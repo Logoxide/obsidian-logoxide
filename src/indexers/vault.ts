@@ -59,7 +59,7 @@ export class VaultIndexer {
   }
 
   private get index() {
-    return this.plugin.index;
+    return this.plugin.refs;
   }
 
   /** Whether a file is indexed, and as what */

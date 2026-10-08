@@ -1,4 +1,4 @@
-import { App, Notice, type DropdownComponent, Platform, PluginSettingTab, Setting } from "obsidian";
+import { App, Notice, type DropdownComponent, Platform, Setting } from "obsidian";
 import { BookStyle } from "topos-bible";
 import { DEFAULT_FORMAT, written, type FormatSettings } from "./core/format.ts";
 import { parseQuery } from "./core/query.ts";
@@ -9,24 +9,32 @@ import type ToposPlugin from "./main.ts";
 
 export { bookStyle, DEFAULT_SETTINGS, type StyleName, type ToposSettings } from "./core/settings.ts";
 
-export class ToposSettingTab extends PluginSettingTab {
-  private readonly plugin: ToposPlugin;
+/**
+ * topos's settings, shown first in the plugin's settings tab (file-plus-plus's tab, which adds
+ * the Bible tab's reading, highlight, and link settings after them)
+ */
+export class ToposSettingsPanel {
+  private readonly app: App;
 
-  constructor(app: App, plugin: ToposPlugin) {
-    super(app, plugin);
-    this.plugin = plugin;
+  constructor(
+    private readonly plugin: ToposPlugin,
+    private readonly containerEl: HTMLElement,
+    private readonly refresh: () => void,
+  ) {
+    this.app = plugin.app;
   }
 
-  /** Settings open in their own window, so redraw the notes behind it once more on closing */
-  hide(): void {
-    this.plugin.refreshLinks();
+  /** Draws the whole settings tab again */
+  private display(): void {
+    this.refresh();
   }
 
-  display(): void {
+  render(): void {
     const { containerEl } = this;
     const settings = this.plugin.settings;
-    const save = () => this.plugin.saveSettings();
-    containerEl.empty();
+    const save = () => this.plugin.saveToposSettings();
+    this.bibleSettings(containerEl);
+    new Setting(containerEl).setName("References").setHeading();
 
     new Setting(containerEl)
       .setName("Reference style")
@@ -219,7 +227,7 @@ export class ToposSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("Reference index")
       .setDesc(
-        `${this.plugin.index.referenceCount.toLocaleString()} references in ${this.plugin.index.fileCount.toLocaleString()} files. The index is kept in the plugin's folder and syncs with your settings, so each file is searched once (on any device). Rebuilding searches every file again.`,
+        `${this.plugin.refs.referenceCount.toLocaleString()} references in ${this.plugin.refs.fileCount.toLocaleString()} files. The index is kept in the plugin's folder and syncs with your settings, so each file is searched once (on any device). Rebuilding searches every file again.`,
       )
       .addButton((b) =>
         b.setButtonText("Rebuild").onClick(() => {
@@ -235,6 +243,66 @@ export class ToposSettingTab extends PluginSettingTab {
    * sidebar, the dialogs, and "Normalize references" all use it
    */
   /** The references' color: the accent color until one is picked */
+  private bibleSettings(containerEl: HTMLElement): void {
+    const settings = this.plugin.settings;
+    const save = () => this.plugin.saveToposSettings();
+    const bibles = this.plugin.bibles.all();
+    new Setting(containerEl)
+      .setName("Bible")
+      .setDesc(
+        bibles.length > 0
+          ? "References open in this translation and show its text on hover and in embeds. A Bible is a folder of USX files (one per book, like JHN.usx)."
+          : "No Bible in this vault yet. Add a folder of USX files (one per book, like JHN.usx), and references open in it and show its text on hover and in embeds (![John 1:1]).",
+      )
+      .addDropdown((d) => {
+        for (const bible of bibles) d.addOption(bible.folder, `${bible.name} (${bible.books.size + bible.unknown.length} books)`);
+        if (bibles.length === 0) d.addOption("", "None found");
+        d.setValue(this.plugin.bibles.current()?.folder ?? "").onChange((value) => {
+          settings.bible = value;
+          void save();
+        });
+      });
+    new Setting(containerEl)
+      .setName("Open reference links in")
+      .setDesc("Where [John 1:1] and [text](John 1:1) open. Bare references open like before (see Link template).")
+      .addDropdown((d) =>
+        d
+          .addOptions({ bible: "The Bible", site: "The link site" })
+          .setValue(settings.referenceLinks)
+          .onChange((value) => {
+            settings.referenceLinks = value as "bible" | "site";
+            void save();
+          }),
+      );
+    new Setting(containerEl)
+      .setName("Preview bare references")
+      .setDesc("Show a reference's text when hovering it in the text, not only in links.")
+      .addToggle((t) =>
+        t.setValue(settings.previewBare).onChange((value) => {
+          settings.previewBare = value;
+          void save();
+        }),
+      );
+    new Setting(containerEl)
+      .setName("Section headings")
+      .setDesc("Show the translation's headings in Bible text.")
+      .addToggle((t) =>
+        t.setValue(settings.bibleHeadings).onChange((value) => {
+          settings.bibleHeadings = value;
+          void save();
+        }),
+      );
+    new Setting(containerEl)
+      .setName("Footnotes")
+      .setDesc("Show the translation's footnotes and cross references in Bible text.")
+      .addToggle((t) =>
+        t.setValue(settings.bibleNotes).onChange((value) => {
+          settings.bibleNotes = value;
+          void save();
+        }),
+      );
+  }
+
   private referenceColor(containerEl: HTMLElement): void {
     const settings = this.plugin.settings;
     new Setting(containerEl)
@@ -247,7 +315,7 @@ export class ToposSettingTab extends PluginSettingTab {
       .addColorPicker((c) =>
         c.setValue(settings.referenceColor || accentColor(containerEl)).onChange((value) => {
           settings.referenceColor = value;
-          void this.plugin.saveSettings();
+          void this.plugin.saveToposSettings();
         }),
       )
       .addExtraButton((b) =>
@@ -256,7 +324,7 @@ export class ToposSettingTab extends PluginSettingTab {
           .setTooltip("Use the accent color")
           .onClick(() => {
             settings.referenceColor = "";
-            void this.plugin.saveSettings();
+            void this.plugin.saveToposSettings();
             this.display();
           }),
       );
@@ -290,7 +358,7 @@ export class ToposSettingTab extends PluginSettingTab {
           if (site) settings.linkTemplate = site.template;
           if (value === "none") settings.linkTemplate = "";
           if (value === "custom" && !settings.linkTemplate.trim()) settings.linkTemplate = "https://";
-          void this.plugin.saveSettings();
+          void this.plugin.saveToposSettings();
           this.display();
         });
       });
@@ -313,7 +381,7 @@ export class ToposSettingTab extends PluginSettingTab {
           settings.linkTemplate = value;
           sites?.setValue(choice(value));
           preview();
-          void this.plugin.saveSettings();
+          void this.plugin.saveToposSettings();
         });
     });
     preview();
@@ -333,7 +401,7 @@ export class ToposSettingTab extends PluginSettingTab {
       heading.setDesc(`Preview: ${samples.join("   ")}`);
     };
     const save = () => {
-      void this.plugin.saveSettings();
+      void this.plugin.saveToposSettings();
       preview();
     };
     const texts: [keyof FormatSettings, string, string][] = [
@@ -377,7 +445,7 @@ export class ToposSettingTab extends PluginSettingTab {
     new Setting(containerEl).addButton((b) =>
       b.setButtonText("Reset the format").onClick(() => {
         settings.format = { ...DEFAULT_FORMAT };
-        void this.plugin.saveSettings();
+        void this.plugin.saveToposSettings();
         this.display();
       }),
     );

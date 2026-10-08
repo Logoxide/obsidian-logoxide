@@ -1,15 +1,23 @@
 import {
+  Component,
   Editor,
   FileSystemAdapter,
   MarkdownView,
   Notice,
+  parseLinktext,
   Platform,
-  Plugin,
   TFile,
+  type HoverParent,
+  type OpenViewState,
   type Menu,
+  type PaneType,
   type TAbstractFile,
+  type Workspace,
 } from "obsidian";
-import { OffsetUnit, type Passage, type Topos } from "topos-bible";
+import { around } from "file-plus-plus/obsidian";
+import { FilePlusPlusPlugin, type DocumentEmbed, type EmbedContext } from "file-plus-plus/obsidian";
+import type { FppSettings } from "file-plus-plus/obsidian";
+import { OffsetUnit, type BookTextOptions, type Passage, type Topos } from "topos-bible";
 import type { EditorView } from "@codemirror/view";
 import { DEFAULT_FORMAT } from "./core/format.ts";
 import { migrateQuery, parseQuery, type SavedQuery } from "./core/query.ts";
@@ -18,7 +26,7 @@ import { linkUrl, siteName, templateFromTranslation, type LinkBook } from "./cor
 import { applyReplacements, normalizeReferences, referenceAt } from "./core/references.ts";
 import { ReferenceIndex } from "./core/index.ts";
 import { searchText, type Hit } from "./core/search.ts";
-import { referenceDecorations, refreshReferences } from "./editor/decorations.ts";
+import { interceptLinkClicks, referenceDecorations, refreshReferences } from "./editor/decorations.ts";
 import { ReferenceSuggest } from "./editor/suggest.ts";
 import { engineWasm, loadTopos } from "./engine.ts";
 import { BackgroundSearcher } from "./indexers/background.ts";
@@ -29,14 +37,30 @@ import { EpubSupport } from "./epub/support.ts";
 import workerSource from "topos-worker-source";
 import { GoToReferenceModal, InsertReferenceModal, SavedQueryModal } from "./modals.ts";
 import { linkReferences, relinkEditor } from "./reading.ts";
-import { bookStyle, DEFAULT_SETTINGS, ToposSettingTab, type ToposSettings } from "./settings.ts";
+import { bookStyle, DEFAULT_SETTINGS, ToposSettingsPanel, type ToposSettings } from "./settings.ts";
+import { BibleEmbed } from "./bible/embed.ts";
+import { createBibleFormat } from "./bible/format.ts";
+import { BibleLibrary } from "./bible/library.ts";
+import type { BibleBook, BibleReader } from "./bible/reader.ts";
+import { formatVerseLocator, passageParts } from "./core/verse-locator.ts";
+import { wholeReference } from "./core/syntax.ts";
+
+/** The page preview source of references in notes (Settings → Page preview) */
+export const HOVER_SOURCE = "topos-bible-references";
 import { SEARCH_VIEW, SearchView } from "./view/SearchView.tsx";
 import { SearchStore } from "./view/store.ts";
 
-export default class ToposPlugin extends Plugin {
-  settings: ToposSettings = DEFAULT_SETTINGS;
+/** The plugin's settings and file-plus-plus's (the Bible tab, previews, highlights) */
+export type PluginSettings = FppSettings & ToposSettings;
+
+export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleReader> {
+  readonly format = createBibleFormat(this);
+  declare settings: PluginSettings;
   topos!: Topos;
-  index!: ReferenceIndex;
+  /** Bibles in the vault (folders of USX files) */
+  bibles = new BibleLibrary(this);
+  private toposReady: Promise<Topos> | null = null;
+  refs!: ReferenceIndex;
   search = new SearchStore();
   /** References in EPUBs, through the EPUB++ plugin */
   epubs = new EpubSupport(this);
@@ -51,11 +75,40 @@ export default class ToposPlugin extends Plugin {
   /** Names this device's index packs */
   device = "";
 
-  async onload(): Promise<void> {
-    await this.loadSettings();
-    this.topos = await loadTopos();
-    this.device = this.deviceId();
-    this.index = new ReferenceIndex(this.topos, this.device, this.manifest?.version ?? "");
+  /** The engine, once its WebAssembly is loaded (file-plus-plus may open a Bible before `onLoaded`) */
+  engine(): Promise<Topos> {
+    this.toposReady ??= loadTopos().then((topos) => (this.topos = topos));
+    return this.toposReady;
+  }
+
+  protected override defaultSettings(): PluginSettings {
+    return { ...super.defaultSettings(), ...structuredClone(DEFAULT_SETTINGS) };
+  }
+
+  override createEmbed(ctx: EmbedContext, file: TFile, subpath: string): DocumentEmbed<BibleBook, BibleReader> {
+    return new BibleEmbed(this, ctx, file, subpath);
+  }
+
+  override displaySettings(el: HTMLElement, refresh: () => void): void {
+    new ToposSettingsPanel(this, el, refresh).render();
+  }
+
+  /** data.json changed on disk (synced from another device) */
+  override async onExternalSettingsChange(): Promise<void> {
+    await super.onExternalSettingsChange();
+    this.refreshLinks();
+  }
+
+  /** file-plus-plus's settings and topos's, with topos's from older versions updated */
+  override async loadSettings(): Promise<void> {
+    await super.loadSettings();
+    await this.migrateToposSettings();
+  }
+
+  protected override async onLoaded(): Promise<void> {
+    await this.engine();
+    this.device = this.indexDevice();
+    this.refs = new ReferenceIndex(this.topos, this.device, this.manifest?.version ?? "");
     const { sort, groupBy, context } = this.settings;
     this.search.set({ sort, groupBy, context });
     // Remember the sidebar's order, grouping, and context lines
@@ -68,18 +121,26 @@ export default class ToposPlugin extends Plugin {
     });
 
     this.registerView(SEARCH_VIEW, (leaf) => new SearchView(leaf, this));
+    this.registerHoverLinkSource(HOVER_SOURCE, { display: "Topos Bible: Bible references in notes", defaultMod: false });
+    this.patchReferenceLinks();
     this.addRibbonIcon("book-open", "Verse search", () => void this.activateSearch());
-    this.addSettingTab(new ToposSettingTab(this.app, this));
     this.registerEditorSuggest(new ReferenceSuggest(this));
     this.registerEditorExtension(referenceDecorations(this));
     this.registerMarkdownPostProcessor(linkReferences(this));
     this.registerEvent(this.app.workspace.on("editor-menu", (menu, editor) => this.editorMenu(menu, editor)));
     // The reference color is a CSS variable on each window's body (pop-out windows too)
     this.applyColor();
-    this.registerEvent(this.app.workspace.on("window-open", (_win, win) => this.applyColor([win.document])));
+    this.registerEvent(
+      this.app.workspace.on("window-open", (_win, win) => {
+        this.applyColor([win.document]);
+        interceptLinkClicks(this, win.document);
+      }),
+    );
+    interceptLinkClicks(this, document);
     this.addCommands();
 
     this.app.workspace.onLayoutReady(() => {
+      this.bibles.start();
       void this.indexer.start();
       this.epubs.start();
       const vault = this.app.vault;
@@ -97,8 +158,9 @@ export default class ToposPlugin extends Plugin {
     });
   }
 
-  onunload(): void {
-    for (const doc of this.documents()) doc.body.style.removeProperty("--topos-reference-color");
+  override onunload(): void {
+    super.onunload();
+    for (const doc of this.windowDocuments()) doc.body.style.removeProperty("--topos-reference-color");
     this.indexer.stop();
     this.epubs.stop();
     clearTimeout(this.notifyTimer);
@@ -106,12 +168,15 @@ export default class ToposPlugin extends Plugin {
     this.topos?.dispose();
   }
 
-  async loadSettings(): Promise<void> {
-    const saved = ((await this.loadData()) ?? {}) as Partial<ToposSettings> & {
-      joinAdjacent?: boolean;
-      translation?: string;
-    };
-    this.settings = { ...DEFAULT_SETTINGS, ...saved };
+  /** Settings saved by older versions, before file-plus-plus's are merged in */
+  private savedData: (Partial<ToposSettings> & { joinAdjacent?: boolean; translation?: string }) | null = null;
+
+  protected override migrateSettings(data: Record<string, unknown>): void {
+    this.savedData = data as Partial<ToposSettings>;
+  }
+
+  private async migrateToposSettings(): Promise<void> {
+    const saved = this.savedData ?? {};
     // Format fields added later get their defaults; an earlier joinAdjacent setting carries over
     this.settings.format = {
       ...DEFAULT_FORMAT,
@@ -131,6 +196,77 @@ export default class ToposPlugin extends Plugin {
       this.settings.queryFormat = 2;
       if (this.settings.queries.length > 0) await this.saveData(this.settings);
     }
+  }
+
+  // Bible text
+
+  /** Where a passage is in its book's file: `v=3:16-18` */
+  passageLocator(passage: Passage): string {
+    return formatVerseLocator(passageParts(passage));
+  }
+
+  /**
+   * Opens a reference link (`[John 1:1]`, `[text](John 1:1)`): in the Bible tab, or with the link
+   * template when that's the setting or there's no Bible with the book
+   */
+  async openPassage(passage: Passage, newLeaf?: PaneType | boolean): Promise<void> {
+    const file = this.settings.referenceLinks === "bible" ? await this.bibles.bookFile(passage) : null;
+    if (file) await this.openDocument(file, this.passageLocator(passage), newLeaf);
+    else this.openReference(passage);
+  }
+
+  /** Shows a passage's text in a hover preview (Obsidian's page preview, with the Bible's embed) */
+  async previewPassage(event: MouseEvent, targetEl: HTMLElement, passage: Passage, hoverParent: HoverParent): Promise<void> {
+    const file = await this.bibles.bookFile(passage);
+    if (!file) return;
+    this.app.workspace.trigger("hover-link", {
+      event,
+      source: HOVER_SOURCE,
+      hoverParent,
+      targetEl,
+      linktext: `${file.path}#${this.passageLocator(passage)}`,
+      sourcePath: "",
+    });
+  }
+
+  /**
+   * Shows a passage's text in an element (`![John 1:1]`); the embed is a child of `owner`, so it is
+   * unloaded with it. Without a Bible with the book, says so
+   */
+  async embedPassage(containerEl: HTMLElement, passage: Passage, label: string, owner: Component): Promise<void> {
+    containerEl.addClass("topos-embed");
+    const file = await this.bibles.bookFile(passage);
+    if (!file) {
+      containerEl.setText(`${label}: ${this.bibles.all().length === 0 ? "add a Bible (a folder of USX files) to show its text" : "not in this Bible"}`);
+      containerEl.addClass("topos-embed-missing");
+      return;
+    }
+    const embed = this.createEmbed({ app: this.app, containerEl }, file, this.passageLocator(passage)) as BibleEmbed;
+    embed.label = passage.reference;
+    owner.addChild(embed);
+    await embed.loadFile();
+  }
+
+  /**
+   * Clicking a link whose target is a reference and no note (`[osis](John.3.16)` is an unresolved
+   * internal link to Obsidian) opens the passage instead of creating a note
+   */
+  private patchReferenceLinks(): void {
+    const plugin = this;
+    this.register(
+      around(this.app.workspace, {
+        openLinkText(old) {
+          return async function (this: Workspace, linktext: string, sourcePath: string, newLeaf?: PaneType | boolean, state?: OpenViewState) {
+            const { path } = parseLinktext(linktext);
+            if (path && !plugin.app.metadataCache.getFirstLinkpathDest(path, sourcePath)) {
+              const passage = wholeReference(plugin.topos, decodeURI(path));
+              if (passage) return plugin.openPassage(passage, newLeaf);
+            }
+            return old.call(this, linktext, sourcePath, newLeaf, state);
+          };
+        },
+      }),
+    );
   }
 
   // Saved searches
@@ -166,9 +302,15 @@ export default class ToposPlugin extends Plugin {
     await this.activateSearch();
   }
 
-  async saveSettings(): Promise<void> {
-    await this.saveData(this.settings);
+  /** Saves a change to topos's own settings and redraws references for it */
+  async saveToposSettings(): Promise<void> {
+    await this.saveSettings();
     this.refreshLinks();
+  }
+
+  /** How passages are written in the Bible tab, previews, and embeds */
+  bookTextOptions(): BookTextOptions {
+    return { notes: this.settings.bibleNotes, headings: this.settings.bibleHeadings, classPrefix: "topos-" };
   }
 
   /**
@@ -292,7 +434,7 @@ export default class ToposPlugin extends Plugin {
   }
 
   /** A random name for this device's index packs, kept in this device's storage for the vault */
-  private deviceId(): string {
+  private indexDevice(): string {
     const key = "topos-bible-device";
     const app = this.app as { loadLocalStorage?: (key: string) => unknown; saveLocalStorage?: (key: string, value: unknown) => void };
     const saved = app.loadLocalStorage?.(key);
@@ -408,7 +550,7 @@ export default class ToposPlugin extends Plugin {
   }
 
   /** The main window's document and each pop-out window's */
-  private documents(): Set<Document> {
+  private windowDocuments(): Set<Document> {
     const docs = new Set<Document>();
     const main = (this.app.workspace as { containerEl?: HTMLElement }).containerEl?.ownerDocument;
     if (main) docs.add(main);
@@ -420,7 +562,7 @@ export default class ToposPlugin extends Plugin {
   }
 
   /** Sets the references' color in these windows (all of them by default) */
-  applyColor(docs: Iterable<Document> = this.documents()): void {
+  applyColor(docs: Iterable<Document> = this.windowDocuments()): void {
     for (const doc of docs) {
       if (this.settings.referenceColor) doc.body.style.setProperty("--topos-reference-color", this.settings.referenceColor);
       else doc.body.style.removeProperty("--topos-reference-color");
@@ -520,7 +662,7 @@ export default class ToposPlugin extends Plugin {
       editorCheckCallback: (checking, editor) => {
         const passage = this.referenceAtCursor(editor);
         if (!passage) return false;
-        if (!checking) void this.copy(passage.osis);
+        if (!checking) void this.copyText(passage.osis);
         return true;
       },
     });
@@ -551,11 +693,11 @@ export default class ToposPlugin extends Plugin {
       item
         .setTitle(`Copy as OSIS (${passage.osis})`)
         .setIcon("copy")
-        .onClick(() => void this.copy(passage.osis)),
+        .onClick(() => void this.copyText(passage.osis)),
     );
   }
 
-  async copy(text: string): Promise<void> {
+  async copyText(text: string): Promise<void> {
     await navigator.clipboard.writeText(text);
     new Notice(`Copied ${text}`);
   }

@@ -81,7 +81,7 @@ export class GoToReferenceModal extends SuggestModal<Hit> {
   }
 
   getSuggestions(query: string): Hit[] {
-    const { topos, index } = this.plugin;
+    const { topos, refs: index } = this.plugin;
     if (!query.trim() || !topos.parse(query, 0)) return [];
     return index.query({ ...NO_FILTERS, anyOverlap: [query] }, { kind: "vault" }, "bible").page(0, this.limit);
   }

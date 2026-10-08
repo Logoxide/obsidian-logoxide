@@ -18,6 +18,39 @@
   background-color: color-mix(in srgb, var(--topos-color) 20%, transparent);
 }
 
+/* Reference links: [text](John 1:1) and [John 1:1], links to the passage in the reference color */
+.topos-link {
+  --topos-color: var(--topos-reference-color, var(--link-color));
+  color: var(--topos-color);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--topos-color) 50%, transparent);
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+/* Obsidian's links to a reference, which it sees as links to a note that doesn't exist */
+.topos-link.is-unresolved,
+.markdown-rendered .internal-link.is-unresolved.topos-link {
+  opacity: 1;
+  filter: none;
+  color: var(--topos-color);
+  text-decoration-style: solid;
+}
+.topos-link:hover {
+  text-decoration-color: var(--topos-color);
+}
+
+/* ![John 1:1]: the passage's text, like an embedded note */
+.topos-embed {
+  margin: var(--size-4-2) 0;
+  border-left: 2px solid var(--topos-reference-color, var(--interactive-accent));
+  border-radius: var(--radius-s);
+}
+.topos-embed-missing {
+  padding: var(--size-4-1) var(--size-4-3);
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
 /* Suggestions */
 .topos-suggestion {
   display: flex;

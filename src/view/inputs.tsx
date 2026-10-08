@@ -77,7 +77,7 @@ export function referenceChoices(
 ): Choice[] {
   if (!value.trim()) {
     return topos.books().map((book) => {
-      const name = book[(["name", "abbreviation", "osis"] as const)[style] ?? "name"] || book.name;
+      const name = book[(["name", "abbreviation", "osis", "usfm"] as const)[style] ?? "name"] || book.name;
       return {
         kind: "complete",
         completion: { label: book.name, text: `${name} `, kind: CompletionKind.Book, start: 0, end: value.length },

@@ -55,6 +55,16 @@ export interface ToposSettings {
   cliPath: string;
   /** Let the CLI reuse results for unchanged files between runs */
   cliCache: boolean;
+  /** The Bible references open in and preview from: a folder of USX files ("" for the first) */
+  bible: string;
+  /** Show footnotes and cross references in Bible text */
+  bibleNotes: boolean;
+  /** Show section headings in Bible text */
+  bibleHeadings: boolean;
+  /** Where links to references (`[John 1:1]`, `[text](John 1:1)`) open: the Bible tab or the link site */
+  referenceLinks: "bible" | "site";
+  /** Show bare references' text on hover (links and explicit links always preview) */
+  previewBare: boolean;
 }
 
 export const DEFAULT_SETTINGS: ToposSettings = {
@@ -80,6 +90,11 @@ export const DEFAULT_SETTINGS: ToposSettings = {
   engine: "builtin",
   cliPath: "",
   cliCache: true,
+  bible: "",
+  bibleNotes: false,
+  bibleHeadings: true,
+  referenceLinks: "bible",
+  previewBare: true,
 };
 
 export function bookStyle(name: StyleName): BookStyle {

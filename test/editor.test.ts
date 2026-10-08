@@ -8,6 +8,7 @@ import esbuild from "esbuild";
 import { Window } from "happy-dom";
 
 const cache = new URL("../node_modules/.cache/", import.meta.url).pathname;
+const stub = new URL("./obsidian-stub.ts", import.meta.url).pathname;
 
 async function load() {
   const src = (path: string) => JSON.stringify(new URL(`../src/${path}`, import.meta.url).pathname);
@@ -19,7 +20,8 @@ async function load() {
      export { referenceDecorations, refreshReferences } from ${src("editor/decorations.ts")};
      export { linkUrl } from ${src("core/links.ts")};
      export { relinkEditor } from ${src("reading.ts")};
-     export { DEFAULT_SETTINGS } from ${src("core/settings.ts")};`,
+     export { DEFAULT_SETTINGS } from ${src("core/settings.ts")};
+     export { livePreview, editorLivePreviewField } from ${JSON.stringify(stub)};`,
   );
   const outfile = join(cache, "editor.mjs");
   await esbuild.build({
@@ -28,6 +30,7 @@ async function load() {
     format: "esm",
     platform: "node",
     external: ["topos-bible"],
+    alias: { obsidian: stub },
     nodePaths: [new URL("../node_modules", import.meta.url).pathname],
     outfile,
     logLevel: "silent",
@@ -46,7 +49,7 @@ test("editor links follow the settings after a refresh", async () => {
     cancelAnimationFrame: (id: number) => clearTimeout(id),
   });
   Object.defineProperty(globalThis, "navigator", { value: window.navigator, configurable: true });
-  const { EditorView, referenceDecorations, refreshReferences, linkUrl, relinkEditor, DEFAULT_SETTINGS } = await load();
+  const { EditorView, referenceDecorations, refreshReferences, linkUrl, relinkEditor, DEFAULT_SETTINGS, livePreview } = await load();
   const { Topos } = await import("topos-bible");
   const topos = Topos.new();
   const settings = { ...DEFAULT_SETTINGS };
@@ -56,6 +59,11 @@ test("editor links follow the settings after a refresh", async () => {
     referenceUrl: (passage: any) => linkUrl(settings.linkTemplate, passage),
     linkSite: () => "the site",
     clickOpens: (event: MouseEvent) => event.button === 1 || event.ctrlKey,
+    bibles: { all: () => [] },
+    embedPassage: async (el: HTMLElement, passage: any, label: string) => {
+      el.className = "topos-embed";
+      el.textContent = `${label}: ${passage.reference}`;
+    },
   };
   const view = new EditorView({
     doc: "Read Jn 3:16 today",
@@ -116,4 +124,47 @@ test("editor links follow the settings after a refresh", async () => {
   assert.deepEqual(hrefs(), []);
   assert.equal(editorEl.querySelector(".callout-content")!.textContent, "Jn 3:16 and Rom 8:28");
   assert.equal(editorEl.querySelector(".cm-line")!.textContent, "Gen 1:1");
+});
+
+test("reference links and embeds in live preview hide their syntax unless the cursor is in them", async () => {
+  const { EditorView, referenceDecorations, DEFAULT_SETTINGS, livePreview, editorLivePreviewField } = await load();
+  const { Topos } = await import("topos-bible");
+  const { EditorSelection } = await import("@codemirror/state");
+  const topos = Topos.new();
+  const settings = { ...DEFAULT_SETTINGS };
+  const plugin = {
+    topos,
+    settings,
+    referenceUrl: () => null,
+    linkSite: () => "the site",
+    clickOpens: () => false,
+    bibles: { all: () => [{}] },
+    embedPassage: async (el: HTMLElement, passage: any, label: string) => {
+      el.className = "topos-embed";
+      el.textContent = `${label} = ${passage.reference}`;
+    },
+  };
+  const doc = "See [the verse](John 3:16) and [Ps 23] and Rom 8:28.\n![John 1:1-5]\nEnd";
+  const make = () =>
+    new EditorView({ doc, selection: EditorSelection.cursor(doc.length), extensions: [editorLivePreviewField, referenceDecorations(plugin)], parent: document.body });
+  const shown = (view: any) => view.contentDOM.textContent;
+  const kinds = (view: any) =>
+    [...view.contentDOM.querySelectorAll("[data-topos-osis]")].map((el: any) => `${el.dataset.toposKind} ${el.textContent} ${el.dataset.toposOsis}`);
+
+  // Source mode: everything is text, links are marked
+  livePreview.on = false;
+  let view = make();
+  assert.equal(shown(view), "See [the verse](John 3:16) and [Ps 23] and Rom 8:28.![John 1:1-5]End");
+  assert.deepEqual(kinds(view), ["link the verse John.3.16", "explicit Ps 23 Ps.23", "bare Rom 8:28 Rom.8.28", "embed John 1:1-5 John.1.1-John.1.5"]);
+  view.destroy();
+
+  // Live preview: link syntax is hidden and the embed shows the passage
+  livePreview.on = true;
+  view = make();
+  assert.equal(shown(view), "See the verse and Ps 23 and Rom 8:28.John 1:1-5 = John 1:1-5End");
+  // The cursor in a link shows its syntax again
+  view.dispatch({ selection: EditorSelection.cursor(8) });
+  assert.match(shown(view), /^See \[the verse\]\(John 3:16\) and Ps 23/);
+  view.destroy();
+  livePreview.on = false;
 });

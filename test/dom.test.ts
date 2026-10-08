@@ -30,7 +30,7 @@ async function loadApp() {
        const index = new ReferenceIndex(topos);
        for (const [path, text] of Object.entries(notes)) index.update(path, text);
        const plugin = {
-         topos, index, indexVersion: 1, indexing: false,
+         topos, refs: index, indexVersion: 1, indexing: false,
          indexer: { loadDetails: async () => {} },
          settings: DEFAULT_SETTINGS,
          referenceUrl: (passage) => linkUrl(DEFAULT_SETTINGS.linkTemplate, passage),

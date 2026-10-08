@@ -50,7 +50,7 @@ export function SearchApp({ plugin }: { plugin: ToposPlugin }) {
         : state.scope === "folder" && folder
           ? { kind: "folder" as const, path: folder }
           : { kind: "vault" as const };
-    return plugin.index.query(state.filters, scope, state.sort);
+    return plugin.refs.query(state.filters, scope, state.sort);
     // indexVersion: recompute when files change
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plugin, state.filters, state.scope, state.folder, state.sort, activePath, indexVersion]);

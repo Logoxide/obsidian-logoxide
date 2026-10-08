@@ -74,6 +74,32 @@ books, with a preview; used by completions, the sidebar, the dialogs, and normal
 extensions to
 search, whether to search EPUBs (below), excluded folders, and the search engine.
 
+### Bible text
+
+Put a Bible in the vault as a folder of USX files, one per book (`Bibles/BSB/JHN.usx`, as
+Paratext, the Digital Bible Library, and eBible.org publish them; the
+[BSB](https://github.com/gracious-tech/fetch_collection/tree/main/bibles/eng_bsb) is public domain).
+Each folder is a translation, named after the folder; pick one under *Settings → Bible*. Then:
+
+| In a note | |
+|---|---|
+| `[some text](John 1:1)` | A link to the passage. The target is any reference topos reads: `Jn 1:1`, OSIS `John.1.1`, USFM `JHN 1:1`, or `<John 1:1>` |
+| `[John 1:1]` | A link too, showing the reference |
+| `![John 1:1]` (or `![text](John 1:1)`) | The passage's text, embedded in the note |
+| `John 1:1` | Still found and marked, with its text on hover, but not a link |
+
+Links open the book in its own tab at the passage (or, with *Open reference links in: the link
+site*, the site from [Links](#links)); hovering any of them shows the passage, through Obsidian's
+page preview (*Settings → Page preview → Topos Bible: Bible references in notes*). In live preview
+the brackets and target are hidden unless the cursor is in them, like Obsidian's own links.
+
+A USX file opens in a reading tab built on file-plus-plus (the engine of EPUB++): the book
+as one page with a chapter list, search, verse numbers, headings (footnotes optional), and
+highlights. Links into a book are `[[JHN.usx#v=3:16-18]]` (verses, `v=3` for a chapter, `;` between
+parts), which work in any translation's file; they show as highlights in the tab, and
+`![[JHN.usx#v=3:16-18]]` embeds the verses. The tab's reading and highlight settings follow the
+plugin's own, under *Reading*, *Highlights*, and *Links* in the settings.
+
 ### EPUBs
 
 With **Search EPUB files** on (off by default), EPUBs in the vault are searched too. topos reads
@@ -169,6 +195,9 @@ right away.
 
 ## Build and install
 
+It also needs file-plus-plus (the engine of EPUB++ and Transcript++) checked out at
+`../obsidian-plus-plus/file-plus-plus` (run `bun install` there once).
+
 The plugin uses the `topos-bible` package built from a [topos](https://github.com/MasterTemple/topos-bible)
 checkout at `../../rust/topos` (`~/Development/rust/topos` when this repository is
 `~/Development/typescript/obsidian-topos-bible`), since it needs bindings newer than the npm release:
@@ -186,7 +215,8 @@ includes these bindings, the dependency can point at the npm version instead (`p
 
 ## Development
 
-- `npm run dev` rebuilds `main.js` on every change
+- `npm run dev` rebuilds `dist/` (`main.js`, `styles.css` with file-plus-plus's styles first,
+  `manifest.json`) on every change
 - `npm test` runs the tests with Node: the core logic, the bundled WebAssembly loading, the
   bundled worker (in a Node worker thread), the sidebar in a DOM (happy-dom: inputs, chips,
   context lines), the built plugin against a stand-in for Obsidian's

@@ -6,5 +6,5 @@ cd "$(dirname "$0")/.."
 npm run build
 target="$vault/.obsidian/plugins/topos-bible"
 mkdir -p "$target"
-cp main.js manifest.json styles.css "$target/"
+cp dist/main.js dist/manifest.json dist/styles.css "$target/"
 echo "Installed to $target; enable \"Topos Bible\" under Settings → Community plugins"

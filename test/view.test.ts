@@ -28,7 +28,7 @@ test("the sidebar renders filtered, grouped results", async () => {
        index.update("a.md", "Read Jn 3:16 and Rom 8:28");
        index.update("b.md", "Psalm 23, then John 1:1");
        const plugin = {
-         topos, index, indexVersion: 1, indexing: false,
+         topos, refs: index, indexVersion: 1, indexing: false,
          indexer: { loadDetails: async () => {} },
          settings: { ...DEFAULT_SETTINGS, queries },
          referenceUrl: (passage) => linkUrl(DEFAULT_SETTINGS.linkTemplate, passage),

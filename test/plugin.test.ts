@@ -14,8 +14,19 @@ class Events {
     return {};
   }
   offref() {}
+  trigger() {}
 }
-class Plugin {
+class Component {
+  load() {}
+  unload() {}
+  register() {}
+  registerEvent() {}
+  registerDomEvent() {}
+  addChild(child: any) {
+    return child;
+  }
+}
+class Plugin extends Component {
   app: any;
   manifest: any;
   commands: any[] = [];
@@ -23,9 +34,12 @@ class Plugin {
   suggests: any[] = [];
   postProcessors: any[] = [];
   constructor(app: any, manifest: any) {
+    super();
     this.app = app;
     this.manifest = manifest;
   }
+  registerExtensions() {}
+  registerHoverLinkSource() {}
   async loadData() {
     return null;
   }
@@ -45,8 +59,6 @@ class Plugin {
   registerMarkdownPostProcessor(p: any) {
     this.postProcessors.push(p);
   }
-  registerEvent() {}
-  registerDomEvent() {}
   registerInterval() {}
   addCommand(command: any) {
     this.commands.push(command);
@@ -146,7 +158,26 @@ class FileSystemAdapter {
 }
 
 const obsidian = {
-  Platform: { isDesktopApp: true },
+  Platform: { isDesktopApp: true, isPhone: false, isMobile: false },
+  Component,
+  Events,
+  WorkspaceLeaf: class {
+    setViewState() {}
+  },
+  FileView: class {},
+  TextFileView: class {},
+  Menu: class {},
+  Scope: class {},
+  MarkdownRenderer: { render: async () => {} },
+  Modal: class {},
+  FuzzySuggestModal: class {},
+  MarkdownRenderChild: class extends Component {},
+  parseLinktext: (linktext: string) => {
+    const i = linktext.indexOf("#");
+    return i === -1 ? { path: linktext, subpath: "" } : { path: linktext.slice(0, i), subpath: linktext.slice(i) };
+  },
+  debounce: (f: any) => f,
+  setIcon() {},
   FileSystemAdapter,
   Plugin,
   TFile,
@@ -224,7 +255,39 @@ function fakeEditor(text: string, ch = text.length) {
   };
 }
 
-test("the built plugin loads, indexes, and runs its commands", async () => {
+test("the built plugin loads, indexes, and runs its commands", async (t) => {
+  // file-plus-plus listens on the document (hover previews in the editor)
+  const { Window } = await import("happy-dom");
+  const dom = new Window();
+  Object.assign(globalThis, { window: dom, document: dom.document, activeDocument: dom.document });
+  // Its timers would keep the test running
+  t.after(() => dom.happyDOM.close());
+  // Obsidian's DOM helpers
+  const proto = (dom as any).HTMLElement.prototype;
+  const nodeProto = (dom as any).Node.prototype;
+  const createEl = function (this: any, tag: string, o: any = {}) {
+    const el = dom.document.createElement(tag) as any;
+    if (typeof o === "string") o = { cls: o };
+    if (o.cls) el.className = Array.isArray(o.cls) ? o.cls.join(" ") : o.cls;
+    if (o.text) el.textContent = o.text;
+    for (const [k, v] of Object.entries(o.attr ?? {})) el.setAttribute(k, String(v));
+    this?.appendChild?.(el);
+    return el;
+  };
+  Object.assign(nodeProto, {
+    createEl,
+    createDiv(this: any, o?: any) { return createEl.call(this, "div", o); },
+    createSpan(this: any, o?: any) { return createEl.call(this, "span", o); },
+    empty(this: any) { this.textContent = ""; },
+    setText(this: any, text: string) { this.textContent = text; },
+  });
+  Object.assign(proto, {
+    addClass(this: any, ...c: string[]) { this.classList.add(...c); },
+    removeClass(this: any, ...c: string[]) { this.classList.remove(...c); },
+    toggleClass(this: any, c: string, on: boolean) { this.classList.toggle(c, on); },
+    setAttr(this: any, k: string, v: string) { this.setAttribute(k, v); },
+  });
+  Object.assign(globalThis, { createDiv: (o?: any) => createEl.call(null, "div", o), createEl: (t: string, o?: any) => createEl.call(null, t, o) });
   execFileSync("node", ["esbuild.config.mjs", "production"], { stdio: "ignore" });
   const require = createRequire(import.meta.url);
   const resolve = (Module as any)._resolveFilename;
@@ -236,7 +299,7 @@ test("the built plugin loads, indexes, and runs its commands", async () => {
   // (inside node_modules, so it still resolves the CodeMirror packages Obsidian provides)
   mkdirSync(new URL("../node_modules/.cache/", import.meta.url), { recursive: true });
   const bundle = new URL("../node_modules/.cache/main.cjs", import.meta.url);
-  copyFileSync(new URL("../main.js", import.meta.url), bundle);
+  copyFileSync(new URL("../dist/main.js", import.meta.url), bundle);
   const ToposPlugin = require(bundle.pathname).default;
 
   // The vault on disk too, for the CLI engine
@@ -260,9 +323,18 @@ test("the built plugin loads, indexes, and runs its commands", async () => {
       updateOptions() {},
       getActiveFile: () => null,
       getLeavesOfType: (type: string) => (type === "markdown" ? [openNote] : []),
+      iterateAllLeaves() {},
+      getActiveViewOfType: () => null,
+      openLinkText: async () => {},
+    }),
+    metadataCache: Object.assign(new Events(), {
+      resolvedLinks: {},
+      getFirstLinkpathDest: () => null,
+      getFileCache: () => null,
     }),
     vault: Object.assign(new Events(), {
       getFiles: () => Object.keys(files).map((path) => new TFile(path)),
+      getMarkdownFiles: () => Object.keys(files).filter((path) => path.endsWith(".md")).map((path) => new TFile(path)),
       cachedRead: async (file: TFile) => files[file.path] as string,
       readBinary: async (file: TFile) => {
         const data = files[file.path];
@@ -282,7 +354,7 @@ test("the built plugin loads, indexes, and runs its commands", async () => {
       this.storage.set(key, value);
     },
   };
-  const manifest = { dir: ".obsidian/plugins/topos-bible", version: "0.4.0" };
+  const manifest = { id: "topos-bible", name: "Topos Bible", dir: ".obsidian/plugins/topos-bible", version: "0.4.0" };
   mkdirSync(join(vaultPath, manifest.dir), { recursive: true });
   // The JSON cache from before the index is removed, and so are packs in another format
   writeFileSync(join(vaultPath, manifest.dir, "epub-index.json"), "{}");
@@ -299,9 +371,10 @@ test("the built plugin loads, indexes, and runs its commands", async () => {
   assert.equal(existsSync(join(vaultPath, manifest.dir, "epub-index.json")), false);
   assert.equal(existsSync(oldPack), false);
 
-  assert.deepEqual(plugin.views, ["topos-bible-search"]);
+  // The Bible tab (and the plain text of USX files, from file-plus-plus), and the sidebar
+  assert.deepEqual(plugin.views, ["topos-bible", "topos-bible-source", "topos-bible-search"]);
   assert.deepEqual(
-    plugin.index.all().map((h: any) => `${h.path} ${h.passage.reference}`),
+    plugin.refs.all().map((h: any) => `${h.path} ${h.passage.reference}`),
     ["Archive/old.md Genesis 1:1", "Sermons/a.md John 3:16", "Sermons/a.md Romans 8:28", "Sermons/b.md Psalm 23"],
   );
   const ids = plugin.commands.map((c: any) => c.id);
@@ -334,7 +407,7 @@ test("the built plugin loads, indexes, and runs its commands", async () => {
   await idle(restarted);
   assert.equal(restarted.device, plugin.device);
   assert.deepEqual(searched, []);
-  assert.deepEqual(restarted.index.all().map((h: any) => h.passage.reference), plugin.index.all().map((h: any) => h.passage.reference));
+  assert.deepEqual(restarted.refs.all().map((h: any) => h.passage.reference), plugin.refs.all().map((h: any) => h.passage.reference));
   restarted.onunload();
 
   // Another device (its files have other times after syncing) confirms the notes by their text
@@ -346,12 +419,12 @@ test("the built plugin loads, indexes, and runs its commands", async () => {
   await idle(phone);
   assert.notEqual(phone.device, plugin.device);
   assert.deepEqual(searched, []);
-  assert.equal(phone.index.all().length, 4);
+  assert.equal(phone.refs.all().length, 4);
   // An edit there is searched, and saved in the phone's own packs
   files["Sermons/b.md"] = "Psalm 23 and Psalm 24";
   app.vault.getFiles = () => realFiles().map((f: any) => (f.path === "Sermons/b.md" ? Object.assign(f, { stat: { mtime: 100, size: 21 } }) : f));
   await phone.indexer.update(app.vault.getFileByPath("Sermons/b.md"));
-  assert.equal(phone.index.get("Sermons/b.md").length, 2);
+  assert.equal(phone.refs.get("Sermons/b.md").length, 2);
   await phone.indexer.save();
   assert.ok(readdirSync(join(vaultPath, manifest.dir, "index/packs")).some((name) => name.startsWith(`${phone.device}-`)));
   phone.onunload();
@@ -364,8 +437,8 @@ test("the built plugin loads, indexes, and runs its commands", async () => {
   // Excluding a folder reindexes without it
   plugin.settings.excludeFolders = "Archive";
   await plugin.reindex();
-  assert.equal(plugin.index.all().length, 3);
-  const builtin = plugin.index.all();
+  assert.equal(plugin.refs.all().length, 3);
+  const builtin = plugin.refs.all();
 
   // The CLI engine finds the same hits (still honoring the plugin's own exclusions)
   const cli = toposCli;
@@ -374,12 +447,12 @@ test("the built plugin loads, indexes, and runs its commands", async () => {
     plugin.settings.cliPath = cli;
     plugin.settings.cliCache = false;
     await plugin.reindex(true);
-    assert.deepEqual(plugin.index.all(), builtin);
+    assert.deepEqual(plugin.refs.all(), builtin);
 
     // A missing CLI falls back to the built-in engine with a notice
     plugin.settings.cliPath = join(vaultPath, "no-such-topos");
     await plugin.reindex(true);
-    assert.deepEqual(plugin.index.all(), builtin);
+    assert.deepEqual(plugin.refs.all(), builtin);
     assert.match(obsidian.Notice.messages.at(-1)!, /Using the built-in engine/);
     plugin.settings.engine = "builtin";
   }
@@ -410,7 +483,14 @@ test("the built plugin loads, indexes, and runs its commands", async () => {
 
   // The settings page: the format fields, with a preview that follows them
   plugin.saveData = async () => {};
-  const tab = plugin.settingTab;
+  // topos's settings, which file-plus-plus's settings tab shows first
+  const tab = {
+    containerEl: { settings: [] as any[] },
+    display() {
+      this.containerEl.settings = [];
+      plugin.displaySettings(this.containerEl, () => this.display());
+    },
+  };
   tab.display();
   const setting = (name: string) => tab.containerEl.settings.find((s: any) => s.name === name);
   assert.equal(setting("Reference format").desc, "Preview: John 3:16,17,18; 4:1-5:3   Jude 1:5");
@@ -506,7 +586,7 @@ test("the built plugin loads, indexes, and runs its commands", async () => {
 
   // EPUBs: off by default; on, their references come from EPUB++'s text and go back as annotations
   assert.ok(epub.provider, "registered as an annotation provider");
-  assert.equal(plugin.index.get("Books/b.epub").length, 0);
+  assert.equal(plugin.refs.get("Books/b.epub").length, 0);
   plugin.settings.searchEpubs = true;
   const extracted: string[] = [];
   const extractText = epub.api.extractText;
@@ -517,13 +597,13 @@ test("the built plugin loads, indexes, and runs its commands", async () => {
   // goes through EPUB++
   assert.deepEqual(extracted, ["Books/b.epub"]);
   assert.deepEqual(
-    plugin.index.get("Books/real.epub").map((h: any) => [h.passage.reference, h.epub.chapter, h.epub.cfi]),
+    plugin.refs.get("Books/real.epub").map((h: any) => [h.passage.reference, h.epub.chapter, h.epub.cfi]),
     [
       ["John 3:16", "Chapter 1", "epubcfi(/6/2!/4/2,/1:5,/1:12)"],
       ["Revelation 22:21", "Chapter 2", "epubcfi(/6/4!/4/2,/1:5,/1:14)"],
     ],
   );
-  const [hit, ...rest] = plugin.index.get("Books/b.epub");
+  const [hit, ...rest] = plugin.refs.get("Books/b.epub");
   // "See John" / "3 more" are separate paragraphs, so only Romans 8:28 is a reference
   assert.equal(rest.length, 0);
   assert.equal(hit.passage.reference, "Romans 8:28");
@@ -545,14 +625,13 @@ test("the built plugin loads, indexes, and runs its commands", async () => {
     throw new Error("searched again");
   };
   await plugin.reindex();
-  assert.equal(plugin.index.get("Books/b.epub").length, 1);
+  assert.equal(plugin.refs.get("Books/b.epub").length, 1);
   epub.api.extractText = extractText;
 
   // A book open as topos starts (a tab restored at launch) asked for its references before the
   // index was read; once it is, open books are redrawn, though the book isn't searched again
   await plugin.indexer.save();
   const relaunched = new ToposPlugin(app, manifest);
-  relaunched.settings.searchEpubs = true;
   const loadSettings = relaunched.loadSettings.bind(relaunched);
   relaunched.loadSettings = async () => {
     await loadSettings();
@@ -564,14 +643,14 @@ test("the built plugin loads, indexes, and runs its commands", async () => {
   await relaunched.onload();
   await idle(relaunched);
   assert.equal(searchedBooks, 0);
-  assert.equal(relaunched.index.get("Books/real.epub").length, 2);
+  assert.equal(relaunched.refs.get("Books/real.epub").length, 2);
   assert.ok(epub.refreshed.includes(undefined), "every open book is asked again");
   relaunched.onunload();
   plugin.epubs.api = null;
   plugin.epubs.start();
   plugin.settings.searchEpubs = false;
   await plugin.epubs.toggled();
-  assert.equal(plugin.index.get("Books/b.epub").length, 0);
+  assert.equal(plugin.refs.get("Books/b.epub").length, 0);
   assert.deepEqual(await epub.provider.annotations(new TFile("Books/b.epub")), []);
   plugin.onunload();
   assert.equal(epub.provider, null);

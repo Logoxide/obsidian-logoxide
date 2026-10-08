@@ -106,6 +106,28 @@ sidebar open with EPUB++'s `open(file, cfi)`.
 
 Either way the CFIs match the reader's exactly.
 
+### Bible text (added October 2026)
+
+Verses come from Bibles in the vault: a folder of USX files is a translation. topos's bindings
+read a book you bring (`ToposBook`, feature `markup` of topos-ffi, on topos-bible-markup's
+`verses`/`slice`), so topos itself still holds no Bible text and the plugin keeps one WebAssembly
+module. USX came first because topos-bible-markup reads it with no I/O; SWORD modules can follow
+once sword-modules reads modules from bytes (its FFI then only has to return each entry's raw
+markup, which `ToposBook`'s renderer already handles).
+
+The plugin extends file-plus-plus (the engine of EPUB++ and Transcript++): a USX book opens in its
+own tab, `[[JHN.usx#v=3:16]]` links are highlights, and hover previews and embeds are its
+`DocumentEmbed`. References in notes (`core/syntax.ts`):
+
+- `[some text](John 1:1)`: a link to the passage (any reference topos reads as the target)
+- `[John 1:1]`: an explicit link
+- `![John 1:1]`: the passage's text, embedded
+- `John 1:1`: still found and marked, previewed on hover, but not a link
+
+Obsidian has no link type for these, so the plugin draws them (CodeMirror decorations, a reading
+view post-processor), previews them through Obsidian's page preview (`hover-link` with the book's
+file and a `v=` locator), and opens them itself.
+
 ## Design
 
 - **One engine instance**: the WASM module is embedded in `main.js` and initialized once on load

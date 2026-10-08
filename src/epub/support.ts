@@ -103,7 +103,7 @@ export class EpubSupport {
     let cfi = hit.epub.cfi;
     if (!cfi) {
       await this.plugin.indexer.loadFileDetails(hit.path);
-      cfi = this.plugin.index.get(hit.path).find((h) => h.start === hit.start)?.epub?.cfi ?? "";
+      cfi = this.plugin.refs.get(hit.path).find((h) => h.start === hit.start)?.epub?.cfi ?? "";
     }
     if (this.api) await this.api.open(file, cfi || undefined);
     else await this.plugin.app.workspace.openLinkText(cfi ? `${hit.path}#${cfi}` : hit.path, "", false);
@@ -134,7 +134,7 @@ export class EpubSupport {
         if (!this.enabled) return [];
         await plugin.indexer.loadFileDetails(file.path);
         const style = bookStyle(plugin.settings.style);
-        return plugin.index
+        return plugin.refs
           .get(file.path)
           .filter((hit) => hit.epub?.cfi)
           .map((hit) => ({
@@ -174,7 +174,7 @@ export class EpubSupport {
               .setTitle(`Copy as OSIS (${passage.osis})`)
               .setIcon("copy")
               .setSection(section)
-              .onClick(() => void plugin.copy(passage.osis)),
+              .onClick(() => void plugin.copyText(passage.osis)),
           );
         }
       },

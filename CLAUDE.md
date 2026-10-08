@@ -7,25 +7,31 @@ The Topos Bible plugin for Obsidian: finds, searches, links, and autocompletes B
 - **topos** (`~/Development/rust/topos`, GitHub `MasterTemple/topos-bible`) finds and parses references, and nothing else; it must stay usable without this plugin. Bible *text* belongs here (or in what this plugin depends on), never in topos-bible itself. Changes the plugin needs in the bindings or the library go into topos (tell the user; don't push or publish topos unless asked).
 - The plugin depends on topos's WebAssembly package built from that checkout: `"topos-bible": "file:../../rust/topos/crates/topos-ffi/dist/wasm/pkg"`. Rebuild it after changing topos's bindings: `(cd ../../rust/topos/crates/topos-ffi && npm run pack:wasm)`.
 - Tests read topos's shared completion cases (`crates/topos-lib/tests/cases/complete.txt`) and run its CLI (`target/debug/topos`, `cargo build -p topos-bible-cli`); `test/topos.ts` finds them (`$TOPOS_DIR`, `$TOPOS_CLI`).
-- EPUB++ and file-plus-plus are in `~/Development/typescript/obsidian-plus-plus/` (each with its own CLAUDE.md); EPUB++'s headless Obsidian scripts are the way to test in a real Obsidian.
+- **file-plus-plus** (`../obsidian-plus-plus/file-plus-plus`, `"file-plus-plus": "file:…"`, read its CLAUDE.md) is the plugin's base class: `ToposPlugin extends FilePlusPlusPlugin`, with USX files as its format (`src/bible/`). It owns `onload` (the plugin's setup is in `onLoaded`), `data.json` (topos's settings are merged into `FppSettings` through `defaultSettings`; migrations run in `loadSettings`), and the settings tab (topos's settings are `ToposSettingsPanel`, shown first through `displaySettings`). Its `saveSettings` runs on every scroll (positions), so topos's settings save with `saveToposSettings`, which also redraws references. Plugin members must not collide with its (`index`, `copy`, `documents`, `deviceId` are taken: the reference index is `refs`). Its classes are prefixed `tpb` in the build (`esbuild.config.mjs` uses its `rewritePrefix`); refer to them through `PREFIX`.
+- EPUB++ is next to it, in `~/Development/typescript/obsidian-plus-plus/`.
 
 ## Commands
 
-- `npm install`, `npm run build` (typecheck + esbuild to `main.js`), `npm run dev`, `npm test` (`node --test`), `npm run typecheck`.
-- `scripts/install.sh ~/Obsidian`: builds and copies `main.js`, `manifest.json`, `styles.css` into the user's vault (`.obsidian/plugins/topos-bible/`). Do this after each commit.
+- `npm install`, `npm run build` (typecheck + esbuild to `dist/`: `main.js`, `styles.css` with file-plus-plus's first, `manifest.json`), `npm run dev`, `npm test` (`node --test`), `npm run typecheck`.
+- `scripts/install.sh ~/Obsidian`: builds and copies `dist/` into the user's vault (`.obsidian/plugins/topos-bible/`). Do this after each commit.
+- Headless Obsidian (never the user's): `FPP_CDP_PORT=9341 ../obsidian-plus-plus/file-plus-plus/scripts/obsidian-headless.sh desktop|mobile|stop` from this folder opens `test-vault/` (its plugin folder links to `dist/`; put a Bible in `test-vault/Bibles/BSB/`, which git ignores, e.g. the BSB's USX from gracious-tech/fetch_collection). Drive it with that folder's `cdp.ts --eval` / `cdp-input.ts --click|--tap|--hover`. `Links.md` there has every reference syntax.
 - Use `rg` and `fd`, not `grep` and `find`.
 
 ## Layout
 
 - `src/core/`: no Obsidian imports (filters, the index wrapper, sorting, completions, link templates, settings data), tested directly with Node.
 - `src/indexers/`: the Web Worker (`worker.ts`, bundled separately and embedded in `main.js` by `esbuild.config.mjs`), the CLI runner, `vault.ts` (the reference index on disk).
-- `src/editor/`: CodeMirror decorations and autocomplete; `src/reading.ts`: reading view; `src/view/`: the React sidebar; `src/epub/`: EPUB++ integration.
-- `test/plugin.test.ts` loads the built `main.js` against a stand-in for Obsidian's API.
+- `src/core/syntax.ts`: how references are written in notes (`[text](John 1:1)` links, `[John 1:1]` explicit links, `![John 1:1]` embeds, bare references), `wholeReference` (the target must be all reference), shared by the editor and reading view. `src/core/verse-locator.ts`: `v=3:16-18` locators. `src/core/bibles.ts`: folders of USX files as Bibles.
+- `src/bible/`: the file-plus-plus format (`format.ts`, reading `ToposBook` from topos's bindings), its reader (`reader.ts`: a section per chapter, verse markers are `span.topos-verse`; a preview renders only its passage), embeds and hover previews (`embed.ts`), and `BibleLibrary` (`library.ts`).
+- `src/editor/`: CodeMirror decorations (live preview hides link syntax, `![…]` is a widget; `Prec.highest` and an inclusive replace keep Obsidian's own link widgets out) and autocomplete. Link clicks in editors are caught in the capture phase (`interceptLinkClicks`): Obsidian's live preview reads `[text](John 3:16)` as a link to a note `John` and would create it. `openLinkText` is patched for Obsidian's own links to references (`[x](John.3.16)`). `src/reading.ts`: reading view. `src/view/`: the React sidebar; `src/epub/`: EPUB++ integration.
+- `test/plugin.test.ts` loads the built `dist/main.js` against a stand-in for Obsidian's API (with happy-dom for file-plus-plus); `test/obsidian-stub.ts` stands in for Obsidian's runtime in bundled editor tests. Modules tested with plain `node --test` must not import file-plus-plus or `obsidian` (they aren't loadable there).
 
 ## Conventions
 
 - Reference logic (parsing, completion, search rules) lives in topos, not here. The plugin only adds presentation and Obsidian glue.
 - Offsets are UTF-16 (`OffsetUnit.Utf16`) everywhere.
+- Bible text comes from the vault (USX now; SWORD modules later through a sword-modules FFI that hands each entry's markup to `ToposBook`/topos-bible-markup), never from topos itself.
+- `tsconfig.json` has no `erasableSyntaxOnly`, since file-plus-plus's sources use parameter properties; code that `node --test` runs directly must still use only erasable syntax.
 - Mobile matters as much as desktop. Never test in the user's running Obsidian.
 - The user may have uncommitted edits here; don't commit over them without asking.
 - Commit messages end with a `Co-Authored-By` line.
