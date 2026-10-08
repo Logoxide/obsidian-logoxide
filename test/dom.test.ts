@@ -1,4 +1,4 @@
-// Renders the sidebar in a DOM (happy-dom), so effects run like they do in Obsidian
+// Renders verse search (the sidebar and the search tab) in a DOM (happy-dom), so effects run like they do in Obsidian
 import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -18,7 +18,7 @@ async function loadApp() {
     `import { act } from "react";
      import { createRoot } from "react-dom/client";
      import { Topos } from "topos-bible";
-     import { SearchApp } from ${src("view/SearchApp.tsx")};
+     import { PaneApp } from ${src("view/PaneApp.tsx")};
      import { ErrorBoundary } from ${src("view/ErrorBoundary.tsx")};
      import { SearchStore } from ${src("view/store.ts")};
      import { ReferenceIndex } from ${src("core/index.ts")};
@@ -33,6 +33,7 @@ async function loadApp() {
          topos, refs: index, indexVersion: 1, indexing: false,
          indexer: { loadDetails: async () => {} },
          settings: DEFAULT_SETTINGS,
+         extensions: () => ["md"], bibles: { all: () => [] },
          referenceUrl: (passage) => linkUrl(DEFAULT_SETTINGS.linkTemplate, passage),
          linkSite: () => siteName(DEFAULT_SETTINGS.linkTemplate),
          search: new SearchStore(state),
@@ -42,8 +43,13 @@ async function loadApp() {
            vault: { getFileByPath: (path) => ({ path }), cachedRead: async (file) => notes[file.path] },
          },
        };
+       const host = {
+         markdown: () => ({ done: Promise.resolve(), unload() {} }), verses: () => ({ unload() {} }),
+         icon() {}, open() {}, openPassage() {}, copy() {}, folders: () => [],
+       };
+       const look = { preview: "source", verses: false, style: "name", merge: false, references: false };
        const root = createRoot(container);
-       act(() => root.render(<ErrorBoundary><SearchApp plugin={plugin} /></ErrorBoundary>));
+       act(() => root.render(<ErrorBoundary><PaneApp plugin={plugin} store={plugin.search} host={host} look={look} onOpenTab={() => {}} /></ErrorBoundary>));
        return { plugin, root };
      }`,
   );
@@ -95,7 +101,7 @@ test("the sidebar's inputs and context lines work in a DOM", async () => {
     await act(async () => new Promise((r) => setTimeout(r, 10)));
     const text = () => container.textContent!.replace(/\s+/g, " ");
     assert.match(text(), /Read Jn 3:16 here/);
-    assert.match(text(), /2 references in 2 notes/);
+    assert.match(text(), /2 references ?2 files/);
 
     // Open the filters and focus the "Names" input (explicit overlap): every book is listed, and arrows move
     const input = [...container.querySelectorAll("input")].find((i) => i.placeholder === "John 3:16-21")!;
@@ -116,19 +122,23 @@ test("the sidebar's inputs and context lines work in a DOM", async () => {
     assert.match(container.querySelector(".topos-dropdown li")!.textContent!, /Add "John 3"/);
     await key("Enter");
     assert.deepEqual(plugin.search.get().filters.explicitOverlap, ["John 3"]);
-    assert.match(text(), /1 reference in 1 note/);
+    assert.match(text(), /1 reference ?1 file/);
 
-    // "New search" in the saved-search list clears the filters
-    const select = container.querySelector<HTMLSelectElement>('select[aria-label="Saved searches"]')!;
-    const clear = [...select.options].find((o) => o.textContent!.startsWith("New search"))!;
-    assert.equal(clear.disabled, false);
-    await act(async () => {
-      select.value = clear.value;
-      select.dispatchEvent(new window.Event("change", { bubbles: true }) as never);
-    });
+    // The filters' Clear clears them
+    const clear = [...container.querySelectorAll("button")].find((b) => b.textContent === "Clear")!;
+    await act(async () => (clear as unknown as HTMLElement).click());
     assert.deepEqual(plugin.search.get().filters.explicitOverlap, []);
-    assert.match(text(), /2 references in 2 notes/);
-    await act(async () => plugin.search.set({ filters: { ...plugin.search.get().filters, explicitOverlap: ["John 3"] } }));
+    assert.match(text(), /2 references ?2 files/);
+
+    // Options typed in the query bar apply on Enter
+    const bar = container.querySelector<HTMLInputElement>("input.topos-pane-query")!;
+    await act(async () => {
+      setter.call(bar, '-o "John 3"');
+      bar.dispatchEvent(new window.Event("input", { bubbles: true }) as never);
+    });
+    await act(async () => bar.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }) as never));
+    assert.deepEqual(plugin.search.get().filters.explicitOverlap, ["John 3"]);
+    assert.match(text(), /1 reference ?1 file/);
 
     // Middle-click removes the chip
     const chip = [...container.querySelectorAll(".topos-chip")].find((c) => c.textContent!.startsWith("John 3"))!;
@@ -138,10 +148,10 @@ test("the sidebar's inputs and context lines work in a DOM", async () => {
     // Context lines are read from the notes and shown around each result
     await act(async () => plugin.search.set({ context: 1 }));
     await act(async () => new Promise((r) => setTimeout(r, 10)));
-    const hit = [...container.querySelectorAll(".topos-hit")].find((h) => h.textContent!.includes("John 3:16"))!;
+    const hit = [...container.querySelectorAll(".topos-pane-card")].find((h) => h.textContent!.includes("John 3:16"))!;
     assert.deepEqual(
-      [...hit.querySelectorAll(".topos-context-line")].map((l) => l.textContent),
-      ["first", "last line"],
+      [...hit.querySelectorAll(".topos-pane-source-line.is-context")].map((l) => l.textContent),
+      ["1first", "3last line"],
     );
 
     assert.equal(container.querySelector(".topos-crash"), null);
@@ -150,44 +160,6 @@ test("the sidebar's inputs and context lines work in a DOM", async () => {
     console.error = consoleError;
     await window.happyDOM.close();
   }
-});
-
-test("Show more goes on while what it adds is all in collapsed groups", async () => {
-  const window = new Window();
-  Object.assign(globalThis, {
-    window,
-    document: window.document,
-    HTMLElement: window.HTMLElement,
-    Element: window.Element,
-    Node: window.Node,
-    Event: window.Event,
-    requestAnimationFrame: (f: () => void) => setTimeout(f, 0),
-    IS_REACT_ACT_ENVIRONMENT: true,
-  });
-  const { act, mount } = await loadApp();
-  const container = document.createElement("div");
-  document.body.appendChild(container);
-  // A page is 300 results: the first shows a.md and 299 of b.md's 700
-  mount(container, { "a.md": "Gen 1:1", "b.md": "John 3:16\n".repeat(700), "c.md": "Rev 22:21" });
-  await act(async () => new Promise((r) => setTimeout(r, 10)));
-  const header = (name: string) =>
-    [...container.querySelectorAll(".topos-group-header")].find((h) => h.querySelector(".topos-group-name")!.textContent === name)!;
-  const more = () => [...container.querySelectorAll("button")].find((b) => b.textContent!.startsWith("Show more"));
-  assert.equal(header("b.md").querySelector(".topos-count")!.textContent, "299");
-  assert.equal(header("c.md"), undefined);
-
-  // Collapse b.md: the next page (300 more of b.md) would show nothing new, so another loads,
-  // which reaches c.md, and there's nothing left
-  await act(async () => (header("b.md") as unknown as HTMLElement).click());
-  await act(async () => (more() as unknown as HTMLElement).click());
-  await act(async () => new Promise((r) => setTimeout(r, 10)));
-  assert.equal(header("b.md").querySelector(".topos-count")!.textContent, "700");
-  assert.ok(header("c.md"));
-  assert.equal(more(), undefined);
-
-  // Expanded, a page at a time again
-  await act(async () => (header("b.md") as unknown as HTMLElement).click());
-  assert.equal(container.querySelectorAll(".topos-hit").length, 702);
 });
 
 test("in the search tab, Collapse all also collapses groups that appear later", async () => {

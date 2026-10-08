@@ -1,4 +1,4 @@
-import { App, Editor, SuggestModal } from "obsidian";
+import { App, Editor, SuggestModal, setIcon } from "obsidian";
 import { CompletionKind, type Completion } from "topos-bible";
 import { applyCompletion, completionsBefore } from "./core/completions.ts";
 import { written } from "./core/format.ts";
@@ -7,6 +7,7 @@ import type { SavedQuery } from "./core/query.ts";
 import type { Hit } from "./core/search.ts";
 import type ToposPlugin from "./main.ts";
 import { bookStyle } from "./settings.ts";
+import { renderCompletion, renderHit, renderSuggestion } from "./suggestions.ts";
 
 /** A completion, or the typed reference itself when it is already complete */
 type Choice = { kind: "completion"; completion: Completion } | { kind: "reference"; text: string };
@@ -41,15 +42,11 @@ export class InsertReferenceModal extends SuggestModal<Choice> {
   }
 
   renderSuggestion(choice: Choice, el: HTMLElement): void {
-    el.addClass("topos-suggestion");
     if (choice.kind === "reference") {
-      el.createSpan({ text: choice.text });
-      el.createSpan({ cls: "topos-suggestion-kind", text: "insert" });
-    } else {
-      el.createSpan({ text: choice.completion.label });
-      const kind = ["book", "chapter", "verse"][choice.completion.kind];
-      el.createSpan({ cls: "topos-suggestion-kind", text: kind });
-    }
+      const passage = this.plugin.topos.parse(choice.text, bookStyle(this.plugin.settings.style));
+      renderSuggestion(this.plugin, el, { label: choice.text, kind: "insert", icon: "corner-down-left", passage });
+      el.addClass("is-insert");
+    } else renderCompletion(this.plugin, el, choice.completion);
   }
 
   /** Books and chapters keep the dialog open so the reference can be refined */
@@ -78,6 +75,12 @@ export class GoToReferenceModal extends SuggestModal<Hit> {
     this.plugin = plugin;
     this.limit = 200;
     this.setPlaceholder("Type a passage, like Romans 8");
+    this.emptyStateText = "No references to it in the vault.";
+    this.setInstructions([
+      { command: "↑↓", purpose: "to navigate" },
+      { command: "↵", purpose: "to open" },
+      { command: "esc", purpose: "to dismiss" },
+    ]);
   }
 
   getSuggestions(query: string): Hit[] {
@@ -88,14 +91,7 @@ export class GoToReferenceModal extends SuggestModal<Hit> {
 
   renderSuggestion(hit: Hit, el: HTMLElement): void {
     const style = bookStyle(this.plugin.settings.style);
-    el.addClass("topos-hit-suggestion");
-    const reference = written(this.plugin.topos, hit.passage, style, this.plugin.settings.format);
-    el.createDiv({ cls: "topos-hit-reference", text: reference });
-    el.createDiv({ cls: "topos-hit-location", text: hit.epub ? `${hit.path}: ${hit.epub.chapter ?? `section ${hit.epub.spineIndex + 1}`}` : `${hit.path}:${hit.line}` });
-    const context = el.createDiv({ cls: "topos-hit-context", text: hit.lineText.trim() });
-    // A note's line comes from the note
-    const file = hit.lineText || hit.epub ? null : this.app.vault.getFileByPath(hit.path);
-    if (file) void this.app.vault.cachedRead(file).then((text) => context.setText(text.split(/\r?\n/)[hit.line - 1]?.trim() ?? ""));
+    renderHit(this.plugin, el, hit, written(this.plugin.topos, hit.passage, style, this.plugin.settings.format));
   }
 
   onChooseSuggestion(hit: Hit): void {
@@ -111,6 +107,7 @@ export class SavedQueryModal extends SuggestModal<SavedQuery> {
     super(app);
     this.plugin = plugin;
     this.setPlaceholder("Saved search");
+    this.emptyStateText = "No saved searches match. Save one from verse search.";
   }
 
   getSuggestions(query: string): SavedQuery[] {
@@ -121,8 +118,11 @@ export class SavedQueryModal extends SuggestModal<SavedQuery> {
   }
 
   renderSuggestion(saved: SavedQuery, el: HTMLElement): void {
-    el.createDiv({ text: saved.name });
-    el.createEl("small", { text: saved.query || "(no filters)", cls: "topos-query-text" });
+    el.addClass("topos-suggestion");
+    setIcon(el.createSpan({ cls: "topos-suggestion-icon" }), "bookmark");
+    const main = el.createDiv({ cls: "topos-suggestion-main" });
+    main.createDiv({ cls: "topos-suggestion-label", text: saved.name });
+    main.createEl("code", { text: saved.query || "(no filters)", cls: "topos-query-text" });
   }
 
   onChooseSuggestion(saved: SavedQuery): void {

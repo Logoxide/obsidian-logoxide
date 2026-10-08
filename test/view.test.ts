@@ -15,7 +15,7 @@ test("the sidebar renders filtered, grouped results", async () => {
     entry,
     `import { renderToString } from "react-dom/server";
      import { Topos } from "topos-bible";
-     import { SearchApp } from ${src("view/SearchApp.tsx")};
+     import { PaneApp } from ${src("view/PaneApp.tsx")};
      import { SearchStore } from ${src("view/store.ts")};
      import { ReferenceIndex } from ${src("core/index.ts")};
      import { DEFAULT_SETTINGS } from ${src("core/settings.ts")};
@@ -27,10 +27,11 @@ test("the sidebar renders filtered, grouped results", async () => {
        const index = new ReferenceIndex(topos);
        index.update("a.md", "Read Jn 3:16 and Rom 8:28");
        index.update("b.md", "Psalm 23, then John 1:1");
+       const settings = { ...DEFAULT_SETTINGS, queries };
        const plugin = {
-         topos, refs: index, indexVersion: 1, indexing: false,
+         topos, refs: index, indexVersion: 1, indexing: false, settings,
          indexer: { loadDetails: async () => {} },
-         settings: { ...DEFAULT_SETTINGS, queries },
+         extensions: () => ["md"], bibles: { all: () => [] },
          referenceUrl: (passage) => linkUrl(DEFAULT_SETTINGS.linkTemplate, passage),
          linkSite: () => siteName(DEFAULT_SETTINGS.linkTemplate),
          search: new SearchStore({ filters: { ...NO_FILTERS, ...filters }, groupBy, context }),
@@ -40,9 +41,16 @@ test("the sidebar renders filtered, grouped results", async () => {
            vault: { getFileByPath: (path) => ({ path }), cachedRead: async () => "" },
          },
        };
-       return renderToString(<SearchApp plugin={plugin} />);
+       const host = {
+         markdown: () => ({ done: Promise.resolve(), unload() {} }),
+         verses: () => ({ unload() {} }),
+         icon() {}, open() {}, openPassage() {}, copy() {}, folders: () => [],
+       };
+       const look = { preview: "source", verses: false, style: "name", merge: false, references: false };
+       return renderToString(<PaneApp plugin={plugin} store={plugin.search} host={host} look={look} onOpenTab={() => {}} />);
      }`,
   );
+  const out = join(new URL("../node_modules/.cache/", import.meta.url).pathname, "view.mjs");
   await esbuild.build({
     entryPoints: [entry],
     bundle: true,
@@ -51,47 +59,47 @@ test("the sidebar renders filtered, grouped results", async () => {
     jsx: "automatic",
     external: ["obsidian", "topos-bible", "react", "react-dom"],
     nodePaths: [new URL("../node_modules", import.meta.url).pathname],
-    outfile: join(new URL("../node_modules/.cache/", import.meta.url).pathname, "view.mjs"),
+    outfile: out,
     logLevel: "silent",
   });
-  const { render } = await import(
-    pathToFileURL(join(new URL("../node_modules/.cache/", import.meta.url).pathname, "view.mjs")).href
-  );
+  const { render } = await import(pathToFileURL(out).href);
   const text = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
 
   const all = text(render({}, "file"));
-  assert.match(all, /4 references in 2 notes/);
+  assert.match(all, /4 references 2 files/);
   assert.match(all, /John 3:16/);
   assert.match(all, /Psalm 23/);
+  // The sidebar can move its search into a tab
+  assert.match(render({}, "file"), /aria-label="Open this search in a tab"/);
 
   const nt = text(render({ testaments: ["new"] }, "book"));
-  assert.match(nt, /3 references in 2 notes/);
+  assert.match(nt, /3 references 2 files/);
   assert.match(nt, /John 2 John 3:16/);
-  assert.doesNotMatch(nt, /▾ Psalm/);
+  assert.doesNotMatch(nt, /Psalm 23/);
 
   // Contradictory filters say why nothing matches, even with the panel closed
   const conflict = text(render({ testaments: ["old"], genres: ["Pauline Epistles"] }, "file"));
   assert.match(conflict, /0 references/);
   assert.match(conflict, /Pauline Epistles is not in the Old Testament, so nothing can match/);
 
-  // The header counts filters and books; the panel shows them as CLI options
-  const pauline = text(render({ testaments: ["new"], genres: ["Pauline Epistles"] }, "file"));
-  assert.match(pauline, /Filters 2 13 books/);
-  assert.match(pauline, /--nt -g &quot;Pauline Epistles&quot;/);
-  assert.match(pauline, /1 reference in 1 note/);
+  // The header counts filters and books; the query bar shows them as CLI options
+  const pauline = render({ testaments: ["new"], genres: ["Pauline Epistles"] }, "file");
+  assert.match(text(pauline), /Filters 2 13 books/);
+  assert.match(pauline, /value="--nt -g &quot;Pauline Epistles&quot;"/);
+  assert.match(text(pauline), /1 reference 1 file/);
 
-  // A saved search matching the filters is selected
+  // A saved search matching the filters is marked
   const saved = render({ testaments: ["new"] }, "file", [
     { name: "Old", query: "--ot" },
     { name: "New", query: "-t new" },
   ]);
-  assert.match(saved, /<option value="New" title="-t new" selected="">New<\/option>/);
-  assert.match(text(saved), /Delete/);
+  assert.match(saved, /<li class="is-active"><button class="topos-pane-saved-name" title="-t new"><span>New<\/span>/);
+  assert.match(saved, /aria-label="Delete &quot;New&quot;"/);
 
   // Passage filters narrow the results
-  assert.match(text(render({ anyOverlap: ["John 3"] }, "file")), /1 reference in 1 note/);
-  assert.match(text(render({ inside: ["John 1-3"] }, "file")), /2 references in 2 notes/);
-  assert.match(text(render({ excludeOverlap: ["John 1-3"] }, "file")), /2 references in 2 notes.*Romans 8:28/);
+  assert.match(text(render({ anyOverlap: ["John 3"] }, "file")), /1 reference 1 file/);
+  assert.match(text(render({ inside: ["John 1-3"] }, "file")), /2 references 2 files/);
+  assert.match(text(render({ excludeOverlap: ["John 1-3"] }, "file")), /2 references 2 files.*Romans 8:28/);
 
   // The context control (lines are read after the first render, so the server render has none)
   assert.match(render({}, "file", [], 2), /<option value="2" selected="">±2 lines<\/option>/);

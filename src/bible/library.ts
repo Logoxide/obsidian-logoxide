@@ -1,11 +1,16 @@
 import { TFile, type TAbstractFile } from "obsidian";
-import type { Passage } from "topos-bible";
+import { ToposBook, type Passage } from "topos-bible";
 import { codeFromUsx, groupBibles, type Bible } from "../core/bibles.ts";
 import type ToposPlugin from "../main.ts";
+
+/** How many parsed books `text` keeps */
+const BOOKS_KEPT = 3;
 
 /** The Bibles in the vault (folders of USX files), kept up to date as files change */
 export class BibleLibrary {
   private cached: Bible[] | null = null;
+  /** The books `text` read last, by path and modification time (suggestions read the same ones again) */
+  private readonly books = new Map<string, ToposBook>();
 
   constructor(
     private readonly plugin: ToposPlugin,
@@ -73,6 +78,27 @@ export class BibleLibrary {
     const path = bible.books.get(bookId);
     if (!path && bible.unknown.length > 0) void this.readUnknown(bible);
     return path ?? null;
+  }
+
+  /**
+   * A passage's plain text, from the Bible it names (else the current one), its parts joined by
+   * " … "; null without a Bible with the book
+   */
+  async text(passage: Passage, translation?: string | null): Promise<string | null> {
+    const file = await this.bookFile(passage, this.forText(translation));
+    if (!file) return null;
+    const key = `${file.path}\n${file.stat.mtime}`;
+    let book: ToposBook | null | undefined = this.books.get(key);
+    if (!book) {
+      book = ToposBook.parse(this.plugin.topos, "usx", await this.plugin.app.vault.cachedRead(file));
+      if (!book) return null;
+      this.books.set(key, book);
+      // A few books: a chapter's verses come from one, and switching books is rare
+      for (const old of [...this.books.keys()].slice(0, -BOOKS_KEPT)) this.books.delete(old);
+    }
+    const parts = book.text(passage, { notes: false, headings: false, classPrefix: "topos-" });
+    const text = parts.map((part) => part.replace(/\s+/g, " ").trim()).filter(Boolean).join(" … ");
+    return text || null;
   }
 
   /** The Bible a book's file is in */

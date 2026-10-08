@@ -5,17 +5,12 @@ import {
   type EditorSuggestContext,
   type EditorSuggestTriggerInfo,
 } from "obsidian";
-import { CompletionKind, type Completion } from "topos-bible";
+import type { Completion } from "topos-bible";
 import { completionsBefore } from "../core/completions.ts";
+import { renderCompletion } from "../suggestions.ts";
 import type ToposPlugin from "../main.ts";
 import { bookStyle } from "../settings.ts";
 
-const KIND_LABELS: Record<number, string> = {
-  [CompletionKind.Book]: "book",
-  [CompletionKind.Chapter]: "chapter",
-  [CompletionKind.Verse]: "verse",
-  [CompletionKind.Translation]: "translation",
-};
 
 /** Suggests books, chapters, verses, and translations for the reference being typed in the editor */
 export class ReferenceSuggest extends EditorSuggest<Completion> {
@@ -61,9 +56,7 @@ export class ReferenceSuggest extends EditorSuggest<Completion> {
   }
 
   renderSuggestion(completion: Completion, el: HTMLElement): void {
-    el.addClass("topos-suggestion");
-    el.createSpan({ text: completion.label });
-    el.createSpan({ cls: "topos-suggestion-kind", text: KIND_LABELS[completion.kind] });
+    renderCompletion(this.plugin, el, completion);
   }
 
   selectSuggestion(completion: Completion): void {

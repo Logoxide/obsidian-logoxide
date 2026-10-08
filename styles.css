@@ -55,90 +55,127 @@
   font-size: var(--font-ui-small);
 }
 
-/* Suggestions */
+/* Suggestions (the editor's autocomplete and the dialogs): an icon, the label with the verse's
+   text under it, and the kind */
 .topos-suggestion {
   display: flex;
-  justify-content: space-between;
+  align-items: flex-start;
   gap: var(--size-4-2);
 }
-.topos-suggestion-kind {
+.topos-suggestion-icon {
+  display: inline-flex;
+  flex: none;
+  padding-top: 2px;
+  color: var(--text-faint);
+}
+.topos-suggestion-icon svg {
+  width: var(--icon-s);
+  height: var(--icon-s);
+}
+.suggestion-item.is-selected .topos-suggestion-icon,
+.topos-suggestion.is-insert .topos-suggestion-icon {
+  color: var(--text-accent);
+}
+.topos-suggestion.is-insert .topos-suggestion-label {
+  color: var(--text-accent);
+  font-weight: var(--font-semibold);
+}
+.topos-suggestion-main {
+  flex: 1;
+  min-width: 0;
+}
+.topos-suggestion-text {
+  max-width: 36em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+.topos-suggestion .topos-query-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0;
+  background: none;
   color: var(--text-faint);
   font-size: var(--font-ui-smaller);
 }
-.topos-hit-suggestion .topos-hit-location,
-.topos-hit-suggestion .topos-hit-context {
-  color: var(--text-muted);
+.topos-suggestion-kind {
+  flex: none;
+  padding: 0 var(--size-4-2);
+  border-radius: 999px;
+  background: var(--background-modifier-hover);
+  color: var(--text-faint);
   font-size: var(--font-ui-smaller);
 }
 
-/* Sidebar */
-.topos-search {
+/* A reference, like verse search's results */
+.topos-pill {
+  padding: var(--size-2-1) var(--size-4-2);
+  border-radius: var(--radius-m);
+  background: color-mix(in srgb, var(--topos-reference-color, var(--interactive-accent)) 16%, transparent);
+  color: var(--text-accent);
+  font-weight: var(--font-semibold);
+  white-space: nowrap;
+}
+/* "Go to a reference": each result's reference, file, place, and line */
+.topos-hit-suggestion {
   display: flex;
   flex-direction: column;
-  gap: var(--size-4-2);
-  font-size: var(--font-ui-small);
-  /* Only ever scroll vertically (clip, unlike hidden, doesn't make this a scroll container) */
-  min-width: 0;
-  overflow-x: clip;
+  gap: var(--size-2-3);
 }
-/* Flex items don't shrink below their content by default, and a result's line never wraps, so
-   one long line would widen the whole sidebar (the horizontal scrolling on mobile) */
-.topos-search > * {
-  min-width: 0;
-}
-.topos-toolbar {
+.topos-hit-head {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--size-4-1);
-}
-.topos-toolbar select {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-/* border-box: with width 100%, padding and borders (larger on mobile) would stick out of the
-   column and widen the sidebar */
-.topos-search input,
-.topos-search select {
-  box-sizing: border-box;
-  max-width: 100%;
-}
-.topos-folder,
-.topos-input input {
-  width: 100%;
-}
-/* Looks like a control: flex hides the native disclosure triangle, so draw one */
-.topos-filters summary {
-  cursor: pointer;
-  font-weight: var(--font-semibold);
-  display: flex;
-  gap: var(--size-4-2);
   align-items: center;
-  list-style: none;
-  padding: var(--size-4-1) var(--size-4-2);
-  border: 1px solid var(--background-modifier-border);
-  border-radius: var(--radius-s);
-  background: var(--background-secondary);
+  gap: var(--size-4-2);
+  min-width: 0;
 }
-.topos-filters summary::-webkit-details-marker {
+.topos-hit-where {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2-2);
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: var(--font-ui-smaller);
+  color: var(--text-normal);
+}
+.topos-hit-icon {
+  display: inline-flex;
+  color: var(--text-muted);
+}
+.topos-hit-icon svg {
+  width: 14px;
+  height: 14px;
+}
+.topos-hit-folder {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-faint);
+}
+.topos-hit-line {
+  margin-left: var(--size-4-1);
+  color: var(--text-faint);
+}
+.topos-hit-context {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+.topos-hit-context:empty {
   display: none;
 }
-.topos-filters summary::before {
-  content: "▸";
-  color: var(--text-muted);
-  transition: transform 100ms ease-in-out;
+.topos-hit-context mark {
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--topos-reference-color, var(--interactive-accent)) 28%, transparent);
+  color: var(--text-normal);
 }
-.topos-filters[open] summary::before {
-  transform: rotate(90deg);
-}
-.topos-filters summary:hover {
-  background: var(--background-modifier-hover);
-}
-.topos-filters-title {
-  display: flex;
-  align-items: center;
-  gap: var(--size-4-1);
-  flex: 1;
-}
+
+/* Verse search's filters: a label and its values (chips and an input with suggestions) */
 .topos-badge {
   font-size: var(--font-ui-smaller);
   font-weight: var(--font-normal);
@@ -147,51 +184,12 @@
   border-radius: var(--radius-l);
   padding: 0 var(--size-4-2);
 }
-.topos-filters-books {
-  font-size: var(--font-ui-smaller);
-  font-weight: var(--font-normal);
-  color: var(--text-muted);
-}
 .topos-conflict {
-  margin-top: var(--size-4-2);
   padding: var(--size-4-1) var(--size-4-2);
   border-radius: var(--radius-s);
   color: var(--text-warning);
   background: rgba(var(--color-orange-rgb), 0.1);
   font-size: var(--font-ui-small);
-}
-.topos-saved {
-  display: flex;
-  gap: var(--size-4-1);
-  margin-bottom: var(--size-4-2);
-}
-.topos-saved select,
-.topos-saved input {
-  flex: 1;
-  min-width: 0;
-}
-.topos-query {
-  display: flex;
-  gap: var(--size-4-2);
-  align-items: center;
-  margin-top: var(--size-4-2);
-}
-.topos-query code {
-  flex: 1;
-  min-width: 0;
-  overflow-wrap: anywhere;
-  font-size: var(--font-ui-smaller);
-  color: var(--text-muted);
-}
-.topos-copy {
-  font-size: var(--font-ui-smaller);
-  padding: 0 var(--size-4-2);
-  height: auto;
-}
-.topos-query-text {
-  display: block;
-  color: var(--text-muted);
-  font-family: var(--font-monospace);
 }
 .topos-query-input {
   width: 22em;
@@ -199,11 +197,6 @@
 }
 .topos-query-error {
   color: var(--text-error);
-}
-.topos-clear {
-  font-size: var(--font-ui-smaller);
-  padding: 0 var(--size-4-2);
-  height: auto;
 }
 .topos-filter-row {
   display: grid;
@@ -253,6 +246,7 @@
   padding: 0 0 0 var(--size-4-2);
   max-width: 100%;
   overflow-wrap: anywhere;
+  user-select: none;
 }
 .topos-chip button {
   background: none;
@@ -293,107 +287,23 @@
 .topos-dropdown li:hover {
   background: var(--background-modifier-hover);
 }
-.topos-errors {
-  color: var(--text-error);
-  margin: var(--size-4-2) 0 0;
-  padding-left: var(--size-4-4);
-}
-.topos-summary {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--size-4-2);
-  color: var(--text-muted);
-}
-.topos-group-header {
-  display: flex;
-  align-items: center;
-  gap: var(--size-4-1);
-  padding: var(--size-2-2) 0;
-  cursor: pointer;
-  font-weight: var(--font-semibold);
-}
-.topos-group-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.topos-caret.is-collapsed {
-  transform: rotate(-90deg);
-}
-.topos-count {
-  color: var(--text-faint);
-  font-size: var(--font-ui-smaller);
-}
-.topos-hit {
-  padding: var(--size-2-2) var(--size-4-2);
-  margin-left: var(--size-4-3);
-  border-radius: var(--radius-s);
-  cursor: pointer;
-}
-.topos-hit:hover {
-  background: var(--background-modifier-hover);
-}
-.topos-hit-head {
-  display: flex;
-  align-items: center;
-  gap: var(--size-4-2);
-}
-.topos-hit-reference {
-  font-weight: var(--font-medium);
-  color: var(--text-accent);
-}
-.topos-hit-location {
-  flex: 1;
-  min-width: 0;
-  overflow-wrap: anywhere;
-  color: var(--text-faint);
-  font-size: var(--font-ui-smaller);
-}
-.topos-lw {
-  padding: 0 var(--size-4-1);
-  height: auto;
-  background: none;
-  box-shadow: none;
-}
-.topos-hit-context {
-  color: var(--text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.topos-hit-context mark {
-  background: var(--text-highlight-bg);
-  color: var(--text-normal);
-}
-.topos-more {
-  width: 100%;
-  margin-top: var(--size-4-2);
-}
 .topos-dropdown li.is-add {
   font-weight: var(--font-semibold);
   color: var(--text-accent);
 }
-.topos-chip {
-  user-select: none;
+.topos-dropdown .topos-suggestion-kind {
+  background: none;
 }
-/* With context, lines wrap in full so they line up */
-.topos-context-line,
-.topos-hit.has-context .topos-hit-context {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-.topos-context-line {
-  color: var(--text-faint);
+.topos-errors {
+  color: var(--text-error);
+  margin: var(--size-4-2) 0 0;
+  padding-left: var(--size-4-4);
 }
 .topos-crash pre {
   white-space: pre-wrap;
   font-size: var(--font-ui-smaller);
   color: var(--text-error);
 }
-
 .topos-filter-hint {
   display: block;
   font-size: var(--font-ui-smaller);
@@ -733,6 +643,12 @@ button.topos-pane-saved-name {
   box-shadow: none;
   text-align: left;
   cursor: pointer;
+}
+.topos-pane-saved-name > span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .topos-pane-saved-name code {
   max-width: 100%;
@@ -1163,7 +1079,65 @@ button.topos-pane-case.is-on {
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.topos-patterns-note {
-  color: var(--text-muted);
-  font-size: var(--font-ui-smaller);
+
+/* Narrow (the sidebar, phones): less indentation, and a result's head wraps instead of overlapping */
+.topos-pane.is-narrow .topos-pane-cards {
+  margin-left: var(--size-2-3);
+  padding-left: var(--size-4-2);
+}
+.topos-pane.is-narrow .topos-pane-card {
+  padding: var(--size-4-2);
+}
+.topos-pane.is-narrow .topos-pane-card-head {
+  flex-wrap: wrap;
+  row-gap: var(--size-2-2);
+}
+.topos-pane.is-narrow .topos-pane-segmented button {
+  padding: var(--size-2-2) var(--size-2-3);
+}
+.topos-pane-summary-actions {
+  display: inline-flex;
+  align-items: center;
+}
+.topos-pane-summary .topos-pane-icon-button {
+  align-self: center;
+}
+
+/* The sidebar: the search tab's app in a narrow column. Nothing may widen it (on phones it would
+   scroll sideways): Obsidian's mobile styles make views scroll both ways, so the app clips instead
+   (clip, unlike hidden, isn't a scroll container, so the counts still stick) */
+.workspace-leaf-content .view-content.topos-sidebar-view {
+  overflow-x: hidden;
+}
+.topos-pane.is-narrow {
+  overflow-x: clip;
+}
+.topos-sidebar-view .topos-pane {
+  --topos-pane-gutter: var(--size-4-3);
+}
+.topos-sidebar-view .topos-pane-header {
+  padding-top: var(--size-4-3);
+}
+.topos-sidebar-view .topos-pane-preview:not(.topos-pane-source) {
+  font-size: var(--font-ui-medium);
+}
+/* Narrow on desktop, a result's actions float over its corner on hover instead of taking a line */
+body:not(.is-mobile) .topos-pane.is-narrow .topos-pane-actions {
+  position: absolute;
+  top: var(--size-2-3);
+  right: var(--size-2-3);
+  padding: 2px;
+  border-radius: var(--radius-m);
+  background: var(--background-primary);
+  box-shadow: var(--shadow-s);
+  pointer-events: none;
+}
+body:not(.is-mobile) .topos-pane.is-narrow .topos-pane-card:is(:hover, :focus-within) .topos-pane-actions {
+  pointer-events: auto;
+}
+.topos-hit-suggestion .topos-pill {
+  font-size: var(--font-ui-small);
+}
+.topos-sidebar-view .topos-pane-summary {
+  background: color-mix(in srgb, var(--background-secondary) 92%, transparent);
 }

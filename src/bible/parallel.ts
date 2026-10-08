@@ -1,4 +1,4 @@
-import { Notice, SuggestModal, type App } from "obsidian";
+import { Notice, SuggestModal, setIcon, type App } from "obsidian";
 import type { DocumentView } from "file-plus-plus/obsidian";
 import type { Bible } from "../core/bibles.ts";
 import type ToposPlugin from "../main.ts";
@@ -23,8 +23,12 @@ class BibleModal extends SuggestModal<Bible> {
   }
 
   renderSuggestion(bible: Bible, el: HTMLElement): void {
-    el.createDiv({ text: bible.name });
-    el.createEl("small", { text: bible.folder, cls: "topos-suggestion-kind" });
+    el.addClass("topos-suggestion");
+    setIcon(el.createSpan({ cls: "topos-suggestion-icon" }), "book-open");
+    const main = el.createDiv({ cls: "topos-suggestion-main" });
+    main.createDiv({ cls: "topos-suggestion-label", text: bible.name });
+    main.createDiv({ cls: "topos-suggestion-text", text: bible.folder });
+    el.createSpan({ cls: "topos-suggestion-kind", text: `${bible.books.size + bible.unknown.length} books` });
   }
 
   onChooseSuggestion(bible: Bible): void {

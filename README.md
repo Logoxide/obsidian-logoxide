@@ -8,9 +8,12 @@ to WebAssembly, embedded in the plugin, so it works offline and on mobile). The 
 
 ## Features
 
-**Verse search sidebar** (the ribbon's book icon, or *Open verse search*), the CLI as a GUI:
+**Verse search**, the CLI as a GUI, in the sidebar (the ribbon's book icon, or *Open verse
+search*) or in a tab (see below). Both are the same search: in the sidebar, and on phones, the
+filters, saved searches, and display options fold away (the sliders button in the query bar shows
+the display options), and the window button moves the search into a tab.
 
-- Search the whole vault, the current note, or some folders and files (separated by commas)
+- Search the whole vault, the current note, or some folders and files (*Paths*, below)
 - Open **Filters** to filter by testament (click OT/NT to include, again to exclude), genre,
   and book, each included or excluded, like `-t`, `-g`, `-b`, and `--exclude-*`. A testament
   narrows the rest (NT + Pauline Epistles is Paul's letters), included genres and books add up
@@ -36,12 +39,10 @@ to WebAssembly, embedded in the plugin, so it works offline and on mobile). The 
   *Settings → Saved searches*; the filter panel shows the current filters in that form. The same
   text works as a CLI named query (`~/.config/topos/queries.toml`, `topos -q NAME`). Saved searches
   from before 0.4.0, when `-o` meant any overlap, are rewritten once to keep their meaning
-- Each result shows its line with the reference highlighted; click to jump there, or ↗ to open
-  its link
 - Results update as notes change
 
-**Verse search in a tab** (*Open verse search in a tab*, *… in a new tab*, or *Open in a tab* in
-the sidebar, which takes the sidebar's search along): the same search with room to read results.
+**Verse search in a tab** (*Open verse search in a tab*, *… in a new tab*, or the window button in
+the sidebar, which takes the sidebar's search along) has room to read results:
 
 - Every filter beside the results (above them, folded, on phones and narrow tabs), and a query bar
   that shows the filters as the CLI's options and takes them typed: `--nt -b John -o "John 3"
@@ -75,7 +76,8 @@ the sidebar, which takes the sidebar's search along): the same search with room 
 
 - Autocomplete while typing: chapters after a book (`John ` → `John 1`…), verses after a colon,
   range ends after a dash, and book names (`1 Co` → `1 Corinthians`). Book names only complete
-  for capitalized words by default, so ordinary prose isn't interrupted
+  for capitalized words by default, so ordinary prose isn't interrupted. With a Bible in the
+  vault, each verse suggestion shows the verse
 - References glow faintly with a dashed underline in your accent color (or one you pick), and
   highlight on hover; Ctrl/Cmd-click or a middle click opens their links (a setting allows plain
   clicks, and another lets a tap open them on mobile when you aren't typing). With links turned off, they aren't marked
@@ -92,8 +94,8 @@ the sidebar, which takes the sidebar's search along): the same search with room 
 | Open verse search in a new tab | Another search tab |
 | Search references in the current note | The sidebar, scoped to the note |
 | Open a saved search | The sidebar with a saved search's filters |
-| Go to a reference in the vault | Type a passage, pick a note that references it |
-| Insert a verse reference | A dialog with autocomplete; books and chapters keep it open to refine |
+| Go to a reference in the vault | Type a passage, pick a note that references it (each with its line) |
+| Insert a verse reference | A dialog with autocomplete (verses show their text); books and chapters keep it open to refine |
 | Find references to the verses under the cursor | The sidebar, filtered to overlapping references |
 | Open the reference under the cursor in the browser | Its link (see [Links](#links)) |
 | Copy the reference under the cursor as OSIS | `John.3.16-John.3.18` |
@@ -167,7 +169,8 @@ plugin, which opens EPUBs in Obsidian, writes them. With EPUB++ enabled:
 - The sidebar lists EPUB results with their chapter, and clicking one opens the book there.
 - In the book, references get the same dashed underline and glow as in notes (in the reference
   color). Hovering shows the reference; Ctrl/Cmd-click (or middle-click) opens its link.
-- EPUB++'s **Bible references** sidebar tab lists the book's references by chapter, with a filter.
+- EPUB++'s **Bible references** sidebar tab lists the book's references by chapter, each in its
+  sentence, with a filter; hover one to preview its verses, right-click it for its menu.
 - Right-click a reference (tap or hold it on mobile) to open it, find references to the same
   verses, copy it as OSIS, or **Save as highlight** / **Save with comment**, which turn it into an
   EPUB++ highlight in the book's annotation file.
@@ -276,7 +279,7 @@ includes these bindings, the dependency can point at the npm version instead (`p
 - `npm run dev` rebuilds `dist/` (`main.js`, `styles.css` with file-plus-plus's styles first,
   `manifest.json`) on every change
 - `npm test` runs the tests with Node: the core logic, the bundled WebAssembly loading, the
-  bundled worker (in a Node worker thread), the sidebar in a DOM (happy-dom: inputs, chips,
+  bundled worker (in a Node worker thread), verse search in a DOM (happy-dom: inputs, chips,
   context lines), the built plugin against a stand-in for Obsidian's
   API (loading, indexing with both engines, commands, and autocomplete), and the sidebar rendered
   to HTML. The shared completion cases come from topos's

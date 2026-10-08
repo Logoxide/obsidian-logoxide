@@ -87,19 +87,25 @@ const FILE_ICONS: Record<string, string> = {
   pdf: "file-text",
 };
 
-/** The search tab: every filter the engine has, file types, and results previewed as they look in notes */
+/**
+ * Verse search: every filter the engine has, file types, and results previewed as they look in
+ * notes. In a tab, or in the sidebar, where `onOpenTab` moves the search into a tab
+ */
 export function PaneApp({
   plugin,
   store,
   host,
   look: initialLook = DEFAULT_LOOK,
   onLook,
+  onOpenTab,
 }: {
   plugin: ToposPlugin;
   store: SearchStore;
   host: PaneHost;
   look?: PaneLook;
   onLook?: (look: PaneLook) => void;
+  /** In the sidebar: opens this search in a tab */
+  onOpenTab?: () => void;
 }) {
   const { topos } = plugin;
   const state = useSyncExternalStore(store.subscribe, store.get, store.get);
@@ -128,8 +134,10 @@ export function PaneApp({
   const [referencesToggled, setReferencesToggled] = useState<Set<string>>(new Set());
   const rootRef = useRef<HTMLDivElement>(null);
   const narrow = useNarrow(rootRef);
-  // Narrow, the filters start folded so the results show first
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  // Narrow, the filters start folded so the results show first (unless there are some to see)
+  const [filtersOpen, setFiltersOpen] = useState(!isEmpty(state.filters));
+  // Narrow, how results look is behind a button
+  const [displayOpen, setDisplayOpen] = useState(false);
   const style = bookStyle(look.style);
 
   useEffect(() => {
@@ -364,6 +372,78 @@ export function PaneApp({
     </aside>
   );
 
+  const display = (
+    <>
+      <Segmented
+        value={look.preview}
+        options={[
+          { value: "rendered", label: "Rendered", icon: "eye", title: "Show results as they look in notes" },
+          { value: "source", label: "Source", icon: "code", title: "Show results' Markdown" },
+        ]}
+        host={host}
+        onChange={(preview: PreviewMode) => setLook({ preview })}
+        label="Preview"
+      />
+      <select
+        value={state.context}
+        onChange={(e) => store.set({ context: Number(e.target.value) })}
+        aria-label="Context lines"
+        title="Lines of context around each result"
+      >
+        {[0, 1, 2, 3, 5, 10].map((n) => (
+          <option key={n} value={n}>
+            {n === 0 ? "Line only" : `±${n} line${n === 1 ? "" : "s"}`}
+          </option>
+        ))}
+      </select>
+      <select
+        value={look.style}
+        onChange={(e) => setLook({ style: e.target.value as StyleName })}
+        aria-label="Reference style"
+      >
+        <option value="name">John 3:16</option>
+        <option value="abbreviation">Jn 3:16</option>
+        <option value="osis">John.3.16</option>
+      </select>
+      <button
+        className={`topos-pane-toggle${look.merge ? " is-on" : ""}`}
+        aria-pressed={look.merge}
+        onClick={() => setLook({ merge: !look.merge })}
+        title={
+          state.context === 0
+            ? "Show references on the same line as one result"
+            : `Show references whose ±${state.context} lines of context meet as one result`
+        }
+      >
+        <Icon host={host} name="combine" />
+        Merge nearby
+      </button>
+      {look.merge && (
+        <button
+          className={`topos-pane-toggle${look.references ? " is-on" : ""}`}
+          aria-pressed={look.references}
+          onClick={() => {
+            setLook({ references: !look.references });
+            setReferencesToggled(new Set());
+          }}
+          title="List the references in each merged result (or click a result's count)"
+        >
+          <Icon host={host} name="tags" />
+          References
+        </button>
+      )}
+      <button
+        className={`topos-pane-toggle${look.verses ? " is-on" : ""}`}
+        aria-pressed={look.verses}
+        onClick={() => setLook({ verses: !look.verses })}
+        title="Show each result's verses"
+      >
+        <Icon host={host} name="book-open-text" />
+        Verses
+      </button>
+    </>
+  );
+
   return (
     <div className={`topos-pane${narrow ? " is-narrow" : ""}`} ref={rootRef}>
       <header className="topos-pane-header">
@@ -374,7 +454,7 @@ export function PaneApp({
             spellCheck={false}
             className="topos-pane-query"
             aria-label="Search options, like the topos CLI's"
-            placeholder={'Filters as topos options: --nt -b John -o "John 3" Sermons/2025'}
+            placeholder={narrow ? 'Options: --nt -b John -o "John 3"' : 'Filters as topos options: --nt -b John -o "John 3" Sermons/2025'}
             value={draft ?? query}
             onChange={(e) => {
               setDraft(e.target.value);
@@ -398,6 +478,15 @@ export function PaneApp({
           {draft !== null && draft !== query && <kbd className="topos-pane-hint">Enter</kbd>}
           {query && draft === null && (
             <IconButton host={host} icon="copy" title="Copy these options" onClick={() => host.copy(query)} />
+          )}
+          {narrow && (
+            <IconButton
+              host={host}
+              icon="sliders-horizontal"
+              title={displayOpen ? "Hide display options" : "Display options: preview, context, verses"}
+              active={displayOpen}
+              onClick={() => setDisplayOpen(!displayOpen)}
+            />
           )}
         </div>
         {draftErrors.length > 0 && (
@@ -488,75 +577,10 @@ export function PaneApp({
               );
             })}
           </div>
-          <span className="topos-pane-spacer" />
-          <Segmented
-            value={look.preview}
-            options={[
-              { value: "rendered", label: "Rendered", icon: "eye", title: "Show results as they look in notes" },
-              { value: "source", label: "Source", icon: "code", title: "Show results' Markdown" },
-            ]}
-            host={host}
-            onChange={(preview: PreviewMode) => setLook({ preview })}
-            label="Preview"
-          />
-          <select
-            value={state.context}
-            onChange={(e) => store.set({ context: Number(e.target.value) })}
-            aria-label="Context lines"
-            title="Lines of context around each result"
-          >
-            {[0, 1, 2, 3, 5, 10].map((n) => (
-              <option key={n} value={n}>
-                {n === 0 ? "Line only" : `±${n} line${n === 1 ? "" : "s"}`}
-              </option>
-            ))}
-          </select>
-          <select
-            value={look.style}
-            onChange={(e) => setLook({ style: e.target.value as StyleName })}
-            aria-label="Reference style"
-          >
-            <option value="name">John 3:16</option>
-            <option value="abbreviation">Jn 3:16</option>
-            <option value="osis">John.3.16</option>
-          </select>
-          <button
-            className={`topos-pane-toggle${look.merge ? " is-on" : ""}`}
-            aria-pressed={look.merge}
-            onClick={() => setLook({ merge: !look.merge })}
-            title={
-              state.context === 0
-                ? "Show references on the same line as one result"
-                : `Show references whose ±${state.context} lines of context meet as one result`
-            }
-          >
-            <Icon host={host} name="combine" />
-            Merge nearby
-          </button>
-          {look.merge && (
-            <button
-              className={`topos-pane-toggle${look.references ? " is-on" : ""}`}
-              aria-pressed={look.references}
-              onClick={() => {
-                setLook({ references: !look.references });
-                setReferencesToggled(new Set());
-              }}
-              title="List the references in each merged result (or click a result's count)"
-            >
-              <Icon host={host} name="tags" />
-              References
-            </button>
-          )}
-          <button
-            className={`topos-pane-toggle${look.verses ? " is-on" : ""}`}
-            aria-pressed={look.verses}
-            onClick={() => setLook({ verses: !look.verses })}
-            title="Show each result's verses"
-          >
-            <Icon host={host} name="book-open-text" />
-            Verses
-          </button>
+          {!narrow && <span className="topos-pane-spacer" />}
+          {!narrow && display}
         </div>
+        {narrow && displayOpen && <div className="topos-pane-controls topos-pane-display">{display}</div>}
       </header>
 
       <div className="topos-pane-body">
@@ -585,7 +609,19 @@ export function PaneApp({
             </span>
             {plugin.indexing && <span className="topos-pane-indexing">Indexing…</span>}
             <span className="topos-pane-spacer" />
-            {groups.length > 0 && (
+            {groups.length > 0 && narrow && (
+              <span className="topos-pane-summary-actions">
+                <IconButton
+                  host={host}
+                  icon="chevrons-down-up"
+                  title="Collapse every group, also ones that appear later"
+                  active={collapsed.all}
+                  onClick={collapsed.collapseAll}
+                />
+                <IconButton host={host} icon="chevrons-up-down" title="Expand every group" onClick={collapsed.expandAll} />
+              </span>
+            )}
+            {groups.length > 0 && !narrow && (
               <>
                 <button
                   className={`topos-pane-link${collapsed.all ? " is-on" : ""}`}
@@ -599,6 +635,9 @@ export function PaneApp({
                   Expand all
                 </button>
               </>
+            )}
+            {onOpenTab && (
+              <IconButton host={host} icon="app-window" title="Open this search in a tab" onClick={onOpenTab} />
             )}
           </div>
 
@@ -930,7 +969,11 @@ function useNarrow(ref: RefObject<HTMLElement | null>): boolean {
   useEffect(() => {
     const el = ref.current;
     if (!el || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(() => setNarrow(el.clientWidth > 0 && el.clientWidth < NARROW));
+    // Hidden (a closed drawer, a tab behind another), it measures 0: it keeps its layout, or switching
+    // layouts would lose where it's scrolled
+    const observer = new ResizeObserver(() => {
+      if (el.clientWidth > 0) setNarrow(el.clientWidth < NARROW);
+    });
     observer.observe(el);
     return () => observer.disconnect();
   }, [ref]);

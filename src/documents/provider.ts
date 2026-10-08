@@ -24,6 +24,7 @@ export function referenceProvider<T>(
   return {
     id: PROVIDER_ID,
     name: "Bible references",
+    noun: "Bible references",
     icon: "book-open",
     get color() {
       return color();

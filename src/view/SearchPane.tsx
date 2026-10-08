@@ -61,6 +61,7 @@ export class SearchPane extends ItemView {
 
   async onOpen(): Promise<void> {
     this.contentEl.addClass("topos-pane-view");
+    keepScroll(this);
     this.root = createRoot(this.contentEl);
     this.render();
   }
@@ -114,30 +115,73 @@ export class SearchPane extends ItemView {
     return this.target;
   }
 
-  private readonly host: PaneHost = {
+  private readonly host: PaneHost = viewHost(this, () => this.plugin, (hit, newTab) =>
+    void this.plugin.openHit(hit, this.resultLeaf(newTab)),
+  );
+}
+
+/**
+ * What verse search needs from Obsidian, for a view (the search tab or the sidebar): rendered
+ * Markdown and verses belong to the view, so they're unloaded with it; results open with `open`
+ */
+export function viewHost(view: ItemView, plugin: () => ToposPlugin, open: (hit: Hit, newTab: boolean) => void): PaneHost {
+  return {
     markdown: (el, markdown, sourcePath) => {
-      const owner = this.addChild(new Component());
-      const done = MarkdownRenderer.render(this.app, markdown, el, sourcePath, owner).then(() => {
+      const owner = view.addChild(new Component());
+      const done = MarkdownRenderer.render(view.app, markdown, el, sourcePath, owner).then(() => {
         // References are linked even with linking in reading view turned off
-        linkElement(this.plugin, el, owner, sourcePath);
+        linkElement(plugin(), el, owner, sourcePath);
       });
-      return { done, unload: () => this.removeChild(owner) };
+      return { done, unload: () => view.removeChild(owner) };
     },
     verses: (el: HTMLElement, passage: Passage, label: string) => {
-      const owner = this.addChild(new Component());
-      void this.plugin.embedPassage(el, passage, label, owner);
-      return { unload: () => this.removeChild(owner) };
+      const owner = view.addChild(new Component());
+      void plugin().embedPassage(el, passage, label, owner);
+      return { unload: () => view.removeChild(owner) };
     },
     icon: (el, name) => setIcon(el, name),
-    open: (hit: Hit, newTab: boolean) => void this.plugin.openHit(hit, this.resultLeaf(newTab)),
-    openPassage: (passage: Passage, newTab: boolean) => void this.plugin.openPassage(passage, newTab ? "tab" : false),
+    open,
+    openPassage: (passage: Passage, newTab: boolean) => void plugin().openPassage(passage, newTab ? "tab" : false),
     copy: (text) => void navigator.clipboard.writeText(text),
     folders: () =>
-      this.app.vault
+      view.app.vault
         .getAllFolders(false)
         .map((folder) => folder.path)
         .sort((a, b) => a.localeCompare(b)),
   };
+}
+
+/**
+ * Keeps where a view and its scrollers (the results, the filters) were scrolled while it's hidden:
+ * a hidden element forgets its scroll position (a closed drawer on phones, a tab behind another),
+ * so it's put back when the view shows again
+ */
+export function keepScroll(view: ItemView): void {
+  const root = view.contentEl;
+  const positions = new Map<Element, number>();
+  // Scroll events don't bubble: listen while they go down to the scroller
+  view.registerDomEvent(
+    root,
+    "scroll",
+    (e) => {
+      const el = e.target as Element;
+      if (el instanceof HTMLElement && root.clientHeight > 0) positions.set(el, el.scrollTop);
+    },
+    { capture: true, passive: true },
+  );
+  let shown = root.clientHeight > 0;
+  const observer = new ResizeObserver(() => {
+    const now = root.clientHeight > 0;
+    if (now && !shown) {
+      for (const [el, top] of positions) {
+        if (!el.isConnected) positions.delete(el);
+        else if (el.scrollTop !== top) el.scrollTop = top;
+      }
+    }
+    shown = now;
+  });
+  observer.observe(root);
+  view.register(() => observer.disconnect());
 }
 
 /** When a leaf was last active (Obsidian keeps it, unofficially) */
