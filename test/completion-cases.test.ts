@@ -1,13 +1,15 @@
-// The shared completion cases (crates/topos-lib/tests/cases/complete.txt), through the plugin's
+// The shared completion cases (topos's crates/topos-lib/tests/cases/complete.txt), through the plugin's
 // completionsBefore, which the editor, the sidebar inputs, and the dialogs all use
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { test } from "node:test";
 import { BookStyle, Topos } from "topos-bible";
 import { completionsBefore } from "../src/core/completions.ts";
 import { DEFAULT_FORMAT } from "../src/core/format.ts";
+import { toposDir } from "./topos.ts";
 
-const cases = readFileSync(new URL("../../crates/topos-lib/tests/cases/complete.txt", import.meta.url), "utf8")
+const cases = readFileSync(join(toposDir, "crates/topos-lib/tests/cases/complete.txt"), "utf8")
   .split("\n")
   .filter((line) => line.trim() && !line.startsWith("#"));
 const labelCases = cases.filter((line) => !line.startsWith("apply: "));

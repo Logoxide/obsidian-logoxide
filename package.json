@@ -14,7 +14,7 @@
   "dependencies": {
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
-    "topos-bible": "file:../crates/topos-ffi/dist/wasm/pkg"
+    "topos-bible": "file:../../rust/topos/crates/topos-ffi/dist/wasm/pkg"
   },
   "devDependencies": {
     "@types/node": "^26.6.4",

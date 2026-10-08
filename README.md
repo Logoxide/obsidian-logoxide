@@ -2,9 +2,9 @@
 
 Find, search, filter, and autocomplete Bible references in your vault, and open them in
 [Literal Word](https://app.literalword.com), BibleHub, lets.bible, BibleGateway, YouVersion, or any site with
-a link template. Built on [topos-bible](../README.md) (Rust compiled
+a link template. Built on [topos-bible](https://github.com/MasterTemple/topos-bible) (Rust compiled
 to WebAssembly, embedded in the plugin, so it works offline and on mobile). The design is in
-[doc/obsidian-plugin.md](../doc/obsidian-plugin.md).
+[doc/plan.md](doc/plan.md).
 
 ## Features
 
@@ -112,7 +112,7 @@ settings searches every file again.
 
 New and changed files are searched in a background thread (a Web Worker), so Obsidian stays
 responsive; results appear in the sidebar as batches finish. On desktop, **Search engine → topos
-CLI** runs the native [`topos`](../crates/topos-cli) command on them instead, which is much faster
+CLI** runs the native [`topos`](https://github.com/MasterTemple/topos-bible/tree/main/crates/topos-cli) command on them instead, which is much faster
 for many files and EPUBs and can cache results between runs (`--cache`):
 
 ```sh
@@ -169,19 +169,20 @@ right away.
 
 ## Build and install
 
-The plugin uses the `topos-bible` package built from this repository, since it needs the newest
-bindings (books, genres, and lookups by name):
+The plugin uses the `topos-bible` package built from a [topos](https://github.com/MasterTemple/topos-bible)
+checkout at `../../rust/topos` (`~/Development/rust/topos` when this repository is
+`~/Development/typescript/obsidian-topos-bible`), since it needs bindings newer than the npm release:
 
 ```sh
 # Once: cargo install boltffi_cli --version 0.31.0, rustup target add wasm32-unknown-unknown
-(cd ../crates/topos-ffi && npm install && npm run pack:wasm)
+(cd ../../rust/topos/crates/topos-ffi && npm install && npm run pack:wasm)
 
 npm install
 scripts/install.sh ~/path/to/vault   # builds, then copies main.js, manifest.json, styles.css
 ```
 
 Then enable **Topos Bible** under *Settings → Community plugins*. Once a `topos-bible` release
-includes these bindings, the dependency can point at the npm version instead.
+includes these bindings, the dependency can point at the npm version instead (`package.json`).
 
 ## Development
 
@@ -190,8 +191,10 @@ includes these bindings, the dependency can point at the npm version instead.
   bundled worker (in a Node worker thread), the sidebar in a DOM (happy-dom: inputs, chips,
   context lines), the built plugin against a stand-in for Obsidian's
   API (loading, indexing with both engines, commands, and autocomplete), and the sidebar rendered
-  to HTML. The CLI tests use `../target/debug/topos` (`cargo build -p topos-bible-cli`) and are skipped
-  without it
+  to HTML. The shared completion cases come from topos's
+  `crates/topos-lib/tests/cases/complete.txt`, and the CLI tests use its `target/debug/topos`
+  (`cargo build -p topos-bible-cli`; skipped without it). The checkout is `$TOPOS_DIR` if set, else
+  `../../rust/topos`; `$TOPOS_CLI` overrides the CLI
 - `npm run typecheck`
 
 `src/indexers/` has the Web Worker (`worker.ts`, bundled separately and embedded in `main.js` by

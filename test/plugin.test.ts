@@ -7,6 +7,7 @@ import { dirname, join } from "node:path";
 import Module, { createRequire } from "node:module";
 import { test } from "node:test";
 import { epub as makeEpub } from "./epub.ts";
+import { toposCli } from "./topos.ts";
 
 class Events {
   on() {
@@ -367,7 +368,7 @@ test("the built plugin loads, indexes, and runs its commands", async () => {
   const builtin = plugin.index.all();
 
   // The CLI engine finds the same hits (still honoring the plugin's own exclusions)
-  const cli = new URL("../../target/debug/topos", import.meta.url).pathname;
+  const cli = toposCli;
   if (existsSync(cli)) {
     plugin.settings.engine = "cli";
     plugin.settings.cliPath = cli;

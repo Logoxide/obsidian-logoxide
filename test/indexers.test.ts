@@ -11,6 +11,7 @@ import { searchText, type Hit } from "../src/core/search.ts";
 import { runCli } from "../src/indexers/cli.ts";
 import { handle } from "../src/indexers/worker.ts";
 import { epub } from "./epub.ts";
+import { toposCli } from "./topos.ts";
 
 const topos = Topos.new();
 // The plugin loads Node's modules with require (desktop only), as Obsidian's CommonJS bundle allows
@@ -81,7 +82,7 @@ test("the worker searches files into index entries, like the main thread", async
   assert.equal(search.type === "results" && search.results[0].hits.length, 2);
 });
 
-const cli = join(import.meta.dirname, "../../target/debug/topos");
+const cli = toposCli;
 
 test("the worker searches EPUBs like the CLI", { skip: !existsSync(cli) && "build topos-bible-cli first" }, async () => {
   const bytes = epub(["See Jn 3:16.", "And Romans 8:28 and Ps 23"]);
