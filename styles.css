@@ -1032,3 +1032,96 @@ button.topos-pane-saved-name {
   align-self: center;
   margin-top: var(--size-4-2);
 }
+
+/* The search tab's paths: folders and files to search, and patterns that pick files */
+.topos-pane-paths {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-2);
+  padding: var(--size-4-2) var(--size-4-3);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-l);
+  background: var(--background-secondary);
+}
+.topos-pane-paths-part {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--size-4-2);
+}
+.topos-pane-paths-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-2-2);
+  width: 4.5em;
+  color: var(--text-muted);
+}
+.topos-pane-paths .topos-chips {
+  display: contents;
+}
+.topos-pane-path-chip,
+.topos-pane-pattern {
+  gap: var(--size-2-2);
+  padding-top: 1px;
+  padding-bottom: 1px;
+}
+.topos-pane-path-chip .topos-pane-icon svg {
+  width: 12px;
+  height: 12px;
+}
+.topos-pane-pattern {
+  cursor: pointer;
+}
+.topos-pane-pattern code {
+  background: none;
+  color: inherit;
+  padding: 0;
+  font-size: var(--font-ui-smaller);
+}
+.topos-pane-pattern-kind {
+  font-size: var(--font-ui-smaller);
+  opacity: 0.75;
+}
+.topos-chip.is-invalid {
+  background-color: transparent;
+  color: var(--text-error);
+  outline: 1px dashed var(--text-error);
+}
+.topos-pane-path-picker,
+.topos-pane-pattern-input {
+  flex: 1 1 14em;
+  min-width: 10em;
+}
+.topos-pane-path-picker input,
+.topos-pane-pattern-input input {
+  width: 100%;
+}
+.topos-pane-pattern-input {
+  display: flex;
+  gap: var(--size-2-2);
+}
+.topos-pane-pattern-input input {
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-smaller);
+}
+button.topos-pane-case {
+  flex: none;
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+}
+button.topos-pane-case.is-on {
+  color: var(--text-on-accent);
+  background: var(--interactive-accent);
+}
+.topos-pane-path-option {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-2-3);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.topos-patterns-note {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}

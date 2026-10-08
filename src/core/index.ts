@@ -1,6 +1,5 @@
 import {
   IndexOrder,
-  IndexScope,
   IndexStatus,
   OffsetUnit,
   Testament,
@@ -13,6 +12,7 @@ import {
   type Topos,
 } from "topos-bible";
 import { compileFilters, NO_FILTERS, type Filters } from "./filters.ts";
+import { toPaths, type Where } from "./paths.ts";
 import type { Hit } from "./search.ts";
 import type { SortOrder } from "./sort.ts";
 
@@ -24,8 +24,8 @@ export interface FileStat {
   mtime: number;
 }
 
-/** Which files a query looks at */
-export type QueryScope = { kind: "vault" } | { kind: "file"; path: string } | { kind: "folder"; path: string };
+/** Which files a query looks at: all, one, or those some paths and patterns pick (see `paths.ts`) */
+export type QueryScope = { kind: "vault" } | { kind: "file"; path: string } | ({ kind: "paths" } & Where);
 
 /** A hit from the index, in the plugin's shape */
 export function toHit(hit: IndexHit): Hit {
@@ -66,10 +66,13 @@ export function toQuery(topos: Topos, filters: Filters): ToposQuery {
 export class QueryResults {
   private readonly index: ReferenceIndex;
   private readonly results: IndexResults | null;
+  /** Why there are no results, when a path pattern couldn't be read */
+  readonly error: string | null;
 
-  constructor(index: ReferenceIndex, results: IndexResults | null) {
+  constructor(index: ReferenceIndex, results: IndexResults | null, error: string | null = null) {
     this.index = index;
     this.results = results;
+    this.error = error;
   }
 
   /** How many references */
@@ -145,14 +148,20 @@ export class ReferenceIndex {
   query(filters: Filters, scope: QueryScope = { kind: "vault" }, order: SortOrder = "file", extensions: string[] = []): QueryResults {
     const compiled = compileFilters(this.topos, filters);
     if (compiled.conflict) return new QueryResults(this, null);
-    const kind = { vault: IndexScope.All, file: IndexScope.File, folder: IndexScope.Folder }[scope.kind];
-    const path = scope.kind === "vault" ? "" : scope.path;
+    const where =
+      scope.kind === "file" ? { paths: [scope.path], patterns: [] } : scope.kind === "paths" ? scope : { paths: [], patterns: [] };
+    const paths = toPaths(where, extensions);
     const query = toQuery(this.topos, filters);
     try {
-      const results = this.core.queryIn(this.topos, query, kind, path, extensions, order === "bible" ? IndexOrder.Bible : IndexOrder.File);
+      const results = this.core.queryPaths(this.topos, query, paths, order === "bible" ? IndexOrder.Bible : IndexOrder.File);
       return new QueryResults(this, results);
+    } catch (error) {
+      // A pattern that can't be read (the engine names it)
+      const value = (error as { value?: { message?: string } }).value;
+      return new QueryResults(this, null, value?.message ?? String(error));
     } finally {
       query.dispose();
+      paths.dispose();
     }
   }
 

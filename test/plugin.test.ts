@@ -473,8 +473,8 @@ test("the built plugin loads, indexes, and runs its commands", async (t) => {
     { name: "Sermons", query: "Sermons -b John" },
   ]);
   assert.deepEqual(plugin.applyQuery(plugin.settings.queries[1]), []);
-  assert.equal(plugin.search.get().scope, "folder");
-  assert.equal(plugin.search.get().folder, "Sermons");
+  assert.equal(plugin.search.get().scope, "paths");
+  assert.deepEqual(plugin.search.get().paths, ["Sermons"]);
   assert.deepEqual(plugin.search.get().filters.books, ["John"]);
   assert.deepEqual(plugin.applyQuery({ name: "x", query: "--bogus" }), ["Unknown option --bogus"]);
   await plugin.deleteQuery("Paul");

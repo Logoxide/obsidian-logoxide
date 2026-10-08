@@ -11,6 +11,8 @@ import {
 } from "../src/core/references.ts";
 import { ReferenceIndex } from "../src/core/index.ts";
 import { chosenExtensions, extensionOf, toggleExtension } from "../src/core/file-types.ts";
+import { parsePattern, patternProblems, patternText, type PathPattern } from "../src/core/paths.ts";
+import { queryScope, SearchStore } from "../src/view/store.ts";
 import { searchText, type Hit } from "../src/core/search.ts";
 import { groupHits, mergeNearby, sortHits } from "../src/core/sort.ts";
 
@@ -192,7 +194,7 @@ test("queries can be limited to file types, and count each type's references", (
   const show = (hits: Hit[]) => hits.map((h) => `${h.path} ${h.passage.reference}`);
   const md = index.query(NO_FILTERS, { kind: "vault" }, "file", ["md"]);
   assert.deepEqual(show(md.page(0, 10)), ["Notes/a.md John 3:16", "Notes/a.md Genesis 1:1"]);
-  const notes = index.query({ ...NO_FILTERS, testaments: ["new"] }, { kind: "folder", path: "Notes" }, "bible", ["txt", "srt"]);
+  const notes = index.query({ ...NO_FILTERS, testaments: ["new"] }, { kind: "paths", paths: ["Notes"], patterns: [] }, "bible", ["txt", "srt"]);
   assert.deepEqual(show(notes.page(0, 10)), ["Notes/b.TXT Romans 8:28"]);
   const all = index.query(NO_FILTERS);
   assert.deepEqual(
@@ -221,6 +223,47 @@ test("nearby references join into one result, counting context from the first an
   // ±2: line 3's context reaches line 5 and line 7's starts there, so the run reaches line 7
   // from its last line, not its first
   assert.deepEqual(runs(2), ["John 3:16+Romans 8:28+Genesis 1:1+Psalm 23 1-7", "Jude 1:5 1-1"]);
+});
+
+test("queries search some files and folders, and files that patterns pick", () => {
+  const index = new ReferenceIndex(topos);
+  index.update("Notes/a.md", "John 3:16");
+  index.update("Notes/drafts/b.md", "Rom 8:28");
+  index.update("Sermons/2025/c.srt", "Ps 23");
+  index.update("Sermons/2024/d.md", "Gen 1:1");
+  index.update("e.txt", "Jude 5");
+  const paths = (where: { paths?: string[]; patterns?: PathPattern[] }, extensions: string[] = []) => {
+    const results = index.query(NO_FILTERS, { kind: "paths", paths: [], patterns: [], ...where }, "file", extensions);
+    return results.error ?? results.page(0, 10).map((h) => h.path);
+  };
+  assert.deepEqual(paths({ paths: ["Notes/", "e.txt"] }), ["e.txt", "Notes/a.md", "Notes/drafts/b.md"]);
+  assert.deepEqual(paths({ paths: ["Notes"], patterns: [parsePattern("!drafts")!] }), ["Notes/a.md"]);
+  assert.deepEqual(paths({ patterns: [parsePattern("Sermons/**")!] }, ["md"]), ["Sermons/2024/d.md"]);
+  assert.deepEqual(paths({ patterns: [parsePattern("/20\\d5/")!, parsePattern("*.SRT", true)!] }), ["Sermons/2025/c.srt"]);
+  assert.deepEqual(paths({ patterns: [parsePattern("!/^sermons/i")!] }), ["e.txt", "Notes/a.md", "Notes/drafts/b.md"]);
+  // A pattern that can't be read says why
+  assert.match(String(paths({ patterns: [parsePattern("/(/")!] })), /regular expression "\("/);
+});
+
+test("a search saved with one folder (before several paths) searches that folder", () => {
+  const store = new SearchStore({ scope: "folder", folder: "Sermons/" } as never);
+  assert.equal(store.get().scope, "paths");
+  assert.deepEqual(store.get().paths, ["Sermons"]);
+  // Patterns that can't be read are left out of the query
+  store.set({ patterns: [parsePattern("a[")!, parsePattern("*.md")!] });
+  assert.deepEqual(queryScope(store.get(), ""), { kind: "paths", paths: ["Sermons"], patterns: [parsePattern("*.md")!] });
+  store.set({ paths: [], patterns: [] });
+  assert.deepEqual(queryScope(store.get(), ""), { kind: "vault" });
+});
+
+test("path patterns are typed as globs or /regexes/, and written back the same", () => {
+  assert.deepEqual(parsePattern("!drafts"), { kind: "glob", pattern: "!drafts" });
+  assert.deepEqual(parsePattern("*.md", true), { kind: "iglob", pattern: "*.md" });
+  assert.deepEqual(parsePattern("/^Sermons/"), { kind: "regex", pattern: "^Sermons" });
+  assert.deepEqual(parsePattern("!/notes/i"), { kind: "regex", pattern: "!(?i)notes" });
+  assert.equal(parsePattern("  "), null);
+  for (const text of ["!drafts", "*.md", "/^Sermons/", "!/notes/i"]) assert.equal(patternText(parsePattern(text)!), text);
+  assert.deepEqual(patternProblems([parsePattern("a[")!, parsePattern("ok")!]).length, 1);
 });
 
 test("file types: every type is an empty choice, and the last can't be turned off", () => {
@@ -272,7 +315,7 @@ test("the index's queries keep and order what the JS filters and sort did", () =
       assert.equal(results.files, new Set(kept.map((h) => h.path)).size);
     }
   }
-  const folder = index.query(NO_FILTERS, { kind: "folder", path: "Sermons" }).page(0, 100);
+  const folder = index.query(NO_FILTERS, { kind: "paths", paths: ["Sermons"], patterns: [] }).page(0, 100);
   assert.ok(folder.length > 0 && folder.every((h) => h.path.startsWith("Sermons/")));
   assert.deepEqual(index.query(NO_FILTERS, { kind: "file", path: "c.md" }).page(0, 100).map(show), index.get("c.md").map(show));
   // Pages

@@ -533,7 +533,7 @@ export class ToposSettingsPanel {
       .setName("Saved searches")
       .setHeading()
       .setDesc(
-          'Filters written like the topos CLI\'s options, plus an optional folder: Sermons --nt -g "Pauline Epistles" -b John --exclude-book Philemon -i "Romans 8" -o "John 1" --exclude-overlap "Psalm 23" (-o is explicit overlap; --any-overlap counts whole chapters too, and --exact-overlap means exactly that passage). Save the sidebar\'s filters with its Save button, or add one here.',
+          'Filters written like the topos CLI\'s options, after any folders or files to search: Sermons --nt -g "Pauline Epistles" -b John --exclude-book Philemon -i "Romans 8" -o "John 1" --exclude-overlap "Psalm 23" (-o is explicit overlap; --any-overlap counts whole chapters too, and --exact-overlap means exactly that passage). --glob, --iglob (a ! before the glob leaves its files out), and --path-regex pick files by path. Save the sidebar\'s filters with its Save button, or add one here.',
       );
     const persist = () => {
       void this.plugin.saveData(settings).then(() => this.plugin.search.set({}));

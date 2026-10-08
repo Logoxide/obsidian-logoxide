@@ -10,7 +10,7 @@ to WebAssembly, embedded in the plugin, so it works offline and on mobile). The 
 
 **Verse search sidebar** (the ribbon's book icon, or *Open verse search*), the CLI as a GUI:
 
-- Search the whole vault, the current note, or a folder
+- Search the whole vault, the current note, or some folders and files (separated by commas)
 - Open **Filters** to filter by testament (click OT/NT to include, again to exclude), genre,
   and book, each included or excluded, like `-t`, `-g`, `-b`, and `--exclude-*`. A testament
   narrows the rest (NT + Pauline Epistles is Paul's letters), included genres and books add up
@@ -46,6 +46,13 @@ the sidebar, which takes the sidebar's search along): the same search with room 
 - Every filter beside the results (above them, folded, on phones and narrow tabs), and a query bar
   that shows the filters as the CLI's options and takes them typed: `--nt -b John -o "John 3"
   Sermons/2025`, then Enter
+- **Paths** searches some folders and files (any type the settings search: suggestions come from
+  the vault's folders and the files with references), and files that patterns pick: globs with
+  ripgrep's rules (`*.srt`, `Sermons/**`, a name like `drafts` at any depth), or `/regular
+  expressions/` matched anywhere in the path (`/…/i`, or *Aa*, ignores case). `!` before a pattern
+  leaves its files out (`!drafts`), and clicking a pattern switches it. A pattern that can't be
+  read is marked, and the search goes on without it. Saved searches keep them as the CLI's
+  `--glob` and `--iglob`, and `--path-regex` (the plugin's own), after the paths
 - A chip for each file type the settings search (EPUBs too, when they're searched), with how many
   references each has: click to toggle a type, Ctrl/Cmd-click for only that type, *All* for every
   type

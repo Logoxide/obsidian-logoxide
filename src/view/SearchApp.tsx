@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { compileFilters, isEmpty, NO_FILTERS, type Filters, type Testament } from "../core/filters.ts";
 import { formatQuery, parseQuery } from "../core/query.ts";
+import { cleanPath, patternProblems, patternText } from "../core/paths.ts";
 import { written } from "../core/format.ts";
 import type { Hit } from "../core/search.ts";
 import { groupHits, type SortOrder } from "../core/sort.ts";
@@ -8,7 +9,7 @@ import type ToposPlugin from "../main.ts";
 import { bookStyle, type StyleName } from "../core/settings.ts";
 import { Chips, NameInput, ReferenceInput } from "./inputs.tsx";
 import { FilterRow, isEpub, PASSAGE_ROWS, TestamentToggle, useFileLines, type ListKey } from "./parts.tsx";
-import type { Scope } from "./store.ts";
+import { queryScope, searchWhere, type Scope } from "./store.ts";
 
 /** The saved-search list's entry that clears the filters */
 const CLEAR = "topos:clear-filters";
@@ -41,18 +42,12 @@ export function SearchApp({ plugin }: { plugin: ToposPlugin }) {
 
   const filter = useMemo(() => compileFilters(topos, state.filters), [topos, state.filters]);
   // The engine filters, sorts, and counts every reference; only the page shown becomes objects
-  const results = useMemo(() => {
-    const folder = state.folder.replace(/\/+$/, "");
-    const scope =
-      state.scope === "file"
-        ? { kind: "file" as const, path: activePath }
-        : state.scope === "folder" && folder
-          ? { kind: "folder" as const, path: folder }
-          : { kind: "vault" as const };
-    return plugin.refs.query(state.filters, scope, state.sort);
+  const results = useMemo(
+    () => plugin.refs.query(state.filters, queryScope(state, activePath), state.sort),
     // indexVersion: recompute when files change
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plugin, state.filters, state.scope, state.folder, state.sort, activePath, indexVersion]);
+    [plugin, state.filters, state.scope, state.paths, state.patterns, state.sort, activePath, indexVersion],
+  );
   const hits = useMemo(
     () => results.page(0, shown),
     // detailsVersion: read again once EPUB details are loaded
@@ -99,11 +94,11 @@ export function SearchApp({ plugin }: { plugin: ToposPlugin }) {
     setFilters({ [key]: state.filters[key].filter((_, j) => j !== i) } as Partial<Filters>);
 
   const activeFilters = Object.values(state.filters).reduce((n, values) => n + values.length, 0);
-  const query = formatQuery(state.filters, state.scope === "folder" ? state.folder.replace(/\/+$/, "") || null : null);
+  const query = formatQuery(state.filters, searchWhere(state));
   const savedQueries = plugin.settings.queries;
   const sameQuery = (text: string) => {
     const parsed = parseQuery(text);
-    return parsed.errors.length === 0 && formatQuery(parsed.filters, parsed.folder) === query;
+    return parsed.errors.length === 0 && formatQuery(parsed.filters, parsed) === query;
   };
   const active = savedQueries.find((saved) => sameQuery(saved.query)) ?? null;
   const save = () => {
@@ -124,7 +119,7 @@ export function SearchApp({ plugin }: { plugin: ToposPlugin }) {
         >
           <option value="vault">Whole vault</option>
           <option value="file">Current note</option>
-          <option value="folder">Folder</option>
+          <option value="paths">Folders</option>
         </select>
         <select
           value={state.sort}
@@ -171,7 +166,7 @@ export function SearchApp({ plugin }: { plugin: ToposPlugin }) {
               value={active?.name ?? ""}
               onChange={(e) => {
                 if (e.target.value === CLEAR) {
-                  plugin.search.set({ filters: NO_FILTERS, scope: "vault", folder: "" });
+                  plugin.search.set({ filters: NO_FILTERS, scope: "vault", paths: [], patterns: [] });
                   setShown(PAGE);
                   return;
                 }
@@ -198,7 +193,7 @@ export function SearchApp({ plugin }: { plugin: ToposPlugin }) {
             </select>
             <button
               onClick={() => setSaving(active?.name ?? "")}
-              disabled={activeFilters === 0 && state.scope !== "folder"}
+              disabled={activeFilters === 0 && state.scope !== "paths"}
               title="Save these filters under a name"
             >
               Save
@@ -230,15 +225,20 @@ export function SearchApp({ plugin }: { plugin: ToposPlugin }) {
         )}
       </div>
 
-      {state.scope === "folder" && (
-        <input
-          className="topos-folder"
-          type="text"
-          value={state.folder}
-          placeholder="Folder, like Sermons/2025"
-          onChange={(e) => plugin.search.set({ folder: e.target.value })}
-        />
+      {state.scope === "paths" && (
+        <>
+          <PathsInput paths={state.paths} onChange={(paths) => plugin.search.set({ paths })} />
+          {state.patterns.length > 0 && (
+            <div className="topos-patterns-note" title={state.patterns.map(patternText).join("\n")}>
+              {`And ${state.patterns.length} pattern${state.patterns.length === 1 ? "" : "s"} (`}
+              <a onClick={() => void plugin.openSearchPane(state, true)}>edit in a tab</a>)
+            </div>
+          )}
+        </>
       )}
+      {state.scope === "paths" && patternProblems(state.patterns).map((problem) => (
+        <div key={problem} className="topos-conflict">⚠ {problem} (searching without it)</div>
+      ))}
 
       <details
         className="topos-filters"
@@ -452,4 +452,27 @@ function ContextLines({ lines, from, to }: { lines: string[]; from: number; to: 
     );
   }
   return <>{shown}</>;
+}
+
+/** Folders and files to search, separated by commas (kept as typed while it's the same list) */
+function PathsInput({ paths, onChange }: { paths: string[]; onChange: (paths: string[]) => void }) {
+  const [text, setText] = useState(paths.join(", "));
+  const split = (value: string) => value.split(",").map(cleanPath).filter(Boolean);
+  // Another change of the paths (a saved search) replaces what was typed
+  useEffect(() => {
+    if (split(text).join("\n") !== paths.join("\n")) setText(paths.join(", "));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paths]);
+  return (
+    <input
+      className="topos-folder"
+      type="text"
+      value={text}
+      placeholder="Folders or files, like Sermons/2025, Notes/John.md"
+      onChange={(e) => {
+        setText(e.target.value);
+        onChange(split(e.target.value));
+      }}
+    />
+  );
 }

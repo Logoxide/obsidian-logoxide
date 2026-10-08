@@ -54,7 +54,7 @@ import { wholeReference } from "./core/syntax.ts";
 export const HOVER_SOURCE = "topos-bible-references";
 import { SEARCH_VIEW, SearchView } from "./view/SearchView.tsx";
 import { newTabLeaf, SEARCH_PANE_VIEW, SearchPane } from "./view/SearchPane.tsx";
-import { SearchStore, type SearchState } from "./view/store.ts";
+import { scopeOf, SearchStore, type SearchState } from "./view/store.ts";
 
 /** The plugin's settings and file-plus-plus's (the Bible tab, previews, highlights) */
 export type PluginSettings = FppSettings & ToposSettings;
@@ -365,9 +365,9 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
 
   /** Shows a saved search in the sidebar; returns the query's mistakes, if any */
   applyQuery(query: SavedQuery): string[] {
-    const { filters, folder, errors } = parseQuery(query.query);
-    this.search.set(folder ? { filters, scope: "folder", folder } : { filters, scope: "vault", folder: "" });
-    return errors;
+    const parsed = parseQuery(query.query);
+    this.search.set({ filters: parsed.filters, ...scopeOf(parsed) });
+    return parsed.errors;
   }
 
   async openQuery(query: SavedQuery): Promise<void> {

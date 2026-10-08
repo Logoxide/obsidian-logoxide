@@ -10,6 +10,7 @@ import {
 } from "react";
 import type { Passage } from "topos-bible";
 import { chosenExtensions, extensionOf, toggleExtension } from "../core/file-types.ts";
+import { cleanPath, excludes, parsePattern, patternProblems, patternText, type PathPattern } from "../core/paths.ts";
 import { compileFilters, isEmpty, NO_FILTERS, type Filters, type Testament } from "../core/filters.ts";
 import { written } from "../core/format.ts";
 import { formatQuery, parseQuery } from "../core/query.ts";
@@ -19,7 +20,7 @@ import { bookStyle, type StyleName } from "../core/settings.ts";
 import type ToposPlugin from "../main.ts";
 import { Chips, NameInput, ReferenceInput } from "./inputs.tsx";
 import { FilterRow, isEpub, PASSAGE_ROWS, TestamentToggle, useFileLines, type ListKey } from "./parts.tsx";
-import type { Scope, SearchStore } from "./store.ts";
+import { queryScope, scopeOf, searchWhere, type Scope, type SearchStore } from "./store.ts";
 
 /** How many results render at a time (more load as the list scrolls to its end) */
 const PAGE = 100;
@@ -39,7 +40,7 @@ export interface PaneHost {
   /** Opens a passage in the Bible tab, or with the link site */
   openPassage(passage: Passage, newTab: boolean): void;
   copy(text: string): void;
-  /** The vault's folders, for the folder scope's suggestions */
+  /** The vault's folders, for the paths' suggestions */
   folders(): string[];
 }
 
@@ -128,15 +129,10 @@ export function PaneApp({
   const extensionsKey = extensions.join(",");
 
   const filter = useMemo(() => compileFilters(topos, state.filters), [topos, state.filters]);
-  const folder = state.folder.replace(/\/+$/, "");
   const scope = useMemo(
-    () =>
-      state.scope === "file"
-        ? { kind: "file" as const, path: activePath }
-        : state.scope === "folder" && folder
-          ? { kind: "folder" as const, path: folder }
-          : { kind: "vault" as const },
-    [state.scope, folder, activePath],
+    () => queryScope(state, activePath),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [state.scope, state.paths, state.patterns, activePath],
   );
   // Every file type's results, for the counts on the file type chips
   const everyType = useMemo(
@@ -149,6 +145,12 @@ export function PaneApp({
     () => (extensions.length === 0 ? everyType : plugin.refs.query(state.filters, scope, state.sort, extensions)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [everyType, extensionsKey],
+  );
+  // The files with references, for the paths' suggestions
+  const indexedPaths = useMemo(
+    () => (state.scope === "paths" ? plugin.refs.core.paths() : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [plugin, state.scope === "paths", indexVersion],
   );
   const typeCounts = useMemo(() => new Map(everyType.extensionCounts().map((c) => [c.extension, c])), [everyType]);
   const hits = useMemo(
@@ -198,17 +200,17 @@ export function PaneApp({
     setFilters({ [key]: state.filters[key].filter((_, j) => j !== i) } as Partial<Filters>);
 
   const activeFilters = Object.values(state.filters).reduce((n, values) => n + values.length, 0);
-  const query = formatQuery(state.filters, state.scope === "folder" ? folder || null : null);
+  const query = formatQuery(state.filters, searchWhere(state));
   const savedQueries = plugin.settings.queries;
   const sameQuery = (text: string) => {
     const parsed = parseQuery(text);
-    return parsed.errors.length === 0 && formatQuery(parsed.filters, parsed.folder) === query;
+    return parsed.errors.length === 0 && formatQuery(parsed.filters, parsed) === query;
   };
   const active = savedQueries.find((saved) => sameQuery(saved.query)) ?? null;
   const applyText = (text: string): string[] => {
-    const { filters, folder, errors } = parseQuery(text);
-    if (errors.length > 0) return errors;
-    set(folder ? { filters, scope: "folder", folder } : { filters, scope: state.scope === "folder" ? "vault" : state.scope, folder: "" });
+    const parsed = parseQuery(text);
+    if (parsed.errors.length > 0) return parsed.errors;
+    set({ filters: parsed.filters, ...scopeOf(parsed, state.scope) });
     return [];
   };
   const save = () => {
@@ -288,7 +290,7 @@ export function PaneApp({
           <button
             className="topos-pane-link"
             onClick={() => setSaving(active?.name ?? "")}
-            disabled={saving !== null || (activeFilters === 0 && state.scope !== "folder")}
+            disabled={saving !== null || (activeFilters === 0 && state.scope !== "paths")}
             title="Save these filters under a name"
           >
             Save
@@ -393,30 +395,13 @@ export function PaneApp({
             value={state.scope}
             options={[
               { value: "vault", label: "Vault", icon: "vault" },
-              { value: "folder", label: "Folder", icon: "folder" },
+              { value: "paths", label: "Paths", icon: "folder-tree", title: "Some files and folders, or globs and regular expressions" },
               { value: "file", label: "Note", icon: "file" },
             ]}
             host={host}
             onChange={(scope: Scope) => set({ scope })}
             label="Where to search"
           />
-          {state.scope === "folder" && (
-            <>
-              <input
-                className="topos-pane-folder"
-                type="text"
-                list="topos-pane-folders"
-                value={state.folder}
-                placeholder="Folder, like Sermons/2025"
-                onChange={(e) => set({ folder: e.target.value })}
-              />
-              <datalist id="topos-pane-folders">
-                {host.folders().map((f) => (
-                  <option key={f} value={f} />
-                ))}
-              </datalist>
-            </>
-          )}
           {state.scope === "file" && (
             <span className="topos-pane-scope-file" title={activePath}>
               {activePath ? activePath.slice(activePath.lastIndexOf("/") + 1) : "No note open"}
@@ -445,6 +430,16 @@ export function PaneApp({
           />
         </div>
 
+        {state.scope === "paths" && (
+          <PathsRow
+            host={host}
+            paths={state.paths}
+            patterns={state.patterns}
+            files={indexedPaths}
+            onPaths={(paths) => set({ paths })}
+            onPatterns={(patterns) => set({ patterns })}
+          />
+        )}
         <div className="topos-pane-controls">
           <div className="topos-pane-types" role="group" aria-label="File types">
             <button
@@ -575,7 +570,7 @@ export function PaneApp({
               <Icon host={host} name="search-x" />
               <p>{plugin.indexing ? "Still indexing the vault…" : "No references match."}</p>
               {(activeFilters > 0 || extensions.length > 0 || state.scope !== "vault") && (
-                <button onClick={() => set({ filters: NO_FILTERS, extensions: [], scope: "vault", folder: "" })}>
+                <button onClick={() => set({ filters: NO_FILTERS, extensions: [], scope: "vault", paths: [], patterns: [] })}>
                   Search everything
                 </button>
               )}
@@ -660,6 +655,223 @@ export function PaneApp({
           )}
         </main>
       </div>
+    </div>
+  );
+}
+
+/** The files and folders to search, and the patterns that pick files, each with a picker */
+function PathsRow({
+  host,
+  paths,
+  patterns,
+  files,
+  onPaths,
+  onPatterns,
+}: {
+  host: PaneHost;
+  paths: string[];
+  patterns: PathPattern[];
+  /** Files to suggest (those with references) */
+  files: string[];
+  onPaths: (paths: string[]) => void;
+  onPatterns: (patterns: PathPattern[]) => void;
+}) {
+  const problems = useMemo(() => patternProblems(patterns), [patterns]);
+  const [ignoreCase, setIgnoreCase] = useState(false);
+  const [patternDraft, setPatternDraft] = useState("");
+  const problemOf = (pattern: PathPattern) => problems.find((p) => p.includes(`"${pattern.pattern}"`));
+  const addPattern = () => {
+    const pattern = parsePattern(patternDraft, ignoreCase);
+    if (!pattern) return;
+    onPatterns([...patterns, pattern]);
+    setPatternDraft("");
+  };
+  return (
+    <div className="topos-pane-paths">
+      <div className="topos-pane-paths-part">
+        <span className="topos-pane-paths-label">
+          <Icon host={host} name="folder" />
+          In
+        </span>
+        <div className="topos-chips">
+          {paths.map((path, i) => (
+            <span key={path} className="topos-chip topos-pane-path-chip" title={path}>
+              <Icon host={host} name={extensionOf(path) ? "file" : "folder"} />
+              {path}
+              <button aria-label={`Remove ${path}`} onClick={() => onPaths(paths.filter((_, j) => j !== i))}>
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+        <PathPicker
+          host={host}
+          folders={host.folders()}
+          files={files}
+          chosen={paths}
+          onPick={(path) => onPaths([...paths, path])}
+          placeholder={paths.length === 0 ? "Every folder; add folders or files" : "Add a folder or file"}
+        />
+      </div>
+      <div className="topos-pane-paths-part">
+        <span className="topos-pane-paths-label">
+          <Icon host={host} name="asterisk" />
+          Match
+        </span>
+        <div className="topos-chips">
+          {patterns.map((pattern, i) => {
+            const problem = problemOf(pattern);
+            const flip = () => {
+              const text = excludes(pattern) ? pattern.pattern.slice(1) : `!${pattern.pattern}`;
+              onPatterns(patterns.map((p, j) => (j === i ? { ...p, pattern: text } : p)));
+            };
+            return (
+              <span
+                key={`${pattern.kind}:${pattern.pattern}:${i}`}
+                className={`topos-chip topos-pane-pattern${excludes(pattern) ? " is-exclude" : ""}${problem ? " is-invalid" : ""}`}
+                title={problem ?? `${excludes(pattern) ? "Leaves out" : "Keeps"} matching files (click to ${excludes(pattern) ? "keep" : "leave out"} them)`}
+                onClick={flip}
+              >
+                <span className="topos-pane-pattern-kind">
+                  {pattern.kind === "regex" ? "regex" : pattern.kind === "iglob" ? "glob, any case" : "glob"}
+                </span>
+                <code>{patternText(pattern)}</code>
+                <button
+                  aria-label={`Remove ${patternText(pattern)}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPatterns(patterns.filter((_, j) => j !== i));
+                  }}
+                >
+                  ×
+                </button>
+              </span>
+            );
+          })}
+        </div>
+        <div className="topos-pane-pattern-input">
+          <input
+            type="text"
+            spellCheck={false}
+            value={patternDraft}
+            placeholder={"Glob or /regex/: *.srt, Sermons/**, !drafts, /20\\d\\d/"}
+            onChange={(e) => setPatternDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") addPattern();
+              if (e.key === "Escape") setPatternDraft("");
+            }}
+          />
+          <button
+            className={`topos-pane-case${ignoreCase ? " is-on" : ""}`}
+            aria-pressed={ignoreCase}
+            title={ignoreCase ? "Ignoring case (click to match case)" : "Matching case (click to ignore case)"}
+            onClick={() => setIgnoreCase(!ignoreCase)}
+          >
+            Aa
+          </button>
+        </div>
+      </div>
+      {problems.length > 0 && (
+        <ul className="topos-errors" title="Searching without these">
+          {problems.map((problem) => (
+            <li key={problem}>{`${problem} (searching without it)`}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** How many suggestions a path picker lists */
+const PATH_SUGGESTIONS = 40;
+
+/** Picks a folder or file, suggesting those whose path has what's typed; Enter adds what's typed */
+function PathPicker({
+  host,
+  folders,
+  files,
+  chosen,
+  onPick,
+  placeholder,
+}: {
+  host: PaneHost;
+  folders: string[];
+  files: string[];
+  chosen: string[];
+  onPick: (path: string) => void;
+  placeholder: string;
+}) {
+  const [text, setText] = useState("");
+  const [focused, setFocused] = useState(false);
+  const [active, setActive] = useState(0);
+  const options = useMemo(() => {
+    const query = text.trim().toLowerCase();
+    const all = [
+      ...folders.map((path) => ({ path, folder: true })),
+      ...[...files].sort((a, b) => a.localeCompare(b)).map((path) => ({ path, folder: false })),
+    ].filter(({ path }) => !chosen.includes(path) && path.toLowerCase().includes(query));
+    // Paths starting with what's typed (or a folder named so) come first
+    const starts = (path: string) => path.toLowerCase().startsWith(query) || path.toLowerCase().includes(`/${query}`);
+    return [...all.filter((o) => starts(o.path)), ...all.filter((o) => !starts(o.path))].slice(0, PATH_SUGGESTIONS);
+  }, [text, folders, files, chosen]);
+  const pick = (path: string) => {
+    const clean = cleanPath(path);
+    if (clean && !chosen.includes(clean)) onPick(clean);
+    setText("");
+    setActive(0);
+  };
+  const activeItem = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    activeItem.current?.scrollIntoView({ block: "nearest" });
+  }, [active]);
+  return (
+    <div className="topos-input topos-pane-path-picker">
+      <input
+        type="text"
+        spellCheck={false}
+        value={text}
+        placeholder={placeholder}
+        onChange={(e) => {
+          setText(e.target.value);
+          setActive(0);
+        }}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowDown" && options.length > 0) {
+            e.preventDefault();
+            setActive((active + 1) % options.length);
+          } else if (e.key === "ArrowUp" && options.length > 0) {
+            e.preventDefault();
+            setActive((active - 1 + options.length) % options.length);
+          } else if (e.key === "Enter" || (e.key === "Tab" && options[active] && text)) {
+            e.preventDefault();
+            // A suggestion while typing, else exactly what's typed
+            pick(options[active] && text.trim() ? options[active].path : text);
+          } else if (e.key === "Escape") setText("");
+        }}
+      />
+      {focused && options.length > 0 && (
+        <ul className="topos-dropdown">
+          {options.map((option, i) => (
+            <li
+              key={option.path}
+              ref={i === active ? activeItem : undefined}
+              className={i === active ? "is-active" : ""}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                pick(option.path);
+              }}
+            >
+              <span className="topos-pane-path-option">
+                <Icon host={host} name={option.folder ? "folder" : FILE_ICONS[extensionOf(option.path)] ?? "file"} />
+                {option.path}
+              </span>
+              <span className="topos-suggestion-kind">{option.folder ? "folder" : "file"}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

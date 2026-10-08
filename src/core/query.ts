@@ -1,16 +1,19 @@
 import { NO_FILTERS, type Filters, type Testament } from "./filters.ts";
+import { cleanPath, EVERYWHERE, type PathPattern, type Where } from "./paths.ts";
 
 /** A named search, saved in the settings */
 export interface SavedQuery {
   name: string;
-  /** The CLI's filter options, like `--nt -g "Pauline Epistles" -o "John 1"` */
+  /**
+   * The CLI's filter options, like `--nt -g "Pauline Epistles" -o "John 1"`, with the files and
+   * folders to search first, and `--glob`/`--iglob` (and `--path-regex`, the plugin's own)
+   */
   query: string;
 }
 
-/** What a query asks for: filters, and optionally a folder to search (a path, like the CLI's) */
-export interface ParsedQuery {
+/** What a query asks for: filters, and which files to search (paths and patterns, like the CLI's) */
+export interface ParsedQuery extends Where {
   filters: Filters;
-  folder: string | null;
   errors: string[];
 }
 
@@ -32,6 +35,13 @@ const LIST_OPTIONS: Record<string, ListKey> = {
   "--exact-overlap": "exactOverlap",
   "--exclude-overlap": "excludeOverlap",
   "--outside": "excludeOverlap",
+};
+
+/** Path patterns: the CLI's globs, and regular expressions (only the plugin has those) */
+const PATTERN_OPTIONS: Record<string, PathPattern["kind"]> = {
+  "--glob": "glob",
+  "--iglob": "iglob",
+  "--path-regex": "regex",
 };
 
 const TESTAMENT_OPTIONS: Record<string, "testaments" | "excludeTestaments"> = {
@@ -74,7 +84,8 @@ function testament(value: string): Testament | null {
 export function parseQuery(text: string, { legacy = false }: { legacy?: boolean } = {}): ParsedQuery {
   const filters: Filters = structuredClone(NO_FILTERS);
   const errors: string[] = [];
-  let folder: string | null = null;
+  const paths: string[] = [];
+  const patterns: PathPattern[] = [];
   const tokens = tokenize(text);
   for (let i = 0; i < tokens.length; i++) {
     let option = tokens[i];
@@ -91,10 +102,10 @@ export function parseQuery(text: string, { legacy = false }: { legacy?: boolean 
     }
     const list = legacy && option === "-o" ? "anyOverlap" : LIST_OPTIONS[option];
     const testamentKey = TESTAMENT_OPTIONS[option];
-    if (!list && !testamentKey) {
+    const patternKind = PATTERN_OPTIONS[option];
+    if (!list && !testamentKey && !patternKind) {
       if (option.startsWith("-")) errors.push(`Unknown option ${option}`);
-      else if (folder === null) folder = option.replace(/^\.\/?/, "").replace(/\/+$/, "");
-      else errors.push(`Only one folder can be searched ("${option}")`);
+      else if (cleanPath(option)) paths.push(cleanPath(option));
       continue;
     }
     value ??= tokens[++i];
@@ -102,24 +113,25 @@ export function parseQuery(text: string, { legacy = false }: { legacy?: boolean 
       errors.push(`${option} needs a value`);
       break;
     }
-    if (list) filters[list].push(value);
+    if (patternKind) patterns.push({ kind: patternKind, pattern: value });
+    else if (list) filters[list].push(value);
     else {
       const t = testament(value);
       if (t === null) errors.push(`Unknown testament "${value}"`);
       else if (!filters[testamentKey].includes(t)) filters[testamentKey].push(t);
     }
   }
-  return { filters, folder, errors };
+  return { filters, paths, patterns, errors };
 }
 
 function quote(value: string): string {
-  return /^[\w:.,;\-–]+$/.test(value) ? value : `"${value.replace(/"/g, "")}"`;
+  return /^[\w:.,;\-–/]+$/.test(value) ? value : `"${value.replace(/"/g, "")}"`;
 }
 
-/** Writes filters (and a folder) as CLI options, the inverse of {@link parseQuery} */
-export function formatQuery(filters: Filters, folder: string | null = null): string {
+/** Writes filters (and the files to search) as CLI options, the inverse of {@link parseQuery} */
+export function formatQuery(filters: Filters, where: Where = EVERYWHERE): string {
   const parts: string[] = [];
-  if (folder) parts.push(quote(folder));
+  for (const path of where.paths) parts.push(quote(path));
   for (const t of filters.testaments) parts.push(t === "new" ? "--nt" : "--ot");
   for (const t of filters.excludeTestaments) parts.push("--exclude-testament", t);
   const lists: [ListKey, string][] = [
@@ -134,6 +146,8 @@ export function formatQuery(filters: Filters, folder: string | null = null): str
     ["excludeOverlap", "--exclude-overlap"],
   ];
   for (const [key, option] of lists) for (const value of filters[key]) parts.push(option, quote(value));
+  const patternOption = { glob: "--glob", iglob: "--iglob", regex: "--path-regex" };
+  for (const { kind, pattern } of where.patterns) parts.push(patternOption[kind], quote(pattern));
   return parts.join(" ");
 }
 
@@ -143,5 +157,5 @@ export function formatQuery(filters: Filters, folder: string | null = null): str
  */
 export function migrateQuery(text: string): string {
   const parsed = parseQuery(text, { legacy: true });
-  return parsed.errors.length > 0 ? text : formatQuery(parsed.filters, parsed.folder);
+  return parsed.errors.length > 0 ? text : formatQuery(parsed.filters, parsed);
 }
