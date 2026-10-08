@@ -189,3 +189,88 @@ test("Show more goes on while what it adds is all in collapsed groups", async ()
   await act(async () => (header("b.md") as unknown as HTMLElement).click());
   assert.equal(container.querySelectorAll(".topos-hit").length, 702);
 });
+
+test("in the search tab, Collapse all also collapses groups that appear later", async () => {
+  const window = new Window();
+  Object.assign(globalThis, {
+    window,
+    document: window.document,
+    HTMLElement: window.HTMLElement,
+    Element: window.Element,
+    Node: window.Node,
+    Event: window.Event,
+    requestAnimationFrame: (f: () => void) => setTimeout(f, 0),
+    IS_REACT_ACT_ENVIRONMENT: true,
+  });
+  const src = (path: string) => JSON.stringify(new URL(`../src/${path}`, import.meta.url).pathname);
+  const entry = join(cache, "dom-pane-entry.tsx");
+  writeFileSync(
+    entry,
+    `import { act } from "react";
+     import { createRoot } from "react-dom/client";
+     import { Topos } from "topos-bible";
+     import { PaneApp } from ${src("view/PaneApp.tsx")};
+     import { SearchStore } from ${src("view/store.ts")};
+     import { ReferenceIndex } from ${src("core/index.ts")};
+     import { DEFAULT_SETTINGS } from ${src("core/settings.ts")};
+     export { act };
+     export function mount(container, notes) {
+       const topos = Topos.new();
+       const index = new ReferenceIndex(topos);
+       for (const [path, text] of Object.entries(notes)) index.update(path, text);
+       const plugin = {
+         topos, refs: index, indexVersion: 1, indexing: false, settings: DEFAULT_SETTINGS,
+         indexer: { loadDetails: async () => {} },
+         extensions: () => ["md"], bibles: { all: () => [] },
+         referenceUrl: () => null, linkSite: () => "",
+         search: new SearchStore(), subscribeIndex: () => () => {},
+         app: {
+           workspace: { getActiveFile: () => null, on: () => ({}), offref() {} },
+           vault: { getFileByPath: (path) => ({ path }), cachedRead: async (file) => notes[file.path] },
+         },
+       };
+       const host = {
+         markdown: () => ({ done: Promise.resolve(), unload() {} }), verses: () => ({ unload() {} }),
+         icon() {}, open() {}, openPassage() {}, copy() {}, folders: () => [],
+       };
+       const look = { preview: "source", verses: false, style: "name", merge: false };
+       act(() => createRoot(container).render(<PaneApp plugin={plugin} store={new SearchStore({ context: 0 })} host={host} look={look} />));
+     }`,
+  );
+  const outfile = join(cache, "dom-pane.mjs");
+  await esbuild.build({
+    entryPoints: [entry],
+    bundle: true,
+    format: "esm",
+    platform: "node",
+    jsx: "automatic",
+    external: ["obsidian", "topos-bible", "react", "react-dom"],
+    nodePaths: [new URL("../node_modules", import.meta.url).pathname],
+    outfile,
+    logLevel: "silent",
+  });
+  const { act, mount } = await import(pathToFileURL(outfile).href);
+  const container = document.createElement("div");
+  document.body.appendChild(container);
+  // A page is 100 results: a.md and 99 of b.md's 350
+  mount(container, { "a.md": "Gen 1:1", "b.md": "John 3:16\n".repeat(350), "c.md": "Rev 22:21" });
+  await act(async () => new Promise((r) => setTimeout(r, 10)));
+  const group = (name: string) =>
+    [...container.querySelectorAll(".topos-pane-group")].find((g) => g.querySelector(".topos-pane-group-name")!.textContent === name);
+  const button = (label: string) =>
+    [...container.querySelectorAll("button")].find((b) => b.textContent!.startsWith(label)) as unknown as HTMLElement | undefined;
+
+  await act(async () => button("Collapse all")!.click());
+  assert.ok(group("a")!.classList.contains("is-collapsed") && group("b")!.classList.contains("is-collapsed"));
+  // Pages of more b.md show nothing new, so they load until c.md's group, which starts collapsed
+  await act(async () => button("Show more")!.click());
+  await act(async () => new Promise((r) => setTimeout(r, 10)));
+  assert.equal(group("b")!.querySelector(".topos-pane-count")!.textContent, "350");
+  assert.ok(group("c")!.classList.contains("is-collapsed"));
+  assert.equal(button("Show more"), undefined);
+  // A group opened by hand stays open; Expand all opens the rest
+  await act(async () => (group("c")!.querySelector(".topos-pane-group-head") as unknown as HTMLElement).click());
+  assert.ok(!group("c")!.classList.contains("is-collapsed") && group("a")!.classList.contains("is-collapsed"));
+  await act(async () => button("Expand all")!.click());
+  assert.equal(container.querySelectorAll(".topos-pane-group.is-collapsed").length, 0);
+});

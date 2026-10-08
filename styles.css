@@ -752,11 +752,31 @@ button.topos-pane-saved-name {
   gap: var(--size-4-3);
   min-width: 0;
 }
+/* The counts and collapse buttons stay at the top while the results scroll under them */
 .topos-pane-summary {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: flex;
   align-items: baseline;
   gap: var(--size-4-3);
+  margin: 0 calc(-1 * var(--size-4-2));
+  padding: var(--size-4-2);
   color: var(--text-muted);
+  background: color-mix(in srgb, var(--background-primary) 92%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+/* Wide, the results scroll with padding above them: the row sticks at their very top */
+.topos-pane:not(.is-narrow) .topos-pane-results {
+  padding-top: 0;
+}
+.topos-pane:not(.is-narrow) .topos-pane-summary {
+  padding-top: var(--size-4-4);
+}
+button.topos-pane-link.is-on {
+  font-weight: var(--font-semibold);
+  text-decoration: underline;
 }
 .topos-pane-stat strong {
   color: var(--text-normal);

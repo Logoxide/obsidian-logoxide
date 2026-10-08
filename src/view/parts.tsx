@@ -124,18 +124,56 @@ export function usePages(page: number): Pages {
   };
 }
 
+/** Which result groups are collapsed: those toggled, or after "Collapse all", all but those */
+export interface Collapsed {
+  /** Whether "Collapse all" is on: groups start collapsed, also ones that appear later */
+  all: boolean;
+  has: (key: string) => boolean;
+  toggle: (key: string) => void;
+  collapseAll: () => void;
+  expandAll: () => void;
+}
+
+export function useCollapsed(): Collapsed {
+  const [state, setState] = useState({ all: false, except: new Set<string>() });
+  return {
+    all: state.all,
+    has: (key) => state.all !== state.except.has(key),
+    toggle: (key) =>
+      setState(({ all, except }) => {
+        const next = new Set(except);
+        if (!next.delete(key)) next.add(key);
+        return { all, except: next };
+      }),
+    collapseAll: () => setState({ all: true, except: new Set() }),
+    expandAll: () => setState({ all: false, except: new Set() }),
+  };
+}
+
 /**
- * After "Show more": when every result it added went into a collapsed group, nothing new can be
- * seen, so it loads another page, until one shows something or there are no more
+ * After "Show more": when every result it added went into groups already shown collapsed, nothing
+ * new can be seen, so it loads another page, until one shows something (a result, or a new
+ * group's header) or there are no more
  */
-export function useLoadPastHidden(pages: Pages, hits: Hit[], total: number, hidden: (hit: Hit) => boolean): void {
+export function useLoadPastHidden(
+  pages: Pages,
+  hits: Hit[],
+  total: number,
+  groupOf: (hit: Hit) => string,
+  collapsed: Collapsed,
+): void {
   useEffect(() => {
     const start = pages.loading.current;
     if (start === null) return;
+    const before = new Set(hits.slice(0, start).map(groupOf));
     const added = hits.slice(start);
+    const hidden = (hit: Hit) => {
+      const group = groupOf(hit);
+      return before.has(group) && collapsed.has(group);
+    };
     if (added.length > 0 && added.every(hidden) && total > pages.shown) pages.more();
     else pages.loading.current = null;
-    // Once each page has loaded (`hidden` is read as it is then)
+    // Once each page has loaded (groups and collapsing are read as they are then)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hits]);
 }

@@ -14,6 +14,7 @@ import {
   PASSAGE_ROWS,
   TestamentToggle,
   useFileLines,
+  useCollapsed,
   useLoadPastHidden,
   usePages,
   type ListKey,
@@ -33,7 +34,7 @@ export function SearchApp({ plugin }: { plugin: ToposPlugin }) {
   const indexVersion = useSyncExternalStore(plugin.subscribeIndex, version, version);
   const [styleName, setStyleName] = useState<StyleName>(plugin.settings.style);
   const [activePath, setActivePath] = useState(plugin.app.workspace.getActiveFile()?.path ?? "");
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const collapsed = useCollapsed();
   const pages = usePages(PAGE);
   const { shown } = pages;
   /** Bumped when EPUB details the page needs are read */
@@ -86,9 +87,8 @@ export function SearchApp({ plugin }: { plugin: ToposPlugin }) {
     [hits, shown, state.groupBy, books],
   );
   // "Show more" goes on while what it adds is all in collapsed groups
-  useLoadPastHidden(pages, hits, results.total, (hit) =>
-    collapsed.has(state.groupBy === "file" ? hit.path : bookName(hit.passage.bookId)),
-  );
+  const groupOf = (hit: Hit) => (state.groupBy === "file" ? hit.path : bookName(hit.passage.bookId));
+  useLoadPastHidden(pages, hits, results.total, groupOf, collapsed);
   const total = results.total;
   const fileCount = results.files;
   const shownPaths = useMemo(
@@ -366,12 +366,7 @@ export function SearchApp({ plugin }: { plugin: ToposPlugin }) {
             <div key={group.key} className="topos-group">
               <div
                 className="topos-group-header"
-                onClick={() => {
-                  const next = new Set(collapsed);
-                  if (isCollapsed) next.delete(group.key);
-                  else next.add(group.key);
-                  setCollapsed(next);
-                }}
+                onClick={() => collapsed.toggle(group.key)}
               >
                 <span className={`topos-caret${isCollapsed ? " is-collapsed" : ""}`}>▾</span>
                 <span className="topos-group-name">{group.key}</span>

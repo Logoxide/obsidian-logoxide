@@ -65,6 +65,9 @@ the sidebar, which takes the sidebar's search along): the same search with room 
   click one of its references to go to that one
 - On a result: open it beside the search (Ctrl/Cmd-click: in a new tab), open the passage in the
   Bible, copy the reference, find references that share a verse with it, or open its link
+- The counts and *Collapse all* / *Expand all* stay above the results as they scroll. *Collapse all*
+  keeps new groups collapsed too (from *Show more*, or as files change) until you open them; *Show
+  more* keeps loading while all it adds goes into groups already collapsed
 - Saved searches are listed by name, with their options; each tab remembers its search and look
 
 **In the editor**

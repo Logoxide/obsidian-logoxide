@@ -25,6 +25,7 @@ import {
   PASSAGE_ROWS,
   TestamentToggle,
   useFileLines,
+  useCollapsed,
   useLoadPastHidden,
   usePages,
   type ListKey,
@@ -111,7 +112,7 @@ export function PaneApp({
     onLook?.(next);
   };
   const [activePath, setActivePath] = useState(plugin.app.workspace.getActiveFile()?.path ?? "");
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const collapsed = useCollapsed();
   const pages = usePages(PAGE);
   const { shown } = pages;
   const [detailsVersion, setDetailsVersion] = useState(0);
@@ -190,9 +191,8 @@ export function PaneApp({
     [hits, state.groupBy, books],
   );
   // "Show more" goes on while what it adds is all in collapsed groups
-  useLoadPastHidden(pages, hits, results.total, (hit) =>
-    collapsed.has(state.groupBy === "file" ? hit.path : bookName(hit.passage.bookId)),
-  );
+  const groupOf = (hit: Hit) => (state.groupBy === "file" ? hit.path : bookName(hit.passage.bookId));
+  useLoadPastHidden(pages, hits, results.total, groupOf, collapsed);
   const shownPaths = useMemo(() => [...new Set(hits.map((h) => h.path))], [hits]);
   const fileLines = useFileLines(plugin, shownPaths.filter((p) => !isEpub(p)), indexVersion);
   // Each shown note's references, to find a result among the rendered ones
@@ -567,12 +567,17 @@ export function PaneApp({
             </span>
             {plugin.indexing && <span className="topos-pane-indexing">Indexing…</span>}
             <span className="topos-pane-spacer" />
-            {groups.length > 1 && (
+            {groups.length > 0 && (
               <>
-                <button className="topos-pane-link" onClick={() => setCollapsed(new Set(groups.map((g) => g.key)))}>
+                <button
+                  className={`topos-pane-link${collapsed.all ? " is-on" : ""}`}
+                  aria-pressed={collapsed.all}
+                  title="Collapse every group, also ones that appear later"
+                  onClick={collapsed.collapseAll}
+                >
                   Collapse all
                 </button>
-                <button className="topos-pane-link" onClick={() => setCollapsed(new Set())}>
+                <button className="topos-pane-link" title="Expand every group" onClick={collapsed.expandAll}>
                   Expand all
                 </button>
               </>
@@ -593,12 +598,7 @@ export function PaneApp({
 
           {groups.map((group) => {
             const isCollapsed = collapsed.has(group.key);
-            const toggle = () => {
-              const next = new Set(collapsed);
-              if (isCollapsed) next.delete(group.key);
-              else next.add(group.key);
-              setCollapsed(next);
-            };
+            const toggle = () => collapsed.toggle(group.key);
             return (
               <section key={group.key} className={`topos-pane-group${isCollapsed ? " is-collapsed" : ""}`}>
                 <div className="topos-pane-group-head" onClick={toggle}>
