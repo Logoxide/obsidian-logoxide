@@ -477,6 +477,8 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
 
   isSearchable(file: TAbstractFile): file is TFile {
     if (!(file instanceof TFile)) return false;
+    // The biblix library holds Bibles and their license files, not notes
+    if (file.path.startsWith(`${this.packages.libraryDir()}/`)) return false;
     return this.extensions().includes(file.extension) && !this.isExcluded(file.path);
   }
 
