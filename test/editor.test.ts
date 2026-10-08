@@ -172,7 +172,7 @@ test("reference links and embeds in live preview hide their syntax unless the cu
 });
 
 test("with embedAlone, a reference alone on its line shows its text unless the cursor is near it", async () => {
-  const { EditorView, referenceDecorations, relinkEditor, DEFAULT_SETTINGS, livePreview, editorLivePreviewField } = await load();
+  const { EditorView, referenceDecorations, refreshReferences, relinkEditor, DEFAULT_SETTINGS, livePreview, editorLivePreviewField } = await load();
   const { Topos } = await import("topos-bible");
   const { EditorSelection } = await import("@codemirror/state");
   const settings = { ...DEFAULT_SETTINGS, embedAlone: true };
@@ -189,29 +189,45 @@ test("with embedAlone, a reference alone on its line shows its text unless the c
       el.textContent = `<${passage.reference}>`;
     },
   };
-  const doc = "Start\n\n  Jn 3:16 \nRead Rom 8:28 too\n\nEnd";
+  const doc = "Start\n\n  Jn 3:16 \nRead Rom 8:28 too\n\nPs 23:1\n\nEnd";
   livePreview.on = true;
   const view = new EditorView({ doc, selection: EditorSelection.cursor(0), extensions: [editorLivePreviewField, referenceDecorations(plugin)], parent: document.body });
   const shown = () => view.contentDOM.textContent;
-  assert.equal(shown(), "Start<John 3:16>Read Rom 8:28 tooEnd");
-  // On the line before, the line itself, or the line after, it's text again
-  for (const line of [2, 3, 4]) {
-    view.dispatch({ selection: EditorSelection.cursor(view.state.doc.line(line).from) });
-    assert.equal(shown(), "Start  Jn 3:16 Read Rom 8:28 tooEnd");
-  }
-  view.dispatch({ selection: EditorSelection.cursor(view.state.doc.length) });
-  assert.equal(shown(), "Start<John 3:16>Read Rom 8:28 tooEnd");
+  const cursorOn = (line: number) => {
+    view.dispatch({ selection: EditorSelection.cursor(view.state.doc.line(line).from), effects: refreshReferences.of(null) });
+    return shown();
+  };
+  // A line of its own is enough, and only the cursor on that line shows the reference
+  assert.equal(cursorOn(1), "Start<John 3:16>Read Rom 8:28 too<Psalm 23:1>End");
+  assert.equal(cursorOn(2), "Start<John 3:16>Read Rom 8:28 too<Psalm 23:1>End");
+  assert.equal(cursorOn(3), "Start  Jn 3:16 Read Rom 8:28 too<Psalm 23:1>End");
+  // A blank line above and below: John 3:16 has text below it; the cursor a line away shows Psalm 23
+  settings.embedAloneBlankLines = 1;
+  assert.equal(cursorOn(1), "Start  Jn 3:16 Read Rom 8:28 too<Psalm 23:1>End");
+  assert.equal(cursorOn(4), "Start  Jn 3:16 Read Rom 8:28 too<Psalm 23:1>End");
+  assert.equal(cursorOn(5), "Start  Jn 3:16 Read Rom 8:28 tooPs 23:1End");
+  assert.equal(cursorOn(7), "Start  Jn 3:16 Read Rom 8:28 tooPs 23:1End");
+  assert.equal(cursorOn(8), "Start  Jn 3:16 Read Rom 8:28 too<Psalm 23:1>End");
+  settings.embedAloneCursorLines = 2;
+  assert.equal(cursorOn(4), "Start  Jn 3:16 Read Rom 8:28 tooPs 23:1End");
+  settings.embedAloneCursorLines = 0;
+  assert.equal(cursorOn(5), "Start  Jn 3:16 Read Rom 8:28 too<Psalm 23:1>End");
   view.destroy();
   livePreview.on = false;
 
   // Rendered Markdown: a line of a paragraph (between line breaks), not a reference in a sentence
+  settings.embedAloneBlankLines = 0;
   const editorEl = document.createElement("div");
   editorEl.innerHTML =
-    '<div class="cm-content"><div class="cm-embed-block"><p>Intro<br>\nJn 3:16<br>\nSee Rom 8:28</p></div></div>';
+    '<div class="cm-content"><div class="cm-embed-block"><p>Intro<br>\nJn 3:16<br>\nSee Rom 8:28</p><p>Ps 23:1</p></div></div>';
   relinkEditor(plugin, editorEl);
-  const p = editorEl.querySelector("p")!;
-  assert.equal(p.textContent, "Intro\n<John 3:16>\nSee Rom 8:28");
+  const text = () => [...editorEl.querySelectorAll("p")].map((p: any) => p.textContent);
+  assert.deepEqual(text(), ["Intro\n<John 3:16>\nSee Rom 8:28", "<Psalm 23:1>"]);
+  // With blank lines, only a paragraph of its own
+  settings.embedAloneBlankLines = 1;
+  relinkEditor(plugin, editorEl);
+  assert.deepEqual(text(), ["Intro\nJn 3:16\nSee Rom 8:28", "<Psalm 23:1>"]);
   settings.embedAlone = false;
   relinkEditor(plugin, editorEl);
-  assert.equal(p.textContent, "Intro\nJn 3:16\nSee Rom 8:28");
+  assert.deepEqual(text(), ["Intro\nJn 3:16\nSee Rom 8:28", "Ps 23:1"]);
 });

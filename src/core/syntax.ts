@@ -152,3 +152,14 @@ export function findReferences(topos: Topos, text: string, translations?: ToposT
 function withTranslation(named: NamedPassage): { passage: Passage; translation?: string } {
   return named.translation ? { passage: named.passage, translation: named.translation } : { passage: named.passage };
 }
+
+/**
+ * Whether the `count` lines above `first` and below `last` (1-based) are blank, or past the start
+ * or end of the text: `line(n)` is line `n`'s text, or undefined past the text
+ */
+export function blankAround(line: (n: number) => string | undefined, first: number, last: number, count: number): boolean {
+  for (let i = 1; i <= count; i++) {
+    if (line(first - i)?.trim() || line(last + i)?.trim()) return false;
+  }
+  return true;
+}

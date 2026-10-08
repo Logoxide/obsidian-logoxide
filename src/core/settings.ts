@@ -71,9 +71,13 @@ export interface ToposSettings {
   previewBare: boolean;
   /**
    * Show the text of a bare reference alone on its line, like `![John 1:1]` (in the editor, unless
-   * the cursor is on that line or next to it)
+   * the cursor is near it)
    */
   embedAlone: boolean;
+  /** Blank lines that must be above and below such a reference (0: it only needs a line of its own) */
+  embedAloneBlankLines: number;
+  /** In the editor, how many lines away the cursor shows the reference again (null: `embedAloneBlankLines`) */
+  embedAloneCursorLines: number | null;
   /** Mark references in other plugins' documents (Transcript++'s transcripts, the Bible tab) */
   markInDocuments: boolean;
   /** Once file-plus-plus's default link label has become `{{reference}}` */
@@ -111,9 +115,16 @@ export const DEFAULT_SETTINGS: ToposSettings = {
   referenceLinks: "bible",
   previewBare: true,
   embedAlone: false,
+  embedAloneBlankLines: 0,
+  embedAloneCursorLines: null,
   markInDocuments: true,
 };
 
 export function bookStyle(name: StyleName): BookStyle {
   return { name: BookStyle.Name, abbreviation: BookStyle.Abbreviation, osis: BookStyle.Osis }[name];
+}
+
+/** How many lines away from an embedded reference the cursor shows it again */
+export function embedAloneCursorLines(settings: ToposSettings): number {
+  return settings.embedAloneCursorLines ?? settings.embedAloneBlankLines;
 }

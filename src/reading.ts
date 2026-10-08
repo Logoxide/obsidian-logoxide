@@ -1,6 +1,6 @@
 import { Component, MarkdownRenderChild, type MarkdownPostProcessor } from "obsidian";
 import type { Passage } from "topos-bible";
-import { findReferences, wholeReference } from "./core/syntax.ts";
+import { blankAround, findReferences, wholeReference } from "./core/syntax.ts";
 import { hoverParent, named } from "./editor/decorations.ts";
 import type ToposPlugin from "./main.ts";
 
@@ -20,22 +20,29 @@ const RENDERED_IN_EDITOR = ".cm-content .cm-embed-block, .cm-content .markdown-e
  * References in reading view (see `core/syntax.ts`): bare references are highlighted (opening their
  * link with Ctrl/Cmd-click, like the editor), `[text](John 1:1)` and `[John 1:1]` become links to
  * the passage, `![John 1:1]` shows its text (and so does a bare reference alone on its line, with
- * `embedAlone`), and all of them preview the passage on hover
+ * `embedAlone` and the blank lines around it), and all of them preview the passage on hover
  */
 export function linkReferences(plugin: ToposPlugin): MarkdownPostProcessor {
   return (el, ctx) => {
     if (!plugin.settings.linkInReading) return;
     const owner = new MarkdownRenderChild(el);
     ctx.addChild(owner);
-    linkElement(plugin, el, owner, ctx.sourcePath);
+    linkElement(plugin, el, owner, ctx.sourcePath, () => ctx.getSectionInfo(el));
   };
 }
 
 /** The embeds in blocks relinked in live preview, unloaded when the block is relinked again */
 const blockOwners = new WeakMap<HTMLElement, Component>();
 
-/** Links the references in an element's text, leaving links and linked ones alone */
-export function linkElement(plugin: ToposPlugin, el: HTMLElement, owner: Component, sourcePath = ""): void {
+/** The Markdown an element was rendered from, and its lines in it (0-based) */
+type SectionInfo = () => { text: string; lineStart: number; lineEnd: number } | null;
+
+/**
+ * Links the references in an element's text, leaving links and linked ones alone. `section` is
+ * where the element is in its note's Markdown, to count the blank lines around a reference
+ * alone in its paragraph (without it, any number of blank lines is assumed)
+ */
+export function linkElement(plugin: ToposPlugin, el: HTMLElement, owner: Component, sourcePath = "", section?: SectionInfo): void {
   const doc = el.ownerDocument;
   linkUnresolved(plugin, el, sourcePath);
   const walker = doc.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
@@ -61,7 +68,7 @@ export function linkElement(plugin: ToposPlugin, el: HTMLElement, owner: Compone
     let last = 0;
     for (const r of found) {
       let element: HTMLElement;
-      if (r.kind === "bare" && plugin.settings.embedAlone && hasBible && aloneOnLine(node, text, r.start, r.end)) {
+      if (r.kind === "bare" && plugin.settings.embedAlone && hasBible && embedsAlone(plugin, node, text, r.start, r.end, section)) {
         element = doc.createElement("div");
         element.classList.add(RENDERED);
         // Unlinking puts the reference back
@@ -101,12 +108,22 @@ export function linkElement(plugin: ToposPlugin, el: HTMLElement, owner: Compone
   }
 }
 
-/** Whether `text[start..end]` is all of a line in a paragraph: between line breaks, with only spaces around it */
-function aloneOnLine(node: Text, text: string, start: number, end: number): boolean {
+/**
+ * Whether `text[start..end]` is embedded by `embedAlone`: all of a line in a paragraph (between line
+ * breaks, with only spaces around it), or with blank lines around it, all of the paragraph
+ */
+function embedsAlone(plugin: ToposPlugin, node: Text, text: string, start: number, end: number, section?: SectionInfo): boolean {
   const parent = node.parentElement;
   if (!parent || !["P", "DIV"].includes(parent.tagName)) return false;
+  if (text.slice(0, start).trim() || text.slice(end).trim()) return false;
+  const blank = plugin.settings.embedAloneBlankLines;
   const lineEdge = (sibling: ChildNode | null) => sibling === null || sibling.nodeName === "BR";
-  return !text.slice(0, start).trim() && !text.slice(end).trim() && lineEdge(node.previousSibling) && lineEdge(node.nextSibling);
+  if (blank === 0) return lineEdge(node.previousSibling) && lineEdge(node.nextSibling);
+  if (node.previousSibling || node.nextSibling) return false;
+  const info = section?.();
+  if (!info) return true;
+  const lines = info.text.split("\n");
+  return blankAround((n) => lines[n - 1], info.lineStart + 1, info.lineEnd + 1, blank);
 }
 
 /**

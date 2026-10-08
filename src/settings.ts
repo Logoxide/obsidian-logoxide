@@ -308,13 +308,46 @@ export class ToposSettingsPanel {
       );
     new Setting(containerEl)
       .setName("Embed references on their own line")
-      .setDesc("A reference alone on its line shows its text, like ![John 1:1]. In the editor, it shows the reference again while the cursor is on that line or next to it.")
+      .setDesc("A reference alone on its line shows its text, like ![John 1:1]. In the editor, it shows the reference again while the cursor is near it.")
       .addToggle((t) =>
         t.setValue(settings.embedAlone).onChange((value) => {
           settings.embedAlone = value;
           void save();
+          this.display();
         }),
       );
+    if (settings.embedAlone) {
+      const counts = (none: string) => {
+        const options: Record<string, string> = { 0: none };
+        for (let n = 1; n <= 5; n++) options[n] = `${n} line${n > 1 ? "s" : ""}`;
+        return options;
+      };
+      new Setting(containerEl)
+        .setName("Blank lines around them")
+        .setDesc("How many blank lines must be above and below the reference (the start and end of the note count).")
+        .addDropdown((d) =>
+          d
+            .addOptions(counts("None, just its own line"))
+            .setValue(String(settings.embedAloneBlankLines))
+            .onChange((value) => {
+              settings.embedAloneBlankLines = Number(value);
+              void save();
+            }),
+        );
+      new Setting(containerEl)
+        .setName("Cursor distance")
+        .setDesc("How many lines away the cursor shows the reference to edit it, instead of its text.")
+        .addDropdown((d) =>
+          d
+            .addOption("same", "As many as the blank lines")
+            .addOptions(counts("Only on its line"))
+            .setValue(settings.embedAloneCursorLines === null ? "same" : String(settings.embedAloneCursorLines))
+            .onChange((value) => {
+              settings.embedAloneCursorLines = value === "same" ? null : Number(value);
+              void save();
+            }),
+        );
+    }
     new Setting(containerEl)
       .setName("Mark references in other documents")
       .setDesc("Find references in transcripts (Transcript++) and other file-plus-plus documents as they open, and mark them like references in notes. EPUBs follow Search EPUB files.")

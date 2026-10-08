@@ -10,7 +10,8 @@ import {
 } from "@codemirror/view";
 import { Component, editorLivePreviewField, MarkdownView, type HoverParent } from "obsidian";
 import { BookStyle, type Passage } from "topos-bible";
-import { findReferences } from "../core/syntax.ts";
+import { embedAloneCursorLines } from "../core/settings.ts";
+import { blankAround, findReferences } from "../core/syntax.ts";
 import type ToposPlugin from "../main.ts";
 
 /** Rebuilds the references in an editor, after the settings change what they link to */
@@ -24,8 +25,8 @@ export const refreshReferences = StateEffect.define<null>();
  * - `[text](John 1:1)` and `[John 1:1]` are links: in live preview their brackets and target are
  *   hidden unless the cursor is in them, a click opens the passage, and hovering previews it
  * - `![John 1:1]` shows the passage's text in live preview, unless the cursor is in it
- * - With `embedAlone`, so does a bare reference alone on its line, unless the cursor is on that line
- *   or next to it
+ * - With `embedAlone`, so does a bare reference alone on its line with `embedAloneBlankLines` blank
+ *   lines above and below it, unless the cursor is within `embedAloneCursorLines` lines of it
  */
 export function referenceDecorations(plugin: ToposPlugin) {
   class References implements PluginValue {
@@ -46,8 +47,10 @@ export function referenceDecorations(plugin: ToposPlugin) {
       const { selection } = view.state;
       const editing = (from: number, to: number) => selection.ranges.some((r) => r.from <= to && r.to >= from);
       const { doc } = view.state;
+      const near = embedAloneCursorLines(plugin.settings);
       const nearCursor = (line: number) =>
-        selection.ranges.some((r) => doc.lineAt(r.from).number <= line + 1 && doc.lineAt(r.to).number >= line - 1);
+        selection.ranges.some((r) => doc.lineAt(r.from).number <= line + near && doc.lineAt(r.to).number >= line - near);
+      const lineText = (n: number) => (n >= 1 && n <= doc.lines ? doc.line(n).text : undefined);
       const site = plugin.linkSite();
       const hasBible = plugin.bibles.all().length > 0;
       // Visible ranges widened to whole lines can overlap
@@ -65,7 +68,10 @@ export function referenceDecorations(plugin: ToposPlugin) {
           if (r.translation) data["data-topos-translation"] = r.translation;
           if (r.kind === "bare" && plugin.settings.embedAlone && live && hasBible) {
             const line = doc.lineAt(a);
-            if (line.text.trim() === text.slice(r.start, r.end) && !nearCursor(line.number)) {
+            const alone =
+              line.text.trim() === text.slice(r.start, r.end) &&
+              blankAround(lineText, line.number, line.number, plugin.settings.embedAloneBlankLines);
+            if (alone && !nearCursor(line.number)) {
               decorations.push(Decoration.replace({ widget: new EmbedWidget(plugin, r.passage, "", r.translation) }).range(line.from, line.to));
               lastEnd = line.to;
               continue;
