@@ -93,10 +93,15 @@ site*, the site from [Links](#links)); hovering any of them shows the passage, t
 page preview (*Settings → Page preview → Topos Bible: Bible references in notes*). In live preview
 the brackets and target are hidden unless the cursor is in them, like Obsidian's own links.
 
+References are also found in other documents built on file-plus-plus: in EPUBs (with *Search
+EPUB files*, through EPUB++) and transcripts (Transcript++), they are marked the same way and
+preview the passage on hover (*Mark references in other documents*).
+
 A USX file opens in a reading tab built on file-plus-plus (the engine of EPUB++): the book
 as one page with a chapter list, search, verse numbers, headings (footnotes optional), and
 highlights. Links into a book are `[[JHN.usx#v=3:16-18]]` (verses, `v=3` for a chapter, `;` between
-parts), which work in any translation's file; they show as highlights in the tab, and
+parts), which work in any translation's file; selecting part of a verse keeps the exact words
+(`v=3:16:~:text=so%20loved`), so only they are highlighted. Comments on highlights work as in EPUB++; they show as highlights in the tab, and
 `![[JHN.usx#v=3:16-18]]` embeds the verses. The tab's reading and highlight settings follow the
 plugin's own, under *Reading*, *Highlights*, and *Links* in the settings.
 

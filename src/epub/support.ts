@@ -1,4 +1,5 @@
-import { Platform, TFile, type Menu } from "obsidian";
+import { TFile } from "obsidian";
+import { PROVIDER_ID, referenceProvider } from "../documents/provider.ts";
 import type { EpubReference } from "topos-bible";
 import { bookHits, epubReferences, sectionKey } from "../core/epub.ts";
 import { written } from "../core/references.ts";
@@ -9,11 +10,9 @@ import {
   API_READY_EVENT,
   API_UNLOAD_EVENT,
   EPUB_PLUGIN_ID,
-  type EpubAnnotation,
   type EpubPlusPlusApi,
 } from "./api.ts";
 
-export const PROVIDER_ID = "topos-bible";
 
 /**
  * References in EPUBs, through EPUB++ (which opens EPUBs in Obsidian): the index finds them (with
@@ -110,79 +109,24 @@ export class EpubSupport {
     return true;
   }
 
-  // The annotation provider
+  // The annotation provider: references from the index, with their CFIs
 
   private register(api: EpubPlusPlusApi): () => void {
     const plugin = this.plugin;
-    const color = () => {
-      const body = activeDocument.body;
-      const get = (name: string) => getComputedStyle(body).getPropertyValue(name).trim();
-      return plugin.settings.referenceColor || get("--interactive-accent") || "#7c3aed";
+    const annotations = async (file: TFile) => {
+      if (!this.enabled) return [];
+      await plugin.indexer.loadFileDetails(file.path);
+      const style = bookStyle(plugin.settings.style);
+      return plugin.refs
+        .get(file.path)
+        .filter((hit) => hit.epub?.cfi)
+        .map((hit) => ({
+          id: String(hit.start),
+          locator: hit.epub!.cfi,
+          label: written(plugin.topos, hit.passage, style, plugin.settings.format),
+          data: hit,
+        }));
     };
-    const passageOf = (a: EpubAnnotation) => (a.data as Hit).passage;
-    return api.registerAnnotationProvider<Hit>({
-      id: PROVIDER_ID,
-      name: "Bible references",
-      icon: "book-open",
-      get color() {
-        return color();
-      },
-      // Like references in notes: a soft glow and a dashed underline
-      style: (c) =>
-        `text-decoration: underline dashed 1.5px ${c}; text-underline-offset: 3px; text-shadow: 0 0 8px color-mix(in srgb, ${c} 55%, transparent);`,
-      annotations: async (file) => {
-        if (!this.enabled) return [];
-        await plugin.indexer.loadFileDetails(file.path);
-        const style = bookStyle(plugin.settings.style);
-        return plugin.refs
-          .get(file.path)
-          .filter((hit) => hit.epub?.cfi)
-          .map((hit) => ({
-            id: String(hit.start),
-            locator: hit.epub!.cfi,
-            label: written(plugin.topos, hit.passage, style, plugin.settings.format),
-            data: hit,
-          }));
-      },
-      // Ctrl/Cmd-click or a middle click opens the reference (taps on mobile open the menu)
-      onClick: (annotations, event) => {
-        if (!Platform.isDesktop || !plugin.clickOpens(event, false)) return false;
-        plugin.openReference(passageOf(annotations[0]!));
-        return true;
-      },
-      menu: (menu: Menu, annotations) => {
-        for (const a of annotations) {
-          const passage = passageOf(a);
-          const section = `topos-${a.id}`;
-          if (plugin.referenceUrl(passage))
-            menu.addItem((item) =>
-              item
-                .setTitle(`Open ${a.label} in ${plugin.linkSite()}`)
-                .setIcon("external-link")
-                .setSection(section)
-                .onClick(() => plugin.openReference(passage)),
-            );
-          menu.addItem((item) =>
-            item
-              .setTitle("Find references to these verses")
-              .setIcon("search")
-              .setSection(section)
-              .onClick(() => void plugin.findInVault(passage)),
-          );
-          menu.addItem((item) =>
-            item
-              .setTitle(`Copy as OSIS (${passage.osis})`)
-              .setIcon("copy")
-              .setSection(section)
-              .onClick(() => void plugin.copyText(passage.osis)),
-          );
-        }
-      },
-      tooltip: (a) => {
-        const site = plugin.referenceUrl(passageOf(a)) ? plugin.linkSite() : "";
-        if (!site || !Platform.isDesktop) return a.label;
-        return `${a.label}\n${plugin.settings.clickNeedsModifier ? "Ctrl/Cmd-click" : "Click"} to open in ${site}`;
-      },
-    });
+    return api.registerAnnotationProvider<Hit>(referenceProvider<Hit>(plugin, annotations, (a) => (a.data as Hit).passage));
   }
 }

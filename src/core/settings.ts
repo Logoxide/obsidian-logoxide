@@ -65,6 +65,8 @@ export interface ToposSettings {
   referenceLinks: "bible" | "site";
   /** Show bare references' text on hover (links and explicit links always preview) */
   previewBare: boolean;
+  /** Mark references in other plugins' documents (Transcript++'s transcripts, the Bible tab) */
+  markInDocuments: boolean;
   /** Once file-plus-plus's default link label has become `{{reference}}` */
   bibleAliasDefault?: boolean;
 }
@@ -97,6 +99,7 @@ export const DEFAULT_SETTINGS: ToposSettings = {
   bibleHeadings: true,
   referenceLinks: "bible",
   previewBare: true,
+  markInDocuments: true,
 };
 
 export function bookStyle(name: StyleName): BookStyle {

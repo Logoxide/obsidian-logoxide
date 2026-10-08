@@ -284,6 +284,15 @@ export class ToposSettingsPanel {
         }),
       );
     new Setting(containerEl)
+      .setName("Mark references in other documents")
+      .setDesc("Find references in transcripts (Transcript++) and other file-plus-plus documents as they open, and mark them like references in notes. EPUBs follow Search EPUB files.")
+      .addToggle((t) =>
+        t.setValue(settings.markInDocuments).onChange((value) => {
+          settings.markInDocuments = value;
+          void save();
+        }),
+      );
+    new Setting(containerEl)
       .setName("Section headings")
       .setDesc("Show the translation's headings in Bible text.")
       .addToggle((t) =>

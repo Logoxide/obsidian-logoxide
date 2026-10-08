@@ -30,7 +30,7 @@ class Plugin extends Component {
   app: any;
   manifest: any;
   commands: any[] = [];
-  views: string[] = [];
+  viewTypes: string[] = [];
   suggests: any[] = [];
   postProcessors: any[] = [];
   constructor(app: any, manifest: any) {
@@ -45,7 +45,7 @@ class Plugin extends Component {
   }
   async saveData() {}
   registerView(type: string) {
-    this.views.push(type);
+    this.viewTypes.push(type);
   }
   addRibbonIcon() {}
   settingTab: any;
@@ -372,7 +372,7 @@ test("the built plugin loads, indexes, and runs its commands", async (t) => {
   assert.equal(existsSync(oldPack), false);
 
   // The Bible tab (and the plain text of USX files, from file-plus-plus), and the sidebar
-  assert.deepEqual(plugin.views, ["topos-bible", "topos-bible-source", "topos-bible-search"]);
+  assert.deepEqual(plugin.viewTypes, ["topos-bible", "topos-bible-source", "topos-bible-search"]);
   assert.deepEqual(
     plugin.refs.all().map((h: any) => `${h.path} ${h.passage.reference}`),
     ["Archive/old.md Genesis 1:1", "Sermons/a.md John 3:16", "Sermons/a.md Romans 8:28", "Sermons/b.md Psalm 23"],

@@ -47,6 +47,15 @@ export class BibleLibrary {
     return path ? this.plugin.app.vault.getFileByPath(path) : null;
   }
 
+  /** The path of a book's file in the current Bible, if known now (else it's looked up for next time) */
+  bookPath(bookId: number): string | null {
+    const bible = this.current();
+    if (!bible) return null;
+    const path = bible.books.get(bookId);
+    if (!path && bible.unknown.length > 0) void this.readUnknown(bible);
+    return path ?? null;
+  }
+
   /** Reads the book code of files whose names don't say which book they are */
   private async readUnknown(bible: Bible): Promise<void> {
     const ids = new Map(this.plugin.topos.books().filter((b) => b.usfm).map((b) => [b.usfm, b.id]));

@@ -34,6 +34,7 @@ import { defaultCliPath } from "./indexers/cli.ts";
 import { VaultIndexer } from "./indexers/vault.ts";
 import { indexBook, type BookRequest, type BookResult, type IndexRequest } from "./indexers/worker.ts";
 import { EpubSupport } from "./epub/support.ts";
+import { DocumentSupport } from "./documents/support.ts";
 import workerSource from "topos-worker-source";
 import { GoToReferenceModal, InsertReferenceModal, SavedQueryModal } from "./modals.ts";
 import { linkReferences, relinkEditor } from "./reading.ts";
@@ -64,6 +65,8 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
   search = new SearchStore();
   /** References in EPUBs, through the EPUB++ plugin */
   epubs = new EpubSupport(this);
+  /** References in other file-plus-plus documents (transcripts, the Bible tab) */
+  otherDocuments = new DocumentSupport(this);
   /** Bumped whenever the index changes, so the sidebar re-renders */
   indexVersion = 0;
   indexing = false;
@@ -144,6 +147,7 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
       this.bibles.start();
       void this.indexer.start();
       this.epubs.start();
+      this.otherDocuments.start();
       const vault = this.app.vault;
       this.registerEvent(vault.on("modify", (file) => file instanceof TFile && void this.indexer.update(file)));
       this.registerEvent(vault.on("create", (file) => file instanceof TFile && void this.indexer.update(file)));
@@ -164,6 +168,7 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
     for (const doc of this.windowDocuments()) doc.body.style.removeProperty("--topos-reference-color");
     this.indexer.stop();
     this.epubs.stop();
+    this.otherDocuments.stop();
     clearTimeout(this.notifyTimer);
     this.worker?.terminate();
     this.topos?.dispose();
@@ -219,6 +224,12 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
     const file = this.settings.referenceLinks === "bible" ? await this.bibles.bookFile(passage) : null;
     if (file) await this.openDocument(file, this.passageLocator(passage), newLeaf);
     else this.openReference(passage);
+  }
+
+  /** A link to a passage in the current Bible (`Bibles/BSB/JHN.usx#v=3:16`), if it has the book */
+  passageLink(passage: Passage): string | null {
+    const path = this.bibles.bookPath(passage.bookId);
+    return path ? `${path}#${this.passageLocator(passage)}` : null;
   }
 
   /** Shows a passage's text in a hover preview (Obsidian's page preview, with the Bible's embed) */
@@ -337,6 +348,7 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
       leaf.view.previewMode?.rerender(true);
     }
     this.epubs.refresh();
+    this.otherDocuments.refresh();
     this.search.set({});
   }
 
