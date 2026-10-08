@@ -168,3 +168,47 @@ test("reference links and embeds in live preview hide their syntax unless the cu
   view.destroy();
   livePreview.on = false;
 });
+
+test("with embedAlone, a reference alone on its line shows its text unless the cursor is near it", async () => {
+  const { EditorView, referenceDecorations, relinkEditor, DEFAULT_SETTINGS, livePreview, editorLivePreviewField } = await load();
+  const { Topos } = await import("topos-bible");
+  const { EditorSelection } = await import("@codemirror/state");
+  const settings = { ...DEFAULT_SETTINGS, embedAlone: true };
+  const plugin = {
+    topos: Topos.new(),
+    settings,
+    referenceUrl: () => null,
+    linkSite: () => "the site",
+    clickOpens: () => false,
+    bibles: { all: () => [{}] },
+    embedPassage: async (el: HTMLElement, passage: any) => {
+      el.className += " topos-embed";
+      el.textContent = `<${passage.reference}>`;
+    },
+  };
+  const doc = "Start\n\n  Jn 3:16 \nRead Rom 8:28 too\n\nEnd";
+  livePreview.on = true;
+  const view = new EditorView({ doc, selection: EditorSelection.cursor(0), extensions: [editorLivePreviewField, referenceDecorations(plugin)], parent: document.body });
+  const shown = () => view.contentDOM.textContent;
+  assert.equal(shown(), "Start<John 3:16>Read Rom 8:28 tooEnd");
+  // On the line before, the line itself, or the line after, it's text again
+  for (const line of [2, 3, 4]) {
+    view.dispatch({ selection: EditorSelection.cursor(view.state.doc.line(line).from) });
+    assert.equal(shown(), "Start  Jn 3:16 Read Rom 8:28 tooEnd");
+  }
+  view.dispatch({ selection: EditorSelection.cursor(view.state.doc.length) });
+  assert.equal(shown(), "Start<John 3:16>Read Rom 8:28 tooEnd");
+  view.destroy();
+  livePreview.on = false;
+
+  // Rendered Markdown: a line of a paragraph (between line breaks), not a reference in a sentence
+  const editorEl = document.createElement("div");
+  editorEl.innerHTML =
+    '<div class="cm-content"><div class="cm-embed-block"><p>Intro<br>\nJn 3:16<br>\nSee Rom 8:28</p></div></div>';
+  relinkEditor(plugin, editorEl);
+  const p = editorEl.querySelector("p")!;
+  assert.equal(p.textContent, "Intro\n<John 3:16>\nSee Rom 8:28");
+  settings.embedAlone = false;
+  relinkEditor(plugin, editorEl);
+  assert.equal(p.textContent, "Intro\nJn 3:16\nSee Rom 8:28");
+});

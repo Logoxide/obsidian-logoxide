@@ -24,6 +24,8 @@ export const refreshReferences = StateEffect.define<null>();
  * - `[text](John 1:1)` and `[John 1:1]` are links: in live preview their brackets and target are
  *   hidden unless the cursor is in them, a click opens the passage, and hovering previews it
  * - `![John 1:1]` shows the passage's text in live preview, unless the cursor is in it
+ * - With `embedAlone`, so does a bare reference alone on its line, unless the cursor is on that line
+ *   or next to it
  */
 export function referenceDecorations(plugin: ToposPlugin) {
   class References implements PluginValue {
@@ -43,6 +45,9 @@ export function referenceDecorations(plugin: ToposPlugin) {
       const live = view.state.field(editorLivePreviewField, false) ?? false;
       const { selection } = view.state;
       const editing = (from: number, to: number) => selection.ranges.some((r) => r.from <= to && r.to >= from);
+      const { doc } = view.state;
+      const nearCursor = (line: number) =>
+        selection.ranges.some((r) => doc.lineAt(r.from).number <= line + 1 && doc.lineAt(r.to).number >= line - 1);
       const site = plugin.linkSite();
       const hasBible = plugin.bibles.all().length > 0;
       // Visible ranges widened to whole lines can overlap
@@ -57,6 +62,14 @@ export function referenceDecorations(plugin: ToposPlugin) {
           const [labelA, labelB] = [start + r.labelStart, start + r.labelEnd];
           if (a < lastEnd) continue;
           const data = { "data-topos-osis": r.passage.osis, "data-topos-kind": r.kind };
+          if (r.kind === "bare" && plugin.settings.embedAlone && live && hasBible) {
+            const line = doc.lineAt(a);
+            if (line.text.trim() === text.slice(r.start, r.end) && !nearCursor(line.number)) {
+              decorations.push(Decoration.replace({ widget: new EmbedWidget(plugin, r.passage, "") }).range(line.from, line.to));
+              lastEnd = line.to;
+              continue;
+            }
+          }
           if (r.kind === "bare") {
             if (!plugin.settings.linkInEditor) continue;
             const url = plugin.referenceUrl(r.passage);

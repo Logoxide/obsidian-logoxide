@@ -19,7 +19,8 @@ const RENDERED_IN_EDITOR = ".cm-content .cm-embed-block, .cm-content .markdown-e
 /**
  * References in reading view (see `core/syntax.ts`): bare references are highlighted (opening their
  * link with Ctrl/Cmd-click, like the editor), `[text](John 1:1)` and `[John 1:1]` become links to
- * the passage, `![John 1:1]` shows its text, and all of them preview the passage on hover
+ * the passage, `![John 1:1]` shows its text (and so does a bare reference alone on its line, with
+ * `embedAlone`), and all of them preview the passage on hover
  */
 export function linkReferences(plugin: ToposPlugin): MarkdownPostProcessor {
   return (el, ctx) => {
@@ -60,7 +61,13 @@ export function linkElement(plugin: ToposPlugin, el: HTMLElement, owner: Compone
     let last = 0;
     for (const r of found) {
       let element: HTMLElement;
-      if (r.kind === "bare") {
+      if (r.kind === "bare" && plugin.settings.embedAlone && hasBible && aloneOnLine(node, text, r.start, r.end)) {
+        element = doc.createElement("div");
+        element.classList.add(RENDERED);
+        // Unlinking puts the reference back
+        element.dataset.toposText = text.slice(r.start, r.end);
+        void plugin.embedPassage(element, r.passage, r.passage.reference, owner);
+      } else if (r.kind === "bare") {
         const url = plugin.referenceUrl(r.passage);
         if (!url && !hasBible) continue;
         element = doc.createElement("span");
@@ -81,8 +88,9 @@ export function linkElement(plugin: ToposPlugin, el: HTMLElement, owner: Compone
         openOnClick(plugin, element, r.passage, true);
       }
       element.dataset.toposOsis = r.passage.osis;
-      element.dataset.toposKind = r.kind;
-      previewOnHover(plugin, element, r.passage, r.kind === "bare");
+      const kind = element.dataset.toposText === undefined ? r.kind : "embed";
+      element.dataset.toposKind = kind;
+      previewOnHover(plugin, element, r.passage, kind === "bare");
       fragment.append(text.slice(last, r.start), element);
       last = r.end;
     }
@@ -90,6 +98,14 @@ export function linkElement(plugin: ToposPlugin, el: HTMLElement, owner: Compone
     fragment.append(text.slice(last));
     node.replaceWith(fragment);
   }
+}
+
+/** Whether `text[start..end]` is all of a line in a paragraph: between line breaks, with only spaces around it */
+function aloneOnLine(node: Text, text: string, start: number, end: number): boolean {
+  const parent = node.parentElement;
+  if (!parent || !["P", "DIV"].includes(parent.tagName)) return false;
+  const lineEdge = (sibling: ChildNode | null) => sibling === null || sibling.nodeName === "BR";
+  return !text.slice(0, start).trim() && !text.slice(end).trim() && lineEdge(node.previousSibling) && lineEdge(node.nextSibling);
 }
 
 /**
@@ -141,7 +157,7 @@ function previewOnHover(plugin: ToposPlugin, element: HTMLElement, passage: Pass
 export function unlinkElement(el: HTMLElement): void {
   const links = el.querySelectorAll<HTMLElement>(`.${RENDERED}`);
   for (const link of Array.from(links)) {
-    const source = link.dataset.toposKind === "embed" ? "" : (link.textContent ?? "");
+    const source = link.dataset.toposText ?? (link.dataset.toposKind === "embed" ? "" : (link.textContent ?? ""));
     link.replaceWith(source);
   }
   if (links.length > 0) el.normalize();

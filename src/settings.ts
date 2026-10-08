@@ -284,6 +284,15 @@ export class ToposSettingsPanel {
         }),
       );
     new Setting(containerEl)
+      .setName("Embed references on their own line")
+      .setDesc("A reference alone on its line shows its text, like ![John 1:1]. In the editor, it shows the reference again while the cursor is on that line or next to it.")
+      .addToggle((t) =>
+        t.setValue(settings.embedAlone).onChange((value) => {
+          settings.embedAlone = value;
+          void save();
+        }),
+      );
+    new Setting(containerEl)
       .setName("Mark references in other documents")
       .setDesc("Find references in transcripts (Transcript++) and other file-plus-plus documents as they open, and mark them like references in notes. EPUBs follow Search EPUB files.")
       .addToggle((t) =>

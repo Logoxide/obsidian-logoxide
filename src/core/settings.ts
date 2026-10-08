@@ -65,6 +65,11 @@ export interface ToposSettings {
   referenceLinks: "bible" | "site";
   /** Show bare references' text on hover (links and explicit links always preview) */
   previewBare: boolean;
+  /**
+   * Show the text of a bare reference alone on its line, like `![John 1:1]` (in the editor, unless
+   * the cursor is on that line or next to it)
+   */
+  embedAlone: boolean;
   /** Mark references in other plugins' documents (Transcript++'s transcripts, the Bible tab) */
   markInDocuments: boolean;
   /** Once file-plus-plus's default link label has become `{{reference}}` */
@@ -99,6 +104,7 @@ export const DEFAULT_SETTINGS: ToposSettings = {
   bibleHeadings: true,
   referenceLinks: "bible",
   previewBare: true,
+  embedAlone: false,
   markInDocuments: true,
 };
 
