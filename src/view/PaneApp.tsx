@@ -64,9 +64,11 @@ export interface PaneLook {
   style: StyleName;
   /** Show references near each other (within their context lines) as one result */
   merge: boolean;
+  /** List each merged result's references above its preview (else only how many) */
+  references: boolean;
 }
 
-export const DEFAULT_LOOK: PaneLook = { preview: "rendered", verses: false, style: "name", merge: true };
+export const DEFAULT_LOOK: PaneLook = { preview: "rendered", verses: false, style: "name", merge: true, references: false };
 
 /** The file types the settings search (EPUBs too when they're searched), lowercase */
 export function settingsExtensions(plugin: ToposPlugin): string[] {
@@ -122,6 +124,8 @@ export function PaneApp({
   const [saving, setSaving] = useState<string | null>(null);
   /** Results whose verses are shown (besides all of them, with the look's `verses`) */
   const [versesOpen, setVersesOpen] = useState<Set<string>>(new Set());
+  /** Merged results whose references are listed (or, with the look's `references`, not listed) */
+  const [referencesToggled, setReferencesToggled] = useState<Set<string>>(new Set());
   const rootRef = useRef<HTMLDivElement>(null);
   const narrow = useNarrow(rootRef);
   // Narrow, the filters start folded so the results show first
@@ -529,6 +533,20 @@ export function PaneApp({
             <Icon host={host} name="combine" />
             Merge nearby
           </button>
+          {look.merge && (
+            <button
+              className={`topos-pane-toggle${look.references ? " is-on" : ""}`}
+              aria-pressed={look.references}
+              onClick={() => {
+                setLook({ references: !look.references });
+                setReferencesToggled(new Set());
+              }}
+              title="List the references in each merged result (or click a result's count)"
+            >
+              <Icon host={host} name="tags" />
+              References
+            </button>
+          )}
           <button
             className={`topos-pane-toggle${look.verses ? " is-on" : ""}`}
             aria-pressed={look.verses}
@@ -650,6 +668,12 @@ export function PaneApp({
                             if (next.has(key)) next.delete(key);
                             else next.add(key);
                             setVersesOpen(next);
+                          }}
+                          listReferences={look.references !== referencesToggled.has(key)}
+                          onListReferences={() => {
+                            const next = new Set(referencesToggled);
+                            if (!next.delete(key)) next.add(key);
+                            setReferencesToggled(next);
                           }}
                           onFind={() =>
                             set({ filters: { ...NO_FILTERS, anyOverlap: [...new Set(run.hits.map((h) => h.passage.osis))] } })
@@ -1049,6 +1073,8 @@ function HitCard({
   preview,
   verses,
   onVerses,
+  listReferences,
+  onListReferences,
   onFind,
 }: {
   plugin: ToposPlugin;
@@ -1063,6 +1089,9 @@ function HitCard({
   preview: PreviewMode;
   verses: boolean;
   onVerses: () => void;
+  /** With several references: list them (else only their count) */
+  listReferences: boolean;
+  onListReferences: () => void;
   onFind: () => void;
 }) {
   const first = run.hits[0]!;
@@ -1092,24 +1121,39 @@ function HitCard({
         if (e.key === "Enter" && e.target === e.currentTarget) host.open(first, e.ctrlKey || e.metaKey);
       }}
     >
-      <div className="topos-pane-card-head">
-        <span className="topos-pane-pills">
-          {run.hits.map((hit, i) => (
-            <span
-              key={hit.start}
-              className="topos-pane-pill"
-              title={many ? `Open this one (line ${hit.line})` : undefined}
-              onClick={(e) => {
-                if (!many) return;
-                e.stopPropagation();
-                host.open(hit, e.ctrlKey || e.metaKey);
-              }}
-            >
-              {references[i]}
-            </span>
-          ))}
-        </span>
-        {many && <span className="topos-pane-matches">{`${run.hits.length} matches`}</span>}
+      <div className={`topos-pane-card-head${many && !listReferences ? " is-unlisted" : ""}`}>
+        {(!many || listReferences) && (
+          <span className="topos-pane-pills">
+            {run.hits.map((hit, i) => (
+              <span
+                key={hit.start}
+                className="topos-pane-pill"
+                title={many ? `Open this one (line ${hit.line})` : undefined}
+                onClick={(e) => {
+                  if (!many) return;
+                  e.stopPropagation();
+                  host.open(hit, e.ctrlKey || e.metaKey);
+                }}
+              >
+                {references[i]}
+              </span>
+            ))}
+          </span>
+        )}
+        {many && (
+          <button
+            className={`topos-pane-matches${listReferences ? " is-open" : ""}`}
+            aria-expanded={listReferences}
+            title={listReferences ? "Hide the references" : `Show them: ${references.join("; ")}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onListReferences();
+            }}
+          >
+            <Icon host={host} name="chevron-right" className="topos-pane-matches-caret" />
+            {`${run.hits.length} matches`}
+          </button>
+        )}
         <span className="topos-pane-where">
           {showPath && <span className="topos-pane-where-path">{first.path}</span>}
           {location}

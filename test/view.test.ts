@@ -165,8 +165,10 @@ test("the search tab shows file types with their counts, filters, and results", 
   const all = text(render({}));
   assert.match(all, /All 5 md 2 txt 2 srt 1/);
   assert.match(all, /5 references 3 files/);
-  // References on the same line are one result, counted
-  assert.match(all, /John 3:16 Romans 8:28 2 matches Line 1/);
+  // References on the same line are one result, counted; which they are is listed when asked
+  assert.match(all, /Notes\/ a 2 2 matches Line 1/);
+  const listed = text(render({}, { preview: "rendered", verses: false, style: "name", merge: true, references: true }));
+  assert.match(listed, /John 3:16 Romans 8:28 2 matches Line 1/);
   const apart = text(render({}, { preview: "rendered", verses: false, style: "name", merge: false }));
   assert.match(apart, /John 3:16 Line 1 .*Romans 8:28 Line 1/);
   assert.doesNotMatch(apart, /matches/);

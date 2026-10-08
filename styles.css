@@ -918,6 +918,28 @@ button.topos-pane-link.is-on {
 .topos-pane-card.is-merged .topos-pane-pill:hover {
   background: color-mix(in srgb, var(--topos-pane-accent) 32%, transparent);
 }
+button.topos-pane-matches {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: auto;
+  box-shadow: none;
+  background: none;
+  cursor: pointer;
+}
+button.topos-pane-matches:hover {
+  background: color-mix(in srgb, var(--topos-pane-accent) 15%, transparent);
+}
+.topos-pane-matches-caret {
+  transition: transform 0.15s ease;
+}
+.topos-pane-matches-caret svg {
+  width: 12px;
+  height: 12px;
+}
+.topos-pane-matches.is-open .topos-pane-matches-caret {
+  transform: rotate(90deg);
+}
 .topos-pane-matches {
   flex: none;
   padding: 0 var(--size-4-2);
@@ -929,7 +951,7 @@ button.topos-pane-link.is-on {
   white-space: nowrap;
 }
 /* Merged, the references get a row of their own, with the count and place below them */
-.topos-pane-card.is-merged .topos-pane-card-head {
+.topos-pane-card.is-merged .topos-pane-card-head:not(.is-unlisted) {
   flex-wrap: wrap;
   row-gap: var(--size-4-1);
 }

@@ -62,7 +62,8 @@ the sidebar, which takes the sidebar's search along): the same search with room 
 - *Merge nearby* (on by default) shows references next to each other as one result, counting how
   many it has: on the same line with no context, or whose context lines meet (±2: lines 3 and 7
   join). The context is counted from the first and last of them, so the result shows lines 1–9;
-  click one of its references to go to that one
+  click one of its references to go to that one. Which references a merged result has is hidden
+  until you click its count (or turn on *References* for every result)
 - On a result: open it beside the search (Ctrl/Cmd-click: in a new tab), open the passage in the
   Bible, copy the reference, find references that share a verse with it, or open its link
 - The counts and *Collapse all* / *Expand all* stay above the results as they scroll. *Collapse all*
