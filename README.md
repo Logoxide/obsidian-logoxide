@@ -52,6 +52,10 @@ the sidebar, which takes the sidebar's search along): the same search with room 
 - Each result shows its lines as they look in the note (Markdown rendered, references marked,
   the result highlighted among them), or their source with line numbers; *Verses* (or the book
   icon on a result) shows the passage's text from your Bibles
+- *Merge nearby* (on by default) shows references next to each other as one result, counting how
+  many it has: on the same line with no context, or whose context lines meet (±2: lines 3 and 7
+  join). The context is counted from the first and last of them, so the result shows lines 1–9;
+  click one of its references to go to that one
 - On a result: open it beside the search (Ctrl/Cmd-click: in a new tab), open the passage in the
   Bible, copy the reference, find references that share a verse with it, or open its link
 - Saved searches are listed by name, with their options; each tab remembers its search and look

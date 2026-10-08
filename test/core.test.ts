@@ -12,7 +12,7 @@ import {
 import { ReferenceIndex } from "../src/core/index.ts";
 import { chosenExtensions, extensionOf, toggleExtension } from "../src/core/file-types.ts";
 import { searchText, type Hit } from "../src/core/search.ts";
-import { groupHits, sortHits } from "../src/core/sort.ts";
+import { groupHits, mergeNearby, sortHits } from "../src/core/sort.ts";
 
 const topos = Topos.new();
 const parse = (reference: string) => topos.parse(reference, BookStyle.Name)!;
@@ -199,6 +199,28 @@ test("queries can be limited to file types, and count each type's references", (
     all.extensionCounts().map((c) => `${c.extension} ${c.references} ${c.files}`),
     ["md 2 1", "srt 2 1", "txt 1 1"],
   );
+});
+
+test("nearby references join into one result, counting context from the first and last", () => {
+  const text = [
+    "John 3:16 and Rom 8:28", // 1
+    "", // 2
+    "Gen 1:1", // 3
+    "", // 4
+    "", // 5
+    "", // 6
+    "Ps 23", // 7
+  ].join("\n");
+  const hits = [...searchText(topos, "a.md", text), ...searchText(topos, "b.md", "Jude 5")];
+  const runs = (context: number) =>
+    mergeNearby(hits, context).map((r) => `${r.hits.map((h) => h.passage.reference).join("+")} ${r.firstLine}-${r.lastLine}`);
+  // Without context, only the same line
+  assert.deepEqual(runs(0), ["John 3:16+Romans 8:28 1-1", "Genesis 1:1 3-3", "Psalm 23 7-7", "Jude 1:5 1-1"]);
+  // ±1: lines 1 and 3 share line 2; 3 and 7 don't touch
+  assert.deepEqual(runs(1), ["John 3:16+Romans 8:28+Genesis 1:1 1-3", "Psalm 23 7-7", "Jude 1:5 1-1"]);
+  // ±2: line 3's context reaches line 5 and line 7's starts there, so the run reaches line 7
+  // from its last line, not its first
+  assert.deepEqual(runs(2), ["John 3:16+Romans 8:28+Genesis 1:1+Psalm 23 1-7", "Jude 1:5 1-1"]);
 });
 
 test("file types: every type is an empty choice, and the last can't be turned off", () => {

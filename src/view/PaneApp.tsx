@@ -14,7 +14,7 @@ import { compileFilters, isEmpty, NO_FILTERS, type Filters, type Testament } fro
 import { written } from "../core/format.ts";
 import { formatQuery, parseQuery } from "../core/query.ts";
 import type { Hit } from "../core/search.ts";
-import { groupHits, type SortOrder } from "../core/sort.ts";
+import { groupHits, mergeNearby, type HitRun, type SortOrder } from "../core/sort.ts";
 import { bookStyle, type StyleName } from "../core/settings.ts";
 import type ToposPlugin from "../main.ts";
 import { Chips, NameInput, ReferenceInput } from "./inputs.tsx";
@@ -51,9 +51,11 @@ export interface PaneLook {
   /** Show each result's verses */
   verses: boolean;
   style: StyleName;
+  /** Show references near each other (within their context lines) as one result */
+  merge: boolean;
 }
 
-export const DEFAULT_LOOK: PaneLook = { preview: "rendered", verses: false, style: "name" };
+export const DEFAULT_LOOK: PaneLook = { preview: "rendered", verses: false, style: "name", merge: true };
 
 /** The file types the settings search (EPUBs too when they're searched), lowercase */
 export function settingsExtensions(plugin: ToposPlugin): string[] {
@@ -218,7 +220,7 @@ export function PaneApp({
   const genreOptions = genres.map((g) => ({ name: g.name, aliases: [] }));
   const total = results.total;
   const fileCount = results.files;
-  const hitKey = (hit: Hit) => `${hit.path}:${hit.start}`;
+  const runKey = (run: HitRun) => `${run.hits[0]!.path}:${run.hits[0]!.start}`;
 
   const filtersPanel = (
     <aside className="topos-pane-filters">
@@ -506,6 +508,19 @@ export function PaneApp({
             <option value="osis">John.3.16</option>
           </select>
           <button
+            className={`topos-pane-toggle${look.merge ? " is-on" : ""}`}
+            aria-pressed={look.merge}
+            onClick={() => setLook({ merge: !look.merge })}
+            title={
+              state.context === 0
+                ? "Show references on the same line as one result"
+                : `Show references whose ±${state.context} lines of context meet as one result`
+            }
+          >
+            <Icon host={host} name="combine" />
+            Merge nearby
+          </button>
+          <button
             className={`topos-pane-toggle${look.verses ? " is-on" : ""}`}
             aria-pressed={look.verses}
             onClick={() => setLook({ verses: !look.verses })}
@@ -605,19 +620,20 @@ export function PaneApp({
                 </div>
                 {!isCollapsed && (
                   <div className="topos-pane-cards">
-                    {group.hits.map((hit) => {
-                      const key = hitKey(hit);
+                    {(look.merge ? mergeNearby(group.hits, state.context) : group.hits.map(single)).map((run) => {
+                      const key = runKey(run);
+                      const path = run.hits[0]!.path;
                       return (
                         <HitCard
                           key={key}
                           plugin={plugin}
                           host={host}
-                          hit={hit}
-                          reference={written(topos, hit.passage, style, plugin.settings.format)}
+                          run={run}
+                          references={run.hits.map((hit) => written(topos, hit.passage, style, plugin.settings.format))}
                           showPath={state.groupBy === "book"}
                           context={state.context}
-                          lines={fileLines.get(hit.path)}
-                          fileHits={fileHits.get(hit.path)}
+                          lines={fileLines.get(path)}
+                          fileHits={fileHits.get(path)}
                           preview={look.preview}
                           verses={look.verses || versesOpen.has(key)}
                           onVerses={() => {
@@ -626,7 +642,9 @@ export function PaneApp({
                             else next.add(key);
                             setVersesOpen(next);
                           }}
-                          onFind={() => set({ filters: { ...NO_FILTERS, anyOverlap: [hit.passage.osis] } })}
+                          onFind={() =>
+                            set({ filters: { ...NO_FILTERS, anyOverlap: [...new Set(run.hits.map((h) => h.passage.osis))] } })
+                          }
                         />
                       );
                     })}
@@ -644,6 +662,11 @@ export function PaneApp({
       </div>
     </div>
   );
+}
+
+/** A hit as a result of its own */
+function single(hit: Hit): HitRun {
+  return { hits: [hit], firstLine: hit.line, lastLine: hit.line };
 }
 
 /** `1 reference`, `2 references` */
@@ -791,8 +814,8 @@ function PathName({ path }: { path: string }) {
 function HitCard({
   plugin,
   host,
-  hit,
-  reference,
+  run,
+  references,
   showPath,
   context,
   lines,
@@ -804,8 +827,9 @@ function HitCard({
 }: {
   plugin: ToposPlugin;
   host: PaneHost;
-  hit: Hit;
-  reference: string;
+  run: HitRun;
+  /** Each hit's reference, as written in the chosen style */
+  references: string[];
   showPath: boolean;
   context: number;
   lines: string[] | undefined;
@@ -815,29 +839,53 @@ function HitCard({
   onVerses: () => void;
   onFind: () => void;
 }) {
-  const url = plugin.referenceUrl(hit.passage);
+  const first = run.hits[0]!;
+  const many = run.hits.length > 1;
   const hasBible = plugin.bibles.all().length > 0;
-  const location = hit.epub
-    ? hit.epub.chapter ?? `Section ${hit.epub.spineIndex + 1}`
-    : `Line ${hit.line}`;
-  const rendered = preview === "rendered" && extensionOf(hit.path) === "md" && lines !== undefined;
+  const url = many ? null : plugin.referenceUrl(first.passage);
+  const location = first.epub
+    ? first.epub.chapter ?? `Section ${first.epub.spineIndex + 1}`
+    : run.firstLine === run.lastLine
+      ? `Line ${run.firstLine}`
+      : `Lines ${run.firstLine}–${run.lastLine}`;
+  const rendered = preview === "rendered" && extensionOf(first.path) === "md" && lines !== undefined;
+  // Each passage once, for the verses
+  const passages = run.hits
+    .map((hit, i) => ({ passage: hit.passage, label: references[i]! }))
+    .filter((p, i, all) => all.findIndex((o) => o.passage.osis === p.passage.osis) === i);
   return (
     <article
-      className="topos-pane-card"
+      className={`topos-pane-card${many ? " is-merged" : ""}`}
       tabIndex={0}
       onClick={(e) => {
         // Clicks on links and references in the preview are theirs
         if ((e.target as HTMLElement).closest("a, .topos-reference, .topos-link, .topos-embed")) return;
-        host.open(hit, e.ctrlKey || e.metaKey);
+        host.open(first, e.ctrlKey || e.metaKey);
       }}
       onKeyDown={(e) => {
-        if (e.key === "Enter" && e.target === e.currentTarget) host.open(hit, e.ctrlKey || e.metaKey);
+        if (e.key === "Enter" && e.target === e.currentTarget) host.open(first, e.ctrlKey || e.metaKey);
       }}
     >
       <div className="topos-pane-card-head">
-        <span className="topos-pane-pill">{reference}</span>
+        <span className="topos-pane-pills">
+          {run.hits.map((hit, i) => (
+            <span
+              key={hit.start}
+              className="topos-pane-pill"
+              title={many ? `Open this one (line ${hit.line})` : undefined}
+              onClick={(e) => {
+                if (!many) return;
+                e.stopPropagation();
+                host.open(hit, e.ctrlKey || e.metaKey);
+              }}
+            >
+              {references[i]}
+            </span>
+          ))}
+        </span>
+        {many && <span className="topos-pane-matches">{`${run.hits.length} matches`}</span>}
         <span className="topos-pane-where">
-          {showPath && <span className="topos-pane-where-path">{hit.path}</span>}
+          {showPath && <span className="topos-pane-where-path">{first.path}</span>}
           {location}
         </span>
         <span className="topos-pane-actions">
@@ -848,12 +896,22 @@ function HitCard({
             <IconButton
               host={host}
               icon="book-open"
-              title="Open in the Bible"
-              onClick={(e) => host.openPassage(hit.passage, e.ctrlKey || e.metaKey)}
+              title={many ? `Open ${references[0]} in the Bible` : "Open in the Bible"}
+              onClick={(e) => host.openPassage(first.passage, e.ctrlKey || e.metaKey)}
             />
           )}
-          <IconButton host={host} icon="copy" title="Copy the reference" onClick={() => host.copy(reference)} />
-          <IconButton host={host} icon="filter" title="Find references that share a verse with it" onClick={onFind} />
+          <IconButton
+            host={host}
+            icon="copy"
+            title={many ? "Copy the references" : "Copy the reference"}
+            onClick={() => host.copy(references.join("; "))}
+          />
+          <IconButton
+            host={host}
+            icon="filter"
+            title={many ? "Find references that share a verse with any of them" : "Find references that share a verse with it"}
+            onClick={onFind}
+          />
           {url && (
             <IconButton
               host={host}
@@ -865,91 +923,114 @@ function HitCard({
         </span>
       </div>
       {rendered ? (
-        <RenderedPreview host={host} hit={hit} lines={lines} context={context} fileHits={fileHits ?? []} />
+        <RenderedPreview host={host} run={run} lines={lines} context={context} fileHits={fileHits ?? []} />
       ) : (
-        <SourcePreview hit={hit} lines={lines} context={context} />
+        <SourcePreview run={run} lines={lines} context={context} />
       )}
-      {verses && hasBible && <VerseText host={host} passage={hit.passage} label={reference} />}
+      {verses &&
+        hasBible &&
+        passages.map(({ passage, label }) => <VerseText key={passage.osis} host={host} passage={passage} label={label} />)}
     </article>
   );
 }
 
-/** The result's lines as Markdown, as they look in the note, with the reference marked */
+/** The result's lines as Markdown, as they look in the note, with its references marked */
 function RenderedPreview({
   host,
-  hit,
+  run,
   lines,
   context,
   fileHits,
 }: {
   host: PaneHost;
-  hit: Hit;
+  run: HitRun;
   lines: string[];
   context: number;
   fileHits: Hit[];
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const visible = useVisible(ref);
-  const first = Math.max(0, hit.line - 1 - context);
-  const last = Math.min(lines.length - 1, hit.line - 1 + context);
+  const path = run.hits[0]!.path;
+  // From the first line's context to the last's
+  const first = Math.max(0, run.firstLine - 1 - context);
+  const last = Math.min(lines.length - 1, run.lastLine - 1 + context);
   const markdown = lines.slice(first, last + 1).join("\n");
-  // Which of the rendered references with this passage is the result
-  const ordinal = fileHits.filter(
-    (h) => h.passage.osis === hit.passage.osis && h.line - 1 >= first && h.start < hit.start,
-  ).length;
+  // Each hit among the rendered references with its passage: (passage, which one)
+  const targets = run.hits
+    .map((hit) => {
+      const ordinal = fileHits.filter(
+        (h) => h.passage.osis === hit.passage.osis && h.line - 1 >= first && h.start < hit.start,
+      ).length;
+      return `${hit.passage.osis}\n${ordinal}`;
+    })
+    .join("\t");
   useEffect(() => {
     const el = ref.current;
     if (!el || !visible) return;
     el.replaceChildren();
     let cancelled = false;
-    const rendered = host.markdown(el, markdown, hit.path);
+    const rendered = host.markdown(el, markdown, path);
     void rendered.done.then(() => {
       if (cancelled) return;
-      const osis = typeof CSS !== "undefined" ? CSS.escape(hit.passage.osis) : hit.passage.osis;
-      const found = el.querySelectorAll<HTMLElement>(`[data-topos-osis="${osis}"]`);
-      const target = found[ordinal] ?? found[0];
-      target?.classList.add("topos-pane-target");
+      for (const target of targets.split("\t")) {
+        const [osis = "", ordinal = "0"] = target.split("\n");
+        const escaped = typeof CSS !== "undefined" ? CSS.escape(osis) : osis;
+        const found = el.querySelectorAll<HTMLElement>(`[data-topos-osis="${escaped}"]`);
+        (found[Number(ordinal)] ?? found[0])?.classList.add("topos-pane-target");
+      }
     });
     return () => {
       cancelled = true;
       rendered.unload();
     };
-  }, [host, visible, markdown, hit.path, hit.passage.osis, ordinal]);
+  }, [host, visible, markdown, path, targets]);
   return <div ref={ref} className="topos-pane-preview markdown-rendered" />;
 }
 
-/** The result's lines as text, with the reference marked */
-function SourcePreview({ hit, lines, context }: { hit: Hit; lines: string[] | undefined; context: number }) {
-  const lineText = hit.lineText || lines?.[hit.line - 1] || "";
-  const from = hit.column - 1;
-  const to = Math.min(lineText.length, from + (hit.end - hit.start));
-  const around = (start: number, end: number) => {
-    if (!lines || hit.epub || context === 0) return null;
-    const shown = [];
-    for (let i = Math.max(0, start); i <= Math.min(lines.length - 1, end); i++) {
-      shown.push(
-        <div key={i} className="topos-pane-source-line is-context">
-          <span className="topos-pane-line-number">{i + 1}</span>
-          <span>{lines[i] || " "}</span>
-        </div>,
-      );
-    }
-    return shown;
-  };
-  return (
-    <div className={`topos-pane-preview topos-pane-source${hit.epub ? " is-prose" : ""}`}>
-      {around(hit.line - 1 - context, hit.line - 2)}
-      <div className="topos-pane-source-line">
-        {!hit.epub && <span className="topos-pane-line-number">{hit.line}</span>}
-        <span>
-          {lineText.slice(0, from)}
-          <mark>{lineText.slice(from, to)}</mark>
-          {lineText.slice(to)}
-        </span>
+/** A line's text with ranges in it marked */
+function Marked({ text, ranges }: { text: string; ranges: [number, number][] }) {
+  const parts: ReactNode[] = [];
+  let at = 0;
+  for (const [from, to] of [...ranges].sort((a, b) => a[0] - b[0])) {
+    if (from < at) continue;
+    parts.push(text.slice(at, from), <mark key={from}>{text.slice(from, Math.min(text.length, to))}</mark>);
+    at = Math.min(text.length, to);
+  }
+  parts.push(text.slice(at));
+  return <span>{parts}</span>;
+}
+
+/** The result's lines as text, with its references marked */
+function SourcePreview({ run, lines, context }: { run: HitRun; lines: string[] | undefined; context: number }) {
+  const range = (hit: Hit): [number, number] => [hit.column - 1, hit.column - 1 + (hit.end - hit.start)];
+  // An EPUB's references show the text around them, a line each
+  if (run.hits[0]!.epub || !lines) {
+    const byLine = new Map<number, Hit[]>();
+    for (const hit of run.hits) byLine.set(hit.line, [...(byLine.get(hit.line) ?? []), hit]);
+    return (
+      <div className={`topos-pane-preview topos-pane-source${run.hits[0]!.epub ? " is-prose" : ""}`}>
+        {[...byLine].map(([line, hits]) => (
+          <div key={line} className="topos-pane-source-line">
+            {!hits[0]!.epub && <span className="topos-pane-line-number">{line}</span>}
+            <Marked text={hits[0]!.lineText} ranges={hits.map(range)} />
+          </div>
+        ))}
       </div>
-      {around(hit.line, hit.line - 1 + context)}
-    </div>
-  );
+    );
+  }
+  const first = Math.max(1, run.firstLine - context);
+  const last = Math.min(lines.length, run.lastLine + context);
+  const shown = [];
+  for (let line = first; line <= last; line++) {
+    const hits = run.hits.filter((h) => h.line === line);
+    shown.push(
+      <div key={line} className={`topos-pane-source-line${hits.length === 0 ? " is-context" : ""}`}>
+        <span className="topos-pane-line-number">{line}</span>
+        {hits.length > 0 ? <Marked text={lines[line - 1] ?? ""} ranges={hits.map(range)} /> : <span>{lines[line - 1] || "\u00a0"}</span>}
+      </div>,
+    );
+  }
+  return <div className="topos-pane-preview topos-pane-source">{shown}</div>;
 }
 
 /** The passage's text, from the vault's Bibles, once scrolled to */

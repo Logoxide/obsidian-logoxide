@@ -165,7 +165,11 @@ test("the search tab shows file types with their counts, filters, and results", 
   const all = text(render({}));
   assert.match(all, /All 5 md 2 txt 2 srt 1/);
   assert.match(all, /5 references 3 files/);
-  assert.match(all, /John 3:16 Line 1/);
+  // References on the same line are one result, counted
+  assert.match(all, /John 3:16 Romans 8:28 2 matches Line 1/);
+  const apart = text(render({}, { preview: "rendered", verses: false, style: "name", merge: false }));
+  assert.match(apart, /John 3:16 Line 1 .*Romans 8:28 Line 1/);
+  assert.doesNotMatch(apart, /matches/);
 
   // Limited to some types, the others are off, and the filters still apply
   const some = render({ extensions: ["txt", "srt"], filters: { testaments: ["new"] } });
@@ -177,7 +181,7 @@ test("the search tab shows file types with their counts, filters, and results", 
 
   // Grouped by book, each result names its file; the source preview numbers its lines (read from
   // the note once shown)
-  const books = render({ groupBy: "book", filters: { books: ["John"] } }, { preview: "source", verses: false, style: "abbreviation" });
+  const books = render({ groupBy: "book", filters: { books: ["John"] } }, { preview: "source", verses: false, style: "abbreviation", merge: false });
   assert.match(text(books), /John 3 .*Jn 3:16 Notes\/a.md Line 1/);
   assert.match(books, /<span class="topos-pane-line-number">1<\/span>/);
 

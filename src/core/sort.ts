@@ -48,3 +48,39 @@ export function groupHits(
   }
   return [...groups].map(([key, hits]) => ({ key, hits }));
 }
+
+/** References near each other in a file, shown as one result */
+export interface HitRun {
+  hits: Hit[];
+  /** The first and last of their lines (1-based) */
+  firstLine: number;
+  lastLine: number;
+}
+
+/**
+ * Joins hits that follow each other in the list, in the same file, whose lines are close enough
+ * that their `context` lines would touch or overlap (with no context, on the same line): each
+ * run's context is then counted from its first and last line. An EPUB's references only join on
+ * the same line (they show their own text, not the book's lines)
+ */
+export function mergeNearby(hits: Hit[], context: number): HitRun[] {
+  const runs: HitRun[] = [];
+  const reach = context === 0 ? 0 : 2 * context + 1;
+  for (const hit of hits) {
+    const run = runs.at(-1);
+    const near =
+      run &&
+      run.hits[0]!.path === hit.path &&
+      (hit.epub
+        ? run.hits.every((h) => h.line === hit.line)
+        : hit.line >= run.firstLine - reach && hit.line <= run.lastLine + reach);
+    if (run && near) {
+      run.hits.push(hit);
+      run.firstLine = Math.min(run.firstLine, hit.line);
+      run.lastLine = Math.max(run.lastLine, hit.line);
+    } else {
+      runs.push({ hits: [hit], firstLine: hit.line, lastLine: hit.line });
+    }
+  }
+  return runs;
+}
