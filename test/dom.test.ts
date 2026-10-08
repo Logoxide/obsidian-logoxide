@@ -151,3 +151,41 @@ test("the sidebar's inputs and context lines work in a DOM", async () => {
     await window.happyDOM.close();
   }
 });
+
+test("Show more goes on while what it adds is all in collapsed groups", async () => {
+  const window = new Window();
+  Object.assign(globalThis, {
+    window,
+    document: window.document,
+    HTMLElement: window.HTMLElement,
+    Element: window.Element,
+    Node: window.Node,
+    Event: window.Event,
+    requestAnimationFrame: (f: () => void) => setTimeout(f, 0),
+    IS_REACT_ACT_ENVIRONMENT: true,
+  });
+  const { act, mount } = await loadApp();
+  const container = document.createElement("div");
+  document.body.appendChild(container);
+  // A page is 300 results: the first shows a.md and 299 of b.md's 700
+  mount(container, { "a.md": "Gen 1:1", "b.md": "John 3:16\n".repeat(700), "c.md": "Rev 22:21" });
+  await act(async () => new Promise((r) => setTimeout(r, 10)));
+  const header = (name: string) =>
+    [...container.querySelectorAll(".topos-group-header")].find((h) => h.querySelector(".topos-group-name")!.textContent === name)!;
+  const more = () => [...container.querySelectorAll("button")].find((b) => b.textContent!.startsWith("Show more"));
+  assert.equal(header("b.md").querySelector(".topos-count")!.textContent, "299");
+  assert.equal(header("c.md"), undefined);
+
+  // Collapse b.md: the next page (300 more of b.md) would show nothing new, so another loads,
+  // which reaches c.md, and there's nothing left
+  await act(async () => (header("b.md") as unknown as HTMLElement).click());
+  await act(async () => (more() as unknown as HTMLElement).click());
+  await act(async () => new Promise((r) => setTimeout(r, 10)));
+  assert.equal(header("b.md").querySelector(".topos-count")!.textContent, "700");
+  assert.ok(header("c.md"));
+  assert.equal(more(), undefined);
+
+  // Expanded, a page at a time again
+  await act(async () => (header("b.md") as unknown as HTMLElement).click());
+  assert.equal(container.querySelectorAll(".topos-hit").length, 702);
+});

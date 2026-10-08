@@ -19,7 +19,16 @@ import { groupHits, mergeNearby, type HitRun, type SortOrder } from "../core/sor
 import { bookStyle, type StyleName } from "../core/settings.ts";
 import type ToposPlugin from "../main.ts";
 import { Chips, NameInput, ReferenceInput } from "./inputs.tsx";
-import { FilterRow, isEpub, PASSAGE_ROWS, TestamentToggle, useFileLines, type ListKey } from "./parts.tsx";
+import {
+  FilterRow,
+  isEpub,
+  PASSAGE_ROWS,
+  TestamentToggle,
+  useFileLines,
+  useLoadPastHidden,
+  usePages,
+  type ListKey,
+} from "./parts.tsx";
 import { queryScope, scopeOf, searchWhere, type Scope, type SearchStore } from "./store.ts";
 
 /** How many results render at a time (more load as the list scrolls to its end) */
@@ -103,7 +112,8 @@ export function PaneApp({
   };
   const [activePath, setActivePath] = useState(plugin.app.workspace.getActiveFile()?.path ?? "");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const [shown, setShown] = useState(PAGE);
+  const pages = usePages(PAGE);
+  const { shown } = pages;
   const [detailsVersion, setDetailsVersion] = useState(0);
   /** The query being typed, or null while it shows the filters */
   const [draft, setDraft] = useState<string | null>(null);
@@ -179,6 +189,10 @@ export function PaneApp({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [hits, state.groupBy, books],
   );
+  // "Show more" goes on while what it adds is all in collapsed groups
+  useLoadPastHidden(pages, hits, results.total, (hit) =>
+    collapsed.has(state.groupBy === "file" ? hit.path : bookName(hit.passage.bookId)),
+  );
   const shownPaths = useMemo(() => [...new Set(hits.map((h) => h.path))], [hits]);
   const fileLines = useFileLines(plugin, shownPaths.filter((p) => !isEpub(p)), indexVersion);
   // Each shown note's references, to find a result among the rendered ones
@@ -188,7 +202,7 @@ export function PaneApp({
     [plugin, shownPaths.join("\n"), indexVersion],
   );
 
-  const reset = () => setShown(PAGE);
+  const reset = pages.reset;
   const set = (update: Parameters<SearchStore["set"]>[0]) => {
     store.set(update);
     reset();
@@ -649,7 +663,7 @@ export function PaneApp({
             );
           })}
           {total > shown && (
-            <LoadMore onLoad={() => setShown((n) => n + PAGE)}>
+            <LoadMore onLoad={pages.more}>
               Show more ({(total - shown).toLocaleString()} left)
             </LoadMore>
           )}

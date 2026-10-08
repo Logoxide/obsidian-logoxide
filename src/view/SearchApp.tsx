@@ -8,7 +8,16 @@ import { groupHits, type SortOrder } from "../core/sort.ts";
 import type ToposPlugin from "../main.ts";
 import { bookStyle, type StyleName } from "../core/settings.ts";
 import { Chips, NameInput, ReferenceInput } from "./inputs.tsx";
-import { FilterRow, isEpub, PASSAGE_ROWS, TestamentToggle, useFileLines, type ListKey } from "./parts.tsx";
+import {
+  FilterRow,
+  isEpub,
+  PASSAGE_ROWS,
+  TestamentToggle,
+  useFileLines,
+  useLoadPastHidden,
+  usePages,
+  type ListKey,
+} from "./parts.tsx";
 import { queryScope, searchWhere, type Scope } from "./store.ts";
 
 /** The saved-search list's entry that clears the filters */
@@ -25,7 +34,8 @@ export function SearchApp({ plugin }: { plugin: ToposPlugin }) {
   const [styleName, setStyleName] = useState<StyleName>(plugin.settings.style);
   const [activePath, setActivePath] = useState(plugin.app.workspace.getActiveFile()?.path ?? "");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const [shown, setShown] = useState(PAGE);
+  const pages = usePages(PAGE);
+  const { shown } = pages;
   /** Bumped when EPUB details the page needs are read */
   const [detailsVersion, setDetailsVersion] = useState(0);
   const [filtersOpen, setFiltersOpen] = useState(!isEmpty(state.filters));
@@ -75,6 +85,10 @@ export function SearchApp({ plugin }: { plugin: ToposPlugin }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [hits, shown, state.groupBy, books],
   );
+  // "Show more" goes on while what it adds is all in collapsed groups
+  useLoadPastHidden(pages, hits, results.total, (hit) =>
+    collapsed.has(state.groupBy === "file" ? hit.path : bookName(hit.passage.bookId)),
+  );
   const total = results.total;
   const fileCount = results.files;
   const shownPaths = useMemo(
@@ -86,7 +100,7 @@ export function SearchApp({ plugin }: { plugin: ToposPlugin }) {
 
   const setFilters = (update: Partial<Filters>) => {
     plugin.search.set({ filters: { ...state.filters, ...update } });
-    setShown(PAGE);
+    pages.reset();
   };
   const addTo = (key: ListKey) => (value: string) =>
     setFilters({ [key]: [...state.filters[key], value] } as Partial<Filters>);
@@ -167,14 +181,14 @@ export function SearchApp({ plugin }: { plugin: ToposPlugin }) {
               onChange={(e) => {
                 if (e.target.value === CLEAR) {
                   plugin.search.set({ filters: NO_FILTERS, scope: "vault", paths: [], patterns: [] });
-                  setShown(PAGE);
+                  pages.reset();
                   return;
                 }
                 const saved = savedQueries.find((q) => q.name === e.target.value);
                 if (!saved) return;
                 plugin.applyQuery(saved);
                 setFiltersOpen(true);
-                setShown(PAGE);
+                pages.reset();
               }}
               aria-label="Saved searches"
             >
@@ -379,7 +393,7 @@ export function SearchApp({ plugin }: { plugin: ToposPlugin }) {
           );
         })}
         {total > shown && (
-          <button className="topos-more" onClick={() => setShown(shown + PAGE)}>
+          <button className="topos-more" onClick={pages.more}>
             Show more ({(total - shown).toLocaleString()} left)
           </button>
         )}

@@ -52,7 +52,7 @@ the sidebar, which takes the sidebar's search along): the same search with room 
   expressions/` matched anywhere in the path (`/…/i`, or *Aa*, ignores case). `!` before a pattern
   leaves its files out (`!drafts`), and clicking a pattern switches it. A pattern that can't be
   read is marked, and the search goes on without it. Saved searches keep them as the CLI's
-  `--glob` and `--iglob`, and `--path-regex` (the plugin's own), after the paths
+  `--glob`, `--iglob`, and `--path-regex`, after the paths, so they work in the CLI too
 - A chip for each file type the settings search (EPUBs too, when they're searched), with how many
   references each has: click to toggle a type, Ctrl/Cmd-click for only that type, *All* for every
   type

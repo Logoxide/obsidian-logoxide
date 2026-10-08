@@ -6,7 +6,7 @@ export interface SavedQuery {
   name: string;
   /**
    * The CLI's filter options, like `--nt -g "Pauline Epistles" -o "John 1"`, with the files and
-   * folders to search first, and `--glob`/`--iglob` (and `--path-regex`, the plugin's own)
+   * folders to search first, and `--glob`, `--iglob`, and `--path-regex`
    */
   query: string;
 }
@@ -37,7 +37,7 @@ const LIST_OPTIONS: Record<string, ListKey> = {
   "--outside": "excludeOverlap",
 };
 
-/** Path patterns: the CLI's globs, and regular expressions (only the plugin has those) */
+/** Path patterns: the CLI's globs and regular expressions */
 const PATTERN_OPTIONS: Record<string, PathPattern["kind"]> = {
   "--glob": "glob",
   "--iglob": "iglob",

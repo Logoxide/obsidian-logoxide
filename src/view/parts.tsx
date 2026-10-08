@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import type { Filters, Testament } from "../core/filters.ts";
+import type { Hit } from "../core/search.ts";
 import type ToposPlugin from "../main.ts";
 
 /** The filters that are lists of names or passages */
@@ -93,4 +94,48 @@ export function useFileLines(plugin: ToposPlugin, paths: string[], indexVersion:
 
 export function isEpub(path: string): boolean {
   return path.toLowerCase().endsWith(".epub");
+}
+
+/** How many results are shown, a page more at a time */
+export interface Pages {
+  shown: number;
+  /** Shows another page ("Show more") */
+  more: () => void;
+  /** Back to the first page (for a new search) */
+  reset: () => void;
+  /** Where the page "Show more" asked for starts, until it has been seen to show something */
+  loading: RefObject<number | null>;
+}
+
+export function usePages(page: number): Pages {
+  const [shown, setShown] = useState(page);
+  const loading = useRef<number | null>(null);
+  return {
+    shown,
+    more: () => {
+      loading.current = shown;
+      setShown(shown + page);
+    },
+    reset: () => {
+      loading.current = null;
+      setShown(page);
+    },
+    loading,
+  };
+}
+
+/**
+ * After "Show more": when every result it added went into a collapsed group, nothing new can be
+ * seen, so it loads another page, until one shows something or there are no more
+ */
+export function useLoadPastHidden(pages: Pages, hits: Hit[], total: number, hidden: (hit: Hit) => boolean): void {
+  useEffect(() => {
+    const start = pages.loading.current;
+    if (start === null) return;
+    const added = hits.slice(start);
+    if (added.length > 0 && added.every(hidden) && total > pages.shown) pages.more();
+    else pages.loading.current = null;
+    // Once each page has loaded (`hidden` is read as it is then)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hits]);
 }
