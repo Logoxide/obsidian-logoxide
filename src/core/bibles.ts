@@ -1,5 +1,5 @@
 /**
- * Bibles in the vault: a folder of USX files (one book each, as Paratext, the Digital Bible
+ * Bibles in the vault: a folder of USX or USFM files (one book each, as Paratext, the Digital Bible
  * Library, and eBible.org publish them) is a translation, named after the folder.
  */
 
@@ -20,7 +20,12 @@ export interface Bible {
   books: Map<number, string>;
   /** Files whose book isn't known from their name yet (read their `<book code>`) */
   unknown: string[];
+  /** From a biblix package (its verse counts come from biblix, not `VerseCounts`) */
+  package?: boolean;
 }
+
+/** Book files' extensions: USX, and USFM (read as USX through biblix) */
+export const BOOK_EXTENSIONS = ["usx", "usfm"];
 
 /**
  * A book's USFM code from its file name: `JHN.usx`, `jhn.usx`, `43JHN.usx`, `44JHNBSB.usx`
@@ -36,9 +41,11 @@ export function codeFromName(basename: string, codes: Set<string>): string | nul
   return null;
 }
 
-/** The book code a USX file declares: `<book code="JHN" ...>` */
+/** The book code a USX file declares (`<book code="JHN" ...>`), or a USFM file (`\\id JHN`) */
 export function codeFromUsx(text: string): string | null {
-  return /<book\b[^>]*\bcode="([^"]+)"/.exec(text.slice(0, 4096))?.[1]?.toUpperCase() ?? null;
+  const head = text.slice(0, 4096);
+  const code = /<book\b[^>]*\bcode="([^"]+)"/.exec(head)?.[1] ?? /\\id\s+(\S+)/.exec(head)?.[1];
+  return code?.toUpperCase() ?? null;
 }
 
 /** The Bibles these USX files make up, sorted by name */

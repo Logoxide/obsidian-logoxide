@@ -15,6 +15,7 @@ export { bookStyle, DEFAULT_SETTINGS, type StyleName, type ToposSettings } from 
  */
 export class ToposSettingsPanel {
   private readonly app: App;
+  private libraryTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(
     private readonly plugin: ToposPlugin,
@@ -251,8 +252,8 @@ export class ToposSettingsPanel {
       .setName("Bible")
       .setDesc(
         bibles.length > 0
-          ? "References open in this translation and show its text on hover and in embeds, unless they name another (John 3:16 KJV). A Bible is a folder of USX files (one per book, like JHN.usx), named after its folder."
-          : "No Bible in this vault yet. Add a folder of USX files (one per book, like JHN.usx), and references open in it and show its text on hover and in embeds (![John 1:1]).",
+          ? "References open in this translation and show its text on hover and in embeds, unless they name another (John 3:16 KJV). A Bible is a folder of USX or USFM files (one per book, like JHN.usx), named after its folder, or a biblix package in the library."
+          : "No Bible in this vault yet. Add a folder of USX or USFM files (one per book, like JHN.usx), or install a biblix package in the library, and references open in it and show its text on hover and in embeds (![John 1:1]).",
       )
       .addDropdown((d) => {
         for (const bible of bibles) d.addOption(bible.folder, `${bible.name} (${bible.books.size + bible.unknown.length} books)`);
@@ -262,6 +263,23 @@ export class ToposSettingsPanel {
           void save();
         });
       });
+    new Setting(containerEl)
+      .setName("Biblix library")
+      .setDesc(
+        "The folder Bible packages are installed in (packages/<id>/<version>/), with this vault's biblix.toml and biblix.lock unless they're at its root. Packages there are Bibles like a folder of USX files, named by their abbreviation.",
+      )
+      .addText((t) =>
+        t
+          .setPlaceholder("Biblix")
+          .setValue(settings.biblixLibrary)
+          .onChange((value) => {
+            settings.biblixLibrary = value;
+            void save();
+            // Read the packages again once typing stops
+            clearTimeout(this.libraryTimer);
+            this.libraryTimer = setTimeout(() => void this.plugin.packages.load(), 800);
+          }),
+      );
     new Setting(containerEl)
       .setName("Translations")
       .setDesc(

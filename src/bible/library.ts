@@ -1,12 +1,15 @@
 import { TFile, type TAbstractFile } from "obsidian";
 import { ToposBook, type Passage } from "biblix";
-import { codeFromUsx, groupBibles, type Bible } from "../core/bibles.ts";
+import { BOOK_EXTENSIONS, codeFromUsx, groupBibles, type Bible } from "../core/bibles.ts";
 import type ToposPlugin from "../main.ts";
 
 /** How many parsed books `text` keeps */
 const BOOKS_KEPT = 3;
 
-/** The Bibles in the vault (folders of USX files), kept up to date as files change */
+/**
+ * The Bibles in the vault: folders of USX (or USFM) files, and biblix packages (installed in the
+ * library's folder, or path packages), kept up to date as files change
+ */
 export class BibleLibrary {
   private cached: Bible[] | null = null;
   /** The books `text` read last, by path and modification time (suggestions read the same ones again) */
@@ -14,7 +17,7 @@ export class BibleLibrary {
 
   constructor(
     private readonly plugin: ToposPlugin,
-    /** Called when USX files are added, removed, or renamed */
+    /** Called when book files are added, removed, or renamed */
     private readonly changed: () => void = () => {},
   ) {}
 
@@ -22,7 +25,7 @@ export class BibleLibrary {
   start(): void {
     const { vault } = this.plugin.app;
     const changed = (file: TAbstractFile) => {
-      if (!(file instanceof TFile && file.extension === "usx")) return;
+      if (!(file instanceof TFile && BOOK_EXTENSIONS.includes(file.extension))) return;
       this.cached = null;
       this.changed();
     };
@@ -31,14 +34,24 @@ export class BibleLibrary {
     this.plugin.registerEvent(vault.on("rename", (file) => changed(file)));
   }
 
+  /** Reads the Bibles again when next asked (biblix's packages changed) */
+  reset(): void {
+    this.cached = null;
+  }
+
   all(): Bible[] {
     if (!this.cached) {
+      // Installed packages are Bibles of their own, named by their abbreviation
+      const installed = `${this.plugin.packages.libraryDir()}/packages/`;
+      const packages = this.plugin.packages.files();
+      const inPackage = (path: string) => path.startsWith(installed) || packages.some((p) => path.startsWith(`${p.dir}/`));
       const files = this.plugin.app.vault
         .getFiles()
-        .filter((f) => f.extension === "usx")
+        .filter((f) => BOOK_EXTENSIONS.includes(f.extension) && !inPackage(f.path))
         .map((f) => ({ path: f.path, basename: f.basename, folder: f.parent?.path ?? "" }));
       const ids = new Map(this.plugin.topos.books().filter((b) => b.usfm).map((b) => [b.usfm, b.id]));
-      this.cached = groupBibles(files, ids);
+      const fromPackages = packages.map((p): Bible => ({ folder: p.dir, name: p.name, books: p.books, unknown: [], package: true }));
+      this.cached = [...groupBibles(files, ids), ...fromPackages].sort((a, b) => a.name.localeCompare(b.name));
     }
     return this.cached;
   }

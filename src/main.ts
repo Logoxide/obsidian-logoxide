@@ -72,7 +72,10 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
   /** Each Bible book's verse counts, for references that name its translation */
   verseCounts = new VerseCounts(this, () => this.resetTranslations(true));
   /** Bibles from biblix packages: the ones the vault's `biblix.toml` asks for */
-  packages = new BiblixBibles(this, () => this.resetTranslations(true));
+  packages = new BiblixBibles(this, () => {
+    this.bibles.reset();
+    this.resetTranslations(true);
+  });
   private translationsCache: ToposTranslations | null = null;
   private toposReady: Promise<Topos> | null = null;
   refs!: ReferenceIndex;
@@ -184,8 +187,12 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
       this.bibles.start();
       void this.verseCounts.start();
       void this.packages.load();
-      // The vault's biblix.toml and biblix.lock at its root (in .obsidian/, the command reads them again)
-      const biblixFiles = (file: TAbstractFile) => (file.path === "biblix.toml" || file.path === "biblix.lock") && void this.packages.load();
+      // The vault's biblix.toml and biblix.lock, at its root or in the library's folder
+      const biblixFiles = (file: TAbstractFile) => {
+        const library = this.packages.libraryDir();
+        const names = ["biblix.toml", "biblix.lock"];
+        if (names.some((n) => file.path === n || file.path === `${library}/${n}`)) void this.packages.load();
+      };
       this.registerEvent(this.app.vault.on("modify", biblixFiles));
       this.registerEvent(this.app.vault.on("create", biblixFiles));
       this.registerEvent(this.app.vault.on("delete", biblixFiles));

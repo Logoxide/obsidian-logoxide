@@ -1,13 +1,7 @@
 import { Biblix, PackageKind, type BiblixPackage, type LockedEntry, type PackageFile, type Passage, type ToposBook, type ToposTranslations } from "biblix";
 import type ToposPlugin from "../main.ts";
 
-/**
- * Where installed packages are: the vault's config folder (`.obsidian/biblix`), as biblix's plan
- * has it, until the location is a setting. Path packages stay where the manifest says.
- */
-export const LIBRARY = "biblix";
-
-/** The vault's manifest: at its root, else in its config folder */
+/** The vault's manifest: at its root, else in the library's folder */
 const MANIFEST = "biblix.toml";
 const LOCK = "biblix.lock";
 
@@ -23,15 +17,26 @@ interface PackageBible {
   pkg: BiblixPackage;
   /** Books read last */
   books: Map<number, ToposBook>;
+  /** The package's folder, from the vault's root */
+  dir: string;
+}
+
+/** A package Bible's book files in the vault, for the reader */
+export interface PackageFiles {
+  dir: string;
+  name: string;
+  books: Map<number, string>;
 }
 
 /**
  * The Bibles a vault's `biblix.toml` asks for, as its `biblix.lock` pins them, read from the library
- * (or a path package's folder) with biblix. They give the translations references can name, with
- * their own verse counts, and passage text. Their parsed cache is kept in the plugin's folder.
+ * (a folder in the vault, `Biblix/` by default) or a path package's folder with biblix. They're
+ * Bibles like the vault's USX folders (their books are vault files the reader opens), and give the
+ * translations references can name, with their own verse counts. Their parsed cache is kept in the
+ * plugin's folder.
  *
- * Installing and the settings come later; `bx install` (with `BIBLIX_HOME` set to the library) puts
- * packages there.
+ * Installing from the settings comes later; `bx install` (with `BIBLIX_HOME` set to the library)
+ * puts packages there.
  */
 export class BiblixBibles {
   private bibles: PackageBible[] = [];
@@ -46,9 +51,9 @@ export class BiblixBibles {
     private readonly changed: () => void,
   ) {}
 
-  /** The library's folder in the vault */
+  /** The library's folder in the vault (the setting; `Biblix` by default) */
   libraryDir(): string {
-    return `${this.plugin.app.vault.configDir}/${LIBRARY}`;
+    return this.plugin.settings.biblixLibrary.trim().replace(/^\/+|\/+$/g, "") || "Biblix";
   }
 
   private cacheDir(): string | null {
@@ -69,8 +74,7 @@ export class BiblixBibles {
 
   private async read(): Promise<void> {
     const adapter = this.plugin.app.vault.adapter;
-    const configDir = this.plugin.app.vault.configDir;
-    const base = (await adapter.exists(MANIFEST)) ? "" : configDir;
+    const base = (await adapter.exists(MANIFEST)) ? "" : this.libraryDir();
     const at = (name: string) => (base ? `${base}/${name}` : name);
     const problems: string[] = [];
     const bibles: PackageBible[] = [];
@@ -124,7 +128,7 @@ export class BiblixBibles {
       pkg.dispose();
       return null;
     }
-    return { id: info.id, name: info.abbreviation, aliases: info.aliases, pkg, books: new Map() };
+    return { id: info.id, name: info.abbreviation, aliases: info.aliases, pkg, books: new Map(), dir };
   }
 
   /** Writes what a package's cache wrote into the plugin's folder */
@@ -157,6 +161,15 @@ export class BiblixBibles {
       return this.bibles.find((b) => b.name.toLowerCase() === lower || b.id === lower || b.aliases.some((a) => a.toLowerCase() === lower)) ?? null;
     }
     return this.bibles.find((b) => b.name === this.defaultName) ?? this.bibles[0] ?? null;
+  }
+
+  /** Each package Bible's book files (in the vault, so the reader opens them) */
+  files(): PackageFiles[] {
+    return this.bibles.map((bible) => ({
+      dir: bible.dir,
+      name: bible.name,
+      books: new Map(bible.pkg.bookFiles().map((f) => [f.bookId, `${bible.dir}/${f.path}`])),
+    }));
   }
 
   /** Whether a package Bible has this name or alias */

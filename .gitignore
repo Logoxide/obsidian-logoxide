@@ -5,6 +5,7 @@ dist/
 # The test vault: its notes are kept, the Bibles and Obsidian state are not
 test-vault/Bibles/
 test-vault/Books/
+test-vault/Biblix/
 test-vault/.obsidian/*
 !test-vault/.obsidian/plugins/
 test-vault/.obsidian/plugins/*

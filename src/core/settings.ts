@@ -57,6 +57,11 @@ export interface ToposSettings {
   cliCache: boolean;
   /** The Bible references open in and preview from: a folder of USX files ("" for the first) */
   bible: string;
+  /**
+   * The biblix library's folder in the vault: installed packages (`packages/<id>/<version>/`), and
+   * the vault's `biblix.toml` and `biblix.lock` unless they're at its root
+   */
+  biblixLibrary: string;
   /** Translations' names and aliases, one per line: `KJV: AV, King James` (see core/translations.ts) */
   bibleAliases: string;
   /** Bibles embeds also show, by name, separated by commas: `KJV, NET` */
@@ -108,6 +113,7 @@ export const DEFAULT_SETTINGS: ToposSettings = {
   cliPath: "",
   cliCache: true,
   bible: "",
+  biblixLibrary: "Biblix",
   bibleAliases: "",
   compareBibles: "",
   bibleNotes: false,

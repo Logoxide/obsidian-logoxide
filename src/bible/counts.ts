@@ -1,4 +1,4 @@
-import { ToposBook } from "biblix";
+import { Biblix, ToposBook } from "biblix";
 import type { TranslationCounts } from "../core/translations.ts";
 import type ToposPlugin from "../main.ts";
 
@@ -36,6 +36,8 @@ export class VerseCounts {
   all(): TranslationCounts[] {
     const counts: TranslationCounts[] = [];
     for (const bible of this.plugin.bibles.all()) {
+      // A package's counts come from biblix
+      if (bible.package) continue;
       for (const [bookId, path] of bible.books) {
         const saved = this.saved[path];
         if (saved && saved.bookId === bookId) counts.push({ translation: bible.name, bookId, counts: saved.counts });
@@ -76,13 +78,22 @@ export class VerseCounts {
     let read = false;
     const paths = new Set<string>();
     for (const bible of this.plugin.bibles.all()) {
+      if (bible.package) continue;
       for (const [bookId, path] of bible.books) {
         paths.add(path);
         const file = vault.getFileByPath(path);
         if (!file) continue;
         const saved = this.saved[path];
         if (saved && saved.bookId === bookId && saved.mtime === file.stat.mtime && saved.size === file.stat.size) continue;
-        const counts = Array.from(ToposBook.usxChapterVerses(await vault.cachedRead(file)));
+        let text = await vault.cachedRead(file);
+        if (file.extension === "usfm") {
+          try {
+            text = Biblix.new().usfmToUsx(text);
+          } catch {
+            continue;
+          }
+        }
+        const counts = Array.from(ToposBook.usxChapterVerses(text));
         this.saved[path] = { mtime: file.stat.mtime, size: file.stat.size, bookId, counts };
         read = true;
         // A Bible is 66 files: let the app breathe between them

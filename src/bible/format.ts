@@ -1,17 +1,21 @@
 import type { FileFormat } from "file-plus-plus/obsidian";
 import { serializeTextFragment, withTextDirective } from "file-plus-plus/core";
 import type { App, TFile } from "obsidian";
-import { ToposBook, type BookVerse, type PassageSegment } from "biblix";
+import { Biblix, ToposBook, type BookVerse, type PassageSegment } from "biblix";
 import { formatVerseLocator, parseVerseLocator } from "../core/verse-locator.ts";
 import type ToposPlugin from "../main.ts";
+import { BOOK_EXTENSIONS } from "../core/bibles.ts";
 import { BIBLE_SCHEMES, BibleReader, type BibleBook } from "./reader.ts";
 
-/** USX files (one Bible book each) for file-plus-plus: their own tab, previews, and embeds */
+/**
+ * USX and USFM files (one Bible book each) for file-plus-plus: their own tab, previews, and embeds.
+ * USFM is read as USX through biblix
+ */
 export function createBibleFormat(plugin: ToposPlugin): FileFormat<BibleBook, BibleReader> {
   return {
     name: "Bible",
     noun: "book",
-    extensions: ["usx"],
+    extensions: BOOK_EXTENSIONS,
     plainText: true,
     icon: "book-open-text",
     frontmatterKey: "bible",
@@ -89,9 +93,13 @@ export function createBibleFormat(plugin: ToposPlugin): FileFormat<BibleBook, Bi
 
 async function loadBook(plugin: ToposPlugin, app: App, file: TFile): Promise<BibleBook> {
   const topos = await plugin.engine();
-  const book = ToposBook.parse(topos, "usx", await app.vault.cachedRead(file));
+  let text = await app.vault.cachedRead(file);
+  if (file.extension === "usfm") text = Biblix.new().usfmToUsx(text);
+  const book = ToposBook.parse(topos, "usx", text);
   if (!book) throw new Error("not a USX file");
   const bookId = book.bookId() ?? 0;
   const info = topos.books().find((b) => b.id === bookId);
-  return { book, bookId, name: info?.name ?? file.basename, bible: file.parent?.name ?? "" };
+  // A package's books are in `usx/`: its name is the package's abbreviation
+  const bible = plugin.bibles.ofFile(file.path)?.name ?? file.parent?.name ?? "";
+  return { book, bookId, name: info?.name ?? file.basename, bible };
 }
