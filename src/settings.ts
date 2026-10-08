@@ -275,6 +275,25 @@ export class ToposSettingsPanel {
       )
       .addButton((b) => b.setButtonText("Search").onClick(() => new AddBibleModal(this.app, this.plugin, () => this.display()).open()))
       .addButton((b) => b.setButtonText("Git URL").onClick(() => new GitUrlModal(this.app, this.plugin, () => this.display()).open()));
+    if (packages.installed.some((p) => !p.path)) {
+      new Setting(containerEl)
+        .setName("Update Bibles")
+        .setDesc("Moves each Bible installed from a repository to its newest release that biblix.toml allows (imports stay as they are).")
+        .addButton((b) =>
+          b.setButtonText("Update").onClick(async () => {
+            const notice = new Notice("Checking for updates…", 0);
+            try {
+              const changed = await this.plugin.bibleManager.update();
+              notice.hide();
+              new Notice(changed.length > 0 ? `Updated ${changed.join(", ")}` : "Every Bible is up to date");
+            } catch (error) {
+              notice.hide();
+              new Notice(`Couldn't update: ${error instanceof Error ? error.message : String(error)}`, 10000);
+            }
+            this.display();
+          }),
+        );
+    }
   }
 
   private bibleSettings(containerEl: HTMLElement): void {

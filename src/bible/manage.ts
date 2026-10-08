@@ -1,5 +1,5 @@
 import { requestUrl } from "obsidian";
-import { Biblix, type BiblixCatalog, type BiblixInstaller, type BiblixProject, type CatalogEntry, type FetchRequest, type InstallStep, type PackageLocation } from "biblix";
+import { Biblix, type BiblixCatalog, type BiblixInstaller, type BiblixProject, type CatalogEntry, type FetchRequest, type InstallStep, type PackageLocation, type UpdateMode } from "biblix";
 import type ToposPlugin from "../main.ts";
 import { LOCK, MANIFEST, buffer, join, message, mkdirs, readTree } from "./packages.ts";
 
@@ -92,6 +92,9 @@ export class BibleManager {
 
   /** Answers what an installer asks for: downloads, or files in the vault */
   private async answer(installer: BiblixInstaller, request: FetchRequest, base: string): Promise<void> {
+    if (request.tag !== "Files" && !/^https?:\/\//.test(request.repository)) {
+      throw new Error(`${request.repository} isn't on the web: install or update it with bx (bx install, bx update)`);
+    }
     if (request.tag === "Refs") {
       installer.provideRefs(request.repository, new Uint8Array(await download(request.url)));
     } else if (request.tag === "Archive") {
@@ -117,11 +120,11 @@ export class BibleManager {
   }
 
   /** Installs the project's packages, then saves its manifest and lock file and reads the packages again; the lock's text */
-  private async install(biblix: Biblix, project: BiblixProject, base: string, installer = biblix.installer()): Promise<string> {
-    let step: InstallStep = installer.install(project, { tag: "Nothing" });
+  private async install(biblix: Biblix, project: BiblixProject, base: string, installer = biblix.installer(), update: UpdateMode = { tag: "Nothing" }): Promise<string> {
+    let step: InstallStep = installer.install(project, update);
     while (step.tag === "Fetch") {
       await this.answer(installer, step.request, base);
-      step = installer.install(project, { tag: "Nothing" });
+      step = installer.install(project, update);
     }
     const library = this.plugin.packages.libraryDir();
     for (const file of step.files) {
@@ -180,6 +183,23 @@ export class BibleManager {
     await this.install(biblix, added, base);
     added.dispose();
     return entry.abbreviation;
+  }
+
+  /** Moves every git package to the newest release its requirement allows (like `bx update`); what changed */
+  async update(): Promise<string[]> {
+    await this.plugin.engine();
+    const biblix = Biblix.new();
+    const { project, base } = await this.project(biblix);
+    const before = new Map(project.packages().map((p) => [p.id, p.version]));
+    const lock = await this.install(biblix, project, base, biblix.installer(), { tag: "All" });
+    const after = biblix.parseProject(project.manifestText(), lock);
+    const changed = after
+      .packages()
+      .filter((p) => before.get(p.id) !== p.version)
+      .map((p) => `${p.id} ${before.get(p.id) ?? "new"} → ${p.version}`);
+    after.dispose();
+    project.dispose();
+    return changed;
   }
 
   /** Removes a package from the vault's manifest, and its files (unless another entry uses them) */
