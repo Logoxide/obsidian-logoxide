@@ -1,4 +1,4 @@
-import type { Passage, Topos } from "topos-bible";
+import type { Passage, Topos } from "biblix";
 
 export type Testament = "old" | "new";
 

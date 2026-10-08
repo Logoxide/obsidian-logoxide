@@ -1,4 +1,4 @@
-import { OffsetUnit, type Passage, type Topos } from "topos-bible";
+import { OffsetUnit, type Passage, type Topos } from "biblix";
 
 /** A reference found in a file; offsets and columns are UTF-16, like CodeMirror's */
 export interface Hit {

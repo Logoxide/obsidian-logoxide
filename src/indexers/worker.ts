@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 // Runs in a Web Worker: searches files with its own copy of the engine, off the main thread
-import init, { OffsetUnit, Topos } from "topos-bible";
+import init, { OffsetUnit, Topos } from "biblix";
 import { searchText, type Hit } from "../core/search.ts";
 
 export type WorkerRequest =

@@ -1,4 +1,4 @@
-import { OffsetUnit, type BookStyle, type Match, type Topos } from "topos-bible";
+import { OffsetUnit, type BookStyle, type Match, type Topos } from "biblix";
 import { DEFAULT_FORMAT, written, type FormatSettings } from "./format.ts";
 
 export { written };

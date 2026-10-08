@@ -1,5 +1,5 @@
 import { App, Notice, type DropdownComponent, Platform, Setting } from "obsidian";
-import { BookStyle } from "topos-bible";
+import { BookStyle } from "biblix";
 import { DEFAULT_FORMAT, written, type FormatSettings } from "./core/format.ts";
 import { parseQuery } from "./core/query.ts";
 import type { BookCompletion } from "./core/completions.ts";

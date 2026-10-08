@@ -1,4 +1,4 @@
-import { ToposPaths } from "topos-bible";
+import { ToposPaths } from "biblix";
 
 /**
  * A glob (ripgrep's `--glob`, gitignore's rules: `*.md`, `drafts`, `Sermons/**`), a glob ignoring

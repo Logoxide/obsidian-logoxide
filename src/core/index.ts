@@ -10,7 +10,7 @@ import {
   type IndexHit,
   type IndexResults,
   type Topos,
-} from "topos-bible";
+} from "biblix";
 import { compileFilters, NO_FILTERS, type Filters } from "./filters.ts";
 import { toPaths, type Where } from "./paths.ts";
 import type { Hit } from "./search.ts";

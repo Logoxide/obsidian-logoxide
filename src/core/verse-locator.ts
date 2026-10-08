@@ -1,4 +1,4 @@
-import type { Passage, PassageSegment } from "topos-bible";
+import type { Passage, PassageSegment } from "biblix";
 
 /**
  * Places in a Bible book, as link subpaths: `v=3:16`, `v=3:16-18`, `v=3:16-4:2`, a chapter `v=3`,

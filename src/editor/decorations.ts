@@ -9,7 +9,7 @@ import {
   type ViewUpdate,
 } from "@codemirror/view";
 import { Component, editorLivePreviewField, MarkdownView, type HoverParent } from "obsidian";
-import { BookStyle, type Passage } from "topos-bible";
+import { BookStyle, type Passage } from "biblix";
 import { embedAloneCursorLines } from "../core/settings.ts";
 import { blankAround, findReferences } from "../core/syntax.ts";
 import type ToposPlugin from "../main.ts";

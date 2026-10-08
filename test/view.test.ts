@@ -14,7 +14,7 @@ test("the sidebar renders filtered, grouped results", async () => {
   writeFileSync(
     entry,
     `import { renderToString } from "react-dom/server";
-     import { Topos } from "topos-bible";
+     import { Topos } from "biblix";
      import { PaneApp } from ${src("view/PaneApp.tsx")};
      import { SearchStore } from ${src("view/store.ts")};
      import { ReferenceIndex } from ${src("core/index.ts")};
@@ -57,7 +57,7 @@ test("the sidebar renders filtered, grouped results", async () => {
     format: "esm",
     platform: "node",
     jsx: "automatic",
-    external: ["obsidian", "topos-bible", "react", "react-dom"],
+    external: ["obsidian", "biblix", "react", "react-dom"],
     nodePaths: [new URL("../node_modules", import.meta.url).pathname],
     outfile: out,
     logLevel: "silent",
@@ -115,7 +115,7 @@ test("the search tab shows file types with their counts, filters, and results", 
   writeFileSync(
     entry,
     `import { renderToString } from "react-dom/server";
-     import { Topos } from "topos-bible";
+     import { Topos } from "biblix";
      import { PaneApp } from ${src("view/PaneApp.tsx")};
      import { SearchStore } from ${src("view/store.ts")};
      import { ReferenceIndex } from ${src("core/index.ts")};
@@ -161,7 +161,7 @@ test("the search tab shows file types with their counts, filters, and results", 
     format: "esm",
     platform: "node",
     jsx: "automatic",
-    external: ["obsidian", "topos-bible", "react", "react-dom"],
+    external: ["obsidian", "biblix", "react", "react-dom"],
     nodePaths: [new URL("../node_modules", import.meta.url).pathname],
     outfile: out,
     logLevel: "silent",

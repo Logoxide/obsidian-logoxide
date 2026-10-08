@@ -1,4 +1,4 @@
-import { BookStyle, ToposFormat, type Passage, type Topos } from "topos-bible";
+import { BookStyle, ToposFormat, type Passage, type Topos } from "biblix";
 
 /** How references are written: the CLI's --psg-fmt fields (the book style is a separate setting) */
 export interface FormatSettings {

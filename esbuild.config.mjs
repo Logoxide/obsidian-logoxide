@@ -32,11 +32,11 @@ const filePlusPlus = {
     });
   },
 };
-const pkg = fileURLToPath(new URL("./node_modules/topos-bible/", import.meta.url));
+const pkg = fileURLToPath(new URL("./node_modules/biblix/", import.meta.url));
 
 const alias = {
-  "topos-bible": `${pkg}topos_bible.js`,
-  "topos-bible-wasm": `${pkg}topos_bible_bg.wasm`,
+  "biblix": `${pkg}biblix.js`,
+  "biblix-wasm": `${pkg}biblix_bg.wasm`,
 };
 
 /**

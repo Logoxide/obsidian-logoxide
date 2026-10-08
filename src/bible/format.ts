@@ -1,7 +1,7 @@
 import type { FileFormat } from "file-plus-plus/obsidian";
 import { serializeTextFragment, withTextDirective } from "file-plus-plus/core";
 import type { App, TFile } from "obsidian";
-import { ToposBook, type BookVerse, type PassageSegment } from "topos-bible";
+import { ToposBook, type BookVerse, type PassageSegment } from "biblix";
 import { formatVerseLocator, parseVerseLocator } from "../core/verse-locator.ts";
 import type ToposPlugin from "../main.ts";
 import { BIBLE_SCHEMES, BibleReader, type BibleBook } from "./reader.ts";

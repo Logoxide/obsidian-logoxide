@@ -259,20 +259,21 @@ right away.
 It also needs file-plus-plus (the engine of EPUB++ and Transcript++) checked out at
 `../obsidian-plus-plus/file-plus-plus` (run `bun install` there once).
 
-The plugin uses the `topos-bible` package built from a [topos](https://github.com/MasterTemple/topos-bible)
-checkout at `../../rust/topos` (`~/Development/rust/topos` when this repository is
-`~/Development/typescript/obsidian-topos-bible`), since it needs bindings newer than the npm release:
+The plugin uses the `biblix` package (biblix's bindings, with all of
+[topos](https://github.com/MasterTemple/topos-bible)'s) built from a biblix checkout at
+`../../rust/biblix`, which builds against topos at `../../rust/topos` (`~/Development/rust/...` when
+this repository is `~/Development/typescript/obsidian-topos-bible`):
 
 ```sh
 # Once: cargo install boltffi_cli --version 0.31.0, rustup target add wasm32-unknown-unknown
-(cd ../../rust/topos/crates/topos-ffi && npm install && npm run pack:wasm)
+(cd ../../rust/biblix/crates/biblix-ffi && npm install && npm run pack:wasm)
 
 npm install
 scripts/install.sh ~/path/to/vault   # builds, then copies main.js, manifest.json, styles.css
 ```
 
-Then enable **Topos Bible** under *Settings → Community plugins*. Once a `topos-bible` release
-includes these bindings, the dependency can point at the npm version instead (`package.json`).
+Then enable **Topos Bible** under *Settings → Community plugins*. Once `biblix` is released on
+npm, the dependency can point at it instead (`package.json`).
 
 ## Development
 

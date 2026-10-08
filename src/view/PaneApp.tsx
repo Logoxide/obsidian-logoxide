@@ -8,7 +8,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import type { Passage } from "topos-bible";
+import type { Passage } from "biblix";
 import { chosenExtensions, extensionOf, toggleExtension } from "../core/file-types.ts";
 import { cleanPath, excludes, parsePattern, patternProblems, patternText, type PathPattern } from "../core/paths.ts";
 import { compileFilters, isEmpty, NO_FILTERS, type Filters, type Testament } from "../core/filters.ts";

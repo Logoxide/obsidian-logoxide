@@ -1,6 +1,6 @@
 import { Platform, type Menu } from "obsidian";
 import type { Annotation, AnnotationProvider } from "file-plus-plus/obsidian";
-import type { Passage } from "topos-bible";
+import type { Passage } from "biblix";
 import type ToposPlugin from "../main.ts";
 
 export const PROVIDER_ID = "topos-bible";

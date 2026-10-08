@@ -1,4 +1,4 @@
-import type { EpubReference } from "topos-bible";
+import type { EpubReference } from "biblix";
 import type { Hit } from "./search.ts";
 
 /** A section of an EPUB's text (one spine item), as EPUB++ extracts it */

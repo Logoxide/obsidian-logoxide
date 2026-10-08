@@ -1,7 +1,7 @@
 import { Component, ItemView, MarkdownRenderer, Platform, setIcon, type HoverPopover, type ViewStateResult, type Workspace, type WorkspaceLeaf } from "obsidian";
 import { StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import type { Passage } from "topos-bible";
+import type { Passage } from "biblix";
 import type { Hit } from "../core/search.ts";
 import { linkElement } from "../reading.ts";
 import type ToposPlugin from "../main.ts";

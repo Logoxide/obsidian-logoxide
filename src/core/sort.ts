@@ -1,4 +1,4 @@
-import type { Passage } from "topos-bible";
+import type { Passage } from "biblix";
 import type { Hit } from "./search.ts";
 
 export type SortOrder = "file" | "bible";

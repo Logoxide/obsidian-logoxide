@@ -1,5 +1,5 @@
 import { DocumentReader, PREFIX, splitTextDirective, textFragmentScheme, withTextDirective, type LocatorScheme, type ParsedLocator, type ReaderOptions, type TocItem } from "file-plus-plus/core";
-import type { BookTextOptions, ToposBook } from "topos-bible";
+import type { BookTextOptions, ToposBook } from "biblix";
 import { END, formatVerseLocator, parseVerseLocator, partSegments, type VersePart } from "../core/verse-locator.ts";
 
 /** A Bible book opened from a USX file */

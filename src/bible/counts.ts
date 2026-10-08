@@ -1,4 +1,4 @@
-import { ToposBook } from "topos-bible";
+import { ToposBook } from "biblix";
 import type { TranslationCounts } from "../core/translations.ts";
 import type ToposPlugin from "../main.ts";
 

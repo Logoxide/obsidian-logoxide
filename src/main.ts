@@ -18,7 +18,7 @@ import {
 import { around } from "file-plus-plus/obsidian";
 import { FilePlusPlusPlugin, type DocumentEmbed, type EmbedContext } from "file-plus-plus/obsidian";
 import type { FppSettings } from "file-plus-plus/obsidian";
-import { OffsetUnit, type BookTextOptions, type Passage, type Topos, type ToposTranslations } from "topos-bible";
+import { OffsetUnit, type BookTextOptions, type Passage, type Topos, type ToposTranslations } from "biblix";
 import type { EditorView } from "@codemirror/view";
 import { DEFAULT_FORMAT } from "./core/format.ts";
 import { migrateQuery, parseQuery, type SavedQuery } from "./core/query.ts";
@@ -44,6 +44,7 @@ import { BibleEmbed } from "./bible/embed.ts";
 import { createBibleFormat } from "./bible/format.ts";
 import { BibleLibrary } from "./bible/library.ts";
 import { VerseCounts } from "./bible/counts.ts";
+import { BiblixBibles } from "./bible/packages.ts";
 import { addParallelCommands } from "./bible/parallel.ts";
 import { buildTranslations, parseAliases } from "./core/translations.ts";
 import type { BibleBook, BibleReader } from "./bible/reader.ts";
@@ -70,6 +71,8 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
   });
   /** Each Bible book's verse counts, for references that name its translation */
   verseCounts = new VerseCounts(this, () => this.resetTranslations(true));
+  /** Bibles from biblix packages: the ones the vault's `biblix.toml` asks for */
+  packages = new BiblixBibles(this, () => this.resetTranslations(true));
   private translationsCache: ToposTranslations | null = null;
   private toposReady: Promise<Topos> | null = null;
   refs!: ReferenceIndex;
@@ -94,10 +97,12 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
    * names and aliases, with each Bible's verse counts
    */
   translations(): ToposTranslations {
-    this.translationsCache ??= buildTranslations(
-      this.bibles.all().map((b) => b.name),
-      parseAliases(this.settings.bibleAliases),
-      this.verseCounts.all(),
+    this.translationsCache ??= this.packages.addTo(
+      buildTranslations(
+        this.bibles.all().map((b) => b.name),
+        parseAliases(this.settings.bibleAliases),
+        this.verseCounts.all(),
+      ),
     );
     return this.translationsCache;
   }
@@ -178,6 +183,12 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
     this.app.workspace.onLayoutReady(() => {
       this.bibles.start();
       void this.verseCounts.start();
+      void this.packages.load();
+      // The vault's biblix.toml and biblix.lock at its root (in .obsidian/, the command reads them again)
+      const biblixFiles = (file: TAbstractFile) => (file.path === "biblix.toml" || file.path === "biblix.lock") && void this.packages.load();
+      this.registerEvent(this.app.vault.on("modify", biblixFiles));
+      this.registerEvent(this.app.vault.on("create", biblixFiles));
+      this.registerEvent(this.app.vault.on("delete", biblixFiles));
       void this.indexer.start();
       this.epubs.start();
       this.otherDocuments.start();
@@ -205,6 +216,7 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
     clearTimeout(this.notifyTimer);
     this.worker?.terminate();
     this.translationsCache?.dispose();
+    this.packages.unload();
     this.topos?.dispose();
   }
 
@@ -703,6 +715,16 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
   // Commands and menus
 
   private addCommands(): void {
+    this.addCommand({
+      id: "reload-biblix-packages",
+      name: "Read biblix packages again",
+      callback: () =>
+        void this.packages.load().then(() => {
+          const { problems } = this.packages;
+          const names = this.packages.names();
+          new Notice(problems.length > 0 ? problems.join("\n") : names.length > 0 ? `Bibles from biblix: ${names.join(", ")}` : "No biblix packages (biblix.toml)");
+        }),
+    });
     this.addCommand({
       id: "open-search",
       name: "Open verse search",

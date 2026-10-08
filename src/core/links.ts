@@ -1,4 +1,4 @@
-import type { BookInfo, Passage } from "topos-bible";
+import type { BookInfo, Passage } from "biblix";
 
 /**
  * Links to Bible websites, from a template like

@@ -1,4 +1,4 @@
-import { BookStyle, OffsetUnit, ToposQuery, type Passage, type Topos, type ToposTranslations } from "topos-bible";
+import { BookStyle, OffsetUnit, ToposQuery, type Passage, type Topos, type ToposTranslations } from "biblix";
 
 /**
  * References in a note's Markdown, by how they are written:

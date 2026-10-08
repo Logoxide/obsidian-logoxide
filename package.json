@@ -15,7 +15,7 @@
     "file-plus-plus": "file:../obsidian-plus-plus/file-plus-plus",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
-    "topos-bible": "file:../../rust/topos/crates/topos-ffi/dist/wasm/pkg"
+    "biblix": "file:../../rust/biblix/crates/biblix-ffi/dist/wasm/pkg"
   },
   "devDependencies": {
     "@codemirror/commands": "^6.8.1",

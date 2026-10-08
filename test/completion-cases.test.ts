@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { BookStyle, Topos } from "topos-bible";
+import { BookStyle, Topos } from "biblix";
 import { completionsBefore } from "../src/core/completions.ts";
 import { DEFAULT_FORMAT } from "../src/core/format.ts";
 import { toposDir } from "./topos.ts";

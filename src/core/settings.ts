@@ -1,4 +1,4 @@
-import { BookStyle } from "topos-bible";
+import { BookStyle } from "biblix";
 import type { BookCompletion } from "./completions.ts";
 import { SITES } from "./links.ts";
 import { DEFAULT_FORMAT, type FormatSettings } from "./format.ts";

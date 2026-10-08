@@ -1,5 +1,5 @@
 import { TFile, type TAbstractFile } from "obsidian";
-import { ToposBook, type Passage } from "topos-bible";
+import { ToposBook, type Passage } from "biblix";
 import { codeFromUsx, groupBibles, type Bible } from "../core/bibles.ts";
 import type ToposPlugin from "../main.ts";
 
@@ -81,12 +81,15 @@ export class BibleLibrary {
   }
 
   /**
-   * A passage's plain text, from the Bible it names (else the current one), its parts joined by
-   * " … "; null without a Bible with the book
+   * A passage's plain text, from the Bible it names (else the current one; else a biblix
+   * package's), its parts joined by " … "; null without a Bible with the book
    */
   async text(passage: Passage, translation?: string | null): Promise<string | null> {
+    // A biblix package's Bible, when the reference names one the vault has no folder for
+    const packages = this.plugin.packages;
+    if (translation && !this.named(translation) && packages.has(translation)) return packages.text(passage, translation);
     const file = await this.bookFile(passage, this.forText(translation));
-    if (!file) return null;
+    if (!file) return packages.text(passage, translation);
     const key = `${file.path}\n${file.stat.mtime}`;
     let book: ToposBook | null | undefined = this.books.get(key);
     if (!book) {
