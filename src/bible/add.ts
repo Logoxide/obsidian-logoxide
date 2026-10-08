@@ -51,7 +51,7 @@ export class AddBibleModal extends SuggestModal<CatalogEntry> {
     const installed = this.plugin.packages.installed.some((p) => p.id === entry.id);
     el.createDiv({ text: `${entry.name} (${entry.abbreviation})${installed ? " — installed" : ""}` });
     const language = entry.languageName ?? entry.language;
-    const from = entry.source.tag === "Ebible" ? "eBible.org" : entry.source.url;
+    const from = entry.source.tag === "Ebible" ? "eBible.org" : entry.source.tag === "FetchBible" ? "fetch.bible" : entry.source.url;
     el.createEl("small", { text: [language, license(entry), from].join(" · "), cls: "topos-muted" });
   }
 

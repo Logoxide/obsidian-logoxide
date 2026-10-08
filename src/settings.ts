@@ -271,7 +271,7 @@ export class ToposSettingsPanel {
     new Setting(containerEl)
       .setName("Add a Bible")
       .setDesc(
-        "Search the catalogs (eBible.org's 1,000+ translations unless biblix.toml's [settings] catalogs names others) and install one into the library, or add a biblix package from its git repository.",
+        "Search the catalogs (eBible.org's and fetch.bible's 2,000+ translations, unless biblix.toml's [settings] catalogs names others) and install one into the library, or add a biblix package from its git repository.",
       )
       .addButton((b) => b.setButtonText("Search").onClick(() => new AddBibleModal(this.app, this.plugin, () => this.display()).open()))
       .addButton((b) => b.setButtonText("Git URL").onClick(() => new GitUrlModal(this.app, this.plugin, () => this.display()).open()));

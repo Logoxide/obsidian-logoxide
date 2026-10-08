@@ -157,7 +157,7 @@ export class BibleManager {
     return info.abbreviation;
   }
 
-  /** Installs a catalog entry: adds its repository, or imports eBible.org's download */
+  /** Installs a catalog entry: adds its repository, or imports eBible.org's or fetch.bible's download */
   async addEntry(entry: CatalogEntry): Promise<string> {
     if (entry.source.tag === "Git") return this.addGit(entry.source.url);
     await this.plugin.engine();
@@ -166,7 +166,10 @@ export class BibleManager {
     const relative = `imports/${entry.id}`;
     const dir = join(base, relative);
     if (await this.adapter.exists(dir)) throw new Error(`${dir} already exists`);
-    const files = biblix.importEbible(entry, new Uint8Array(await download(entry.source.zipUrl)));
+    const files =
+      entry.source.tag === "Ebible"
+        ? biblix.importEbible(entry, new Uint8Array(await download(entry.source.zipUrl)))
+        : biblix.importFetchBible(entry, await downloadBooks(entry.source.books));
     for (const file of files) {
       const path = `${dir}/${file.path}`;
       await mkdirs(this.plugin, path.slice(0, path.lastIndexOf("/")));
@@ -201,6 +204,19 @@ export class BibleManager {
     }
     await this.plugin.packages.load();
   }
+}
+
+/** Each of fetch.bible's books (a few at a time), with its code as the path */
+async function downloadBooks(books: { code: string; url: string }[]): Promise<{ path: string; bytes: Uint8Array }[]> {
+  const files: { path: string; bytes: Uint8Array }[] = [];
+  const queue = [...books];
+  const worker = async () => {
+    for (let book = queue.shift(); book; book = queue.shift()) {
+      files.push({ path: book.code, bytes: new Uint8Array(await download(book.url)) });
+    }
+  };
+  await Promise.all(Array.from({ length: 8 }, worker));
+  return files;
 }
 
 /** A URL's bytes through Obsidian (redirects followed, no CORS) */
