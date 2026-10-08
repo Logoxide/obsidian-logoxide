@@ -13,6 +13,7 @@ import {
   type PaneType,
   type TAbstractFile,
   type Workspace,
+  type WorkspaceLeaf,
 } from "obsidian";
 import { around } from "file-plus-plus/obsidian";
 import { FilePlusPlusPlugin, type DocumentEmbed, type EmbedContext } from "file-plus-plus/obsidian";
@@ -52,7 +53,8 @@ import { wholeReference } from "./core/syntax.ts";
 /** The page preview source of references in notes (Settings → Page preview) */
 export const HOVER_SOURCE = "topos-bible-references";
 import { SEARCH_VIEW, SearchView } from "./view/SearchView.tsx";
-import { SearchStore } from "./view/store.ts";
+import { newTabLeaf, SEARCH_PANE_VIEW, SearchPane } from "./view/SearchPane.tsx";
+import { SearchStore, type SearchState } from "./view/store.ts";
 
 /** The plugin's settings and file-plus-plus's (the Bible tab, previews, highlights) */
 export type PluginSettings = FppSettings & ToposSettings;
@@ -154,6 +156,7 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
     });
 
     this.registerView(SEARCH_VIEW, (leaf) => new SearchView(leaf, this));
+    this.registerView(SEARCH_PANE_VIEW, (leaf) => new SearchPane(leaf, this));
     this.registerHoverLinkSource(HOVER_SOURCE, { display: "Topos Bible: Bible references in notes", defaultMod: false });
     this.patchReferenceLinks();
     this.addRibbonIcon("book-open", "Verse search", () => void this.activateSearch());
@@ -592,12 +595,30 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
     await workspace.revealLeaf(leaf);
   }
 
-  /** Opens the note and selects the reference */
-  async openHit(hit: Hit): Promise<void> {
+  /**
+   * Opens verse search in a new tab, starting from a search (the sidebar's, by default), or shows
+   * the search tab already open
+   */
+  async openSearchPane(search: Partial<SearchState> | null = this.search.get(), newTab = false): Promise<void> {
+    const { workspace } = this.app;
+    const existing = newTab ? undefined : workspace.getLeavesOfType(SEARCH_PANE_VIEW)[0];
+    if (existing) {
+      if (search && existing.view instanceof SearchPane) existing.view.store.set(search);
+      await workspace.revealLeaf(existing);
+      workspace.setActiveLeaf(existing, { focus: true });
+      return;
+    }
+    const leaf = newTabLeaf(workspace);
+    await leaf.setViewState({ type: SEARCH_PANE_VIEW, active: true, state: search ? { search } : {} });
+    await workspace.revealLeaf(leaf);
+  }
+
+  /** Opens the note (in `leaf`, else the current tab) and selects the reference */
+  async openHit(hit: Hit, inLeaf?: WorkspaceLeaf): Promise<void> {
     if (hit.epub && (await this.epubs.open(hit))) return;
     const file = this.app.vault.getFileByPath(hit.path);
     if (!file) return;
-    const leaf = this.app.workspace.getLeaf(false);
+    const leaf = inLeaf ?? this.app.workspace.getLeaf(false);
     await leaf.openFile(file, { active: true });
     if (leaf.view instanceof MarkdownView) {
       const editor = leaf.view.editor;
@@ -686,6 +707,16 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
       id: "open-search",
       name: "Open verse search",
       callback: () => void this.activateSearch(),
+    });
+    this.addCommand({
+      id: "open-search-tab",
+      name: "Open verse search in a tab",
+      callback: () => void this.openSearchPane(null),
+    });
+    this.addCommand({
+      id: "open-search-new-tab",
+      name: "Open verse search in a new tab",
+      callback: () => void this.openSearchPane(null, true),
     });
     this.addCommand({
       id: "search-current-note",

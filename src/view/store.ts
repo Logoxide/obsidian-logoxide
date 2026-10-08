@@ -11,15 +11,20 @@ export interface SearchState {
   groupBy: "file" | "book";
   /** Lines to show before and after each result's line */
   context: number;
+  /** File extensions to search (without the dot), or all of them if empty */
+  extensions: string[];
 }
 
-/** The sidebar's state, kept on the plugin so commands can set filters and the view survives reloads */
+/**
+ * A search's state: the sidebar's is kept on the plugin so commands can set filters and the view
+ * survives reloads; each search tab has its own, saved with the workspace
+ */
 export class SearchStore {
   private state: SearchState;
   private readonly listeners = new Set<() => void>();
 
   constructor(initial: Partial<SearchState> = {}) {
-    this.state = { filters: NO_FILTERS, scope: "vault", folder: "", sort: "file", groupBy: "file", context: 0, ...initial };
+    this.state = { filters: NO_FILTERS, scope: "vault", folder: "", sort: "file", groupBy: "file", context: 0, extensions: [], ...initial };
   }
 
   get = (): SearchState => this.state;

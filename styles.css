@@ -299,6 +299,10 @@
   padding-left: var(--size-4-4);
 }
 .topos-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--size-4-2);
   color: var(--text-muted);
 }
 .topos-group-header {
@@ -396,4 +400,595 @@
   color: var(--text-faint);
   font-weight: var(--font-normal);
   line-height: 1.2;
+}
+
+/* Verse search in a tab: filters beside the results (above them when narrow), results as cards
+   previewed as they look in notes */
+.topos-pane-view {
+  padding: 0 !important;
+}
+/* Wide, the header stays and the filters and results scroll on their own; narrow, it all scrolls */
+.topos-pane-view:has(> .topos-pane:not(.is-narrow)) {
+  overflow: hidden !important;
+}
+.topos-pane {
+  --topos-pane-accent: var(--topos-reference-color, var(--interactive-accent));
+  --topos-pane-gutter: var(--size-4-6);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  font-size: var(--font-ui-small);
+}
+.topos-pane.is-narrow {
+  height: auto;
+}
+.topos-pane.is-narrow {
+  --topos-pane-gutter: var(--size-4-4);
+}
+.topos-pane input,
+.topos-pane select {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+.topos-pane-icon {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+}
+.topos-pane-icon svg {
+  width: var(--icon-s);
+  height: var(--icon-s);
+}
+.topos-pane-spacer {
+  flex: 1;
+}
+.topos-pane-muted {
+  color: var(--text-faint);
+  font-weight: var(--font-normal);
+  font-size: var(--font-ui-smaller);
+}
+button.topos-pane-link {
+  background: none;
+  box-shadow: none;
+  border: none;
+  height: auto;
+  padding: 0 var(--size-2-2);
+  color: var(--text-accent);
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-normal);
+  cursor: pointer;
+}
+button.topos-pane-link:hover {
+  text-decoration: underline;
+}
+button.topos-pane-link:disabled {
+  color: var(--text-faint);
+  text-decoration: none;
+  cursor: default;
+}
+
+.topos-pane-header {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-2);
+  padding: var(--size-4-4) var(--topos-pane-gutter) var(--size-4-3);
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--topos-pane-accent) 7%, var(--background-primary)),
+    var(--background-primary)
+  );
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+.topos-pane-querybar {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-2);
+  padding: 0 var(--size-4-2) 0 var(--size-4-3);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-l);
+  background: var(--background-secondary);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.topos-pane-querybar:focus-within {
+  border-color: var(--topos-pane-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--topos-pane-accent) 20%, transparent);
+}
+.topos-pane-querybar-icon {
+  color: var(--text-muted);
+}
+.topos-pane input.topos-pane-query {
+  flex: 1;
+  min-width: 0;
+  height: 2.5em;
+  border: none;
+  background: none;
+  box-shadow: none;
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-small);
+}
+.topos-pane input.topos-pane-query:focus {
+  box-shadow: none;
+}
+.topos-pane-hint {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+}
+.topos-pane-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--size-4-2);
+}
+.topos-pane-folder {
+  width: 16em;
+}
+.topos-pane-scope-file {
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 16em;
+}
+
+/* Segmented controls: one choice of a few, like the scope and the order */
+.topos-pane-segmented {
+  display: inline-flex;
+  padding: 2px;
+  gap: 2px;
+  border-radius: var(--radius-m);
+  background: var(--background-modifier-hover);
+}
+.topos-pane-segmented button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-2-2);
+  height: auto;
+  padding: var(--size-2-2) var(--size-4-2);
+  border-radius: calc(var(--radius-m) - 2px);
+  background: none;
+  box-shadow: none;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.topos-pane-segmented button:hover {
+  color: var(--text-normal);
+}
+.topos-pane-segmented button.is-on {
+  background: var(--background-primary);
+  color: var(--text-normal);
+  box-shadow: var(--shadow-s);
+}
+.topos-pane.is-narrow .topos-pane-segment-label {
+  display: none;
+}
+
+/* File types: a chip each, with its count */
+.topos-pane-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-4-1);
+}
+.topos-pane-type,
+.topos-pane-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-2-3);
+  height: auto;
+  padding: var(--size-2-2) var(--size-4-3);
+  border-radius: 999px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  box-shadow: none;
+  color: var(--text-normal);
+  font-size: var(--font-ui-smaller);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+.topos-pane-type:hover,
+.topos-pane-toggle:hover {
+  border-color: var(--topos-pane-accent);
+}
+.topos-pane-type.is-on,
+.topos-pane-toggle.is-on {
+  background: color-mix(in srgb, var(--topos-pane-accent) 18%, var(--background-primary));
+  border-color: var(--topos-pane-accent);
+}
+.topos-pane-type.is-off {
+  opacity: 0.55;
+  border-style: dashed;
+}
+.topos-pane-type-count {
+  padding: 0 var(--size-2-3);
+  border-radius: 999px;
+  background: var(--background-modifier-hover);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.topos-pane-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(250px, 300px) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: var(--size-4-6);
+  padding: 0 var(--topos-pane-gutter);
+}
+.topos-pane:not(.is-narrow) .topos-pane-filters,
+.topos-pane:not(.is-narrow) .topos-pane-results {
+  overflow-y: auto;
+  padding: var(--size-4-4) 0 var(--size-4-12);
+}
+/* Room for the results' scrollbar */
+.topos-pane:not(.is-narrow) .topos-pane-results {
+  padding-right: var(--size-4-2);
+}
+.topos-pane.is-narrow .topos-pane-body {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: none;
+  gap: var(--size-4-3);
+  padding: var(--size-4-3) var(--topos-pane-gutter) var(--size-4-12);
+}
+
+/* Filters: beside the results, they stay in view */
+.topos-pane-filters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-4);
+  min-width: 0;
+}
+.topos-pane-section {
+  padding: var(--size-4-3);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-l);
+  background: var(--background-secondary);
+}
+.topos-pane-section h4 {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-2);
+  margin: 0 0 var(--size-4-1);
+  font-size: var(--font-ui-small);
+  font-weight: var(--font-semibold);
+}
+.topos-pane-section h4 .topos-pane-link {
+  margin-left: auto;
+}
+.topos-pane-section .topos-filter-row {
+  grid-template-columns: 5.5em minmax(0, 1fr);
+}
+.topos-pane-section .topos-input input {
+  width: 100%;
+}
+.topos-pane-filters-fold > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-2);
+  padding: var(--size-4-2) var(--size-4-3);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-secondary);
+  font-weight: var(--font-semibold);
+  cursor: pointer;
+  list-style: none;
+}
+.topos-pane-filters-fold > summary::-webkit-details-marker {
+  display: none;
+}
+.topos-pane-filters-fold > summary::before {
+  content: "▸";
+  color: var(--text-muted);
+  transition: transform 100ms ease-in-out;
+}
+.topos-pane-filters-fold[open] > summary::before {
+  transform: rotate(90deg);
+}
+.topos-pane-filters-fold[open] > .topos-pane-filters {
+  margin-top: var(--size-4-2);
+}
+.topos-pane-save {
+  display: flex;
+  gap: var(--size-4-1);
+  margin: var(--size-4-2) 0;
+}
+.topos-pane-save input {
+  flex: 1;
+  min-width: 0;
+}
+.topos-pane-saved {
+  list-style: none;
+  margin: var(--size-4-1) 0 0;
+  padding: 0;
+}
+.topos-pane-saved li {
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius-m);
+}
+.topos-pane-saved li:hover {
+  background: var(--background-modifier-hover);
+}
+.topos-pane-saved li.is-active {
+  background: color-mix(in srgb, var(--topos-pane-accent) 15%, transparent);
+}
+.topos-pane-saved li .topos-pane-icon-button {
+  opacity: 0;
+}
+.topos-pane-saved li:hover .topos-pane-icon-button,
+.is-mobile .topos-pane-saved li .topos-pane-icon-button {
+  opacity: 1;
+}
+button.topos-pane-saved-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  height: auto;
+  padding: var(--size-2-3) var(--size-4-2);
+  background: none;
+  box-shadow: none;
+  text-align: left;
+  cursor: pointer;
+}
+.topos-pane-saved-name code {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+  background: none;
+  padding: 0;
+}
+
+/* Results */
+.topos-pane-results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-3);
+  min-width: 0;
+}
+.topos-pane-summary {
+  display: flex;
+  align-items: baseline;
+  gap: var(--size-4-3);
+  color: var(--text-muted);
+}
+.topos-pane-stat strong {
+  color: var(--text-normal);
+  font-size: var(--font-ui-large);
+  font-variant-numeric: tabular-nums;
+}
+.topos-pane-indexing {
+  color: var(--text-accent);
+  animation: topos-pane-pulse 1.4s ease-in-out infinite;
+}
+@keyframes topos-pane-pulse {
+  50% {
+    opacity: 0.4;
+  }
+}
+.topos-pane-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--size-4-2);
+  padding: var(--size-4-12) var(--size-4-4);
+  color: var(--text-muted);
+  border: 1px dashed var(--background-modifier-border);
+  border-radius: var(--radius-l);
+}
+.topos-pane-empty .topos-pane-icon svg {
+  width: 32px;
+  height: 32px;
+  color: var(--text-faint);
+}
+.topos-pane-group-head {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-2);
+  padding: var(--size-4-1) var(--size-2-2);
+  border-radius: var(--radius-s);
+  cursor: pointer;
+  font-weight: var(--font-semibold);
+  color: var(--text-normal);
+}
+.topos-pane-group-head:hover {
+  background: var(--background-modifier-hover);
+}
+.topos-pane-group-head > .topos-pane-icon {
+  color: var(--text-muted);
+}
+.topos-pane-caret {
+  transition: transform 0.15s ease;
+}
+.topos-pane-group.is-collapsed .topos-pane-caret {
+  transform: rotate(-90deg);
+}
+.topos-pane-group-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.topos-pane-folder-name {
+  color: var(--text-faint);
+  font-weight: var(--font-normal);
+}
+.topos-pane-count {
+  margin-right: auto;
+  padding: 0 var(--size-4-2);
+  border-radius: 999px;
+  background: var(--background-modifier-hover);
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-normal);
+  font-variant-numeric: tabular-nums;
+}
+.topos-pane-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-2);
+  margin: var(--size-4-1) 0 var(--size-4-2) var(--size-4-3);
+  padding-left: var(--size-4-3);
+  border-left: 1px solid var(--background-modifier-border);
+}
+
+/* A result: the reference, where it is, actions, and its preview */
+.topos-pane-card {
+  position: relative;
+  padding: var(--size-4-2) var(--size-4-3) var(--size-4-3);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-l);
+  background: var(--background-primary);
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+.topos-pane-card::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: var(--size-4-3);
+  bottom: var(--size-4-3);
+  width: 3px;
+  border-radius: 3px;
+  background: var(--topos-pane-accent);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.topos-pane-card:hover,
+.topos-pane-card:focus-visible {
+  border-color: color-mix(in srgb, var(--topos-pane-accent) 50%, var(--background-modifier-border));
+  box-shadow: var(--shadow-s);
+  outline: none;
+}
+.topos-pane-card:hover::before,
+.topos-pane-card:focus-visible::before {
+  opacity: 1;
+}
+.topos-pane-card-head {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-2);
+  min-height: 28px;
+}
+.topos-pane-pill {
+  padding: var(--size-2-1) var(--size-4-2);
+  border-radius: var(--radius-m);
+  background: color-mix(in srgb, var(--topos-pane-accent) 16%, transparent);
+  color: var(--text-accent);
+  font-weight: var(--font-semibold);
+  white-space: nowrap;
+}
+.topos-pane-where {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: var(--size-4-2);
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+  overflow: hidden;
+  white-space: nowrap;
+}
+.topos-pane-where-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-muted);
+}
+.topos-pane-actions {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.topos-pane-card:hover .topos-pane-actions,
+.topos-pane-card:focus-within .topos-pane-actions,
+.is-mobile .topos-pane-actions {
+  opacity: 1;
+}
+.topos-pane-icon-button.is-active {
+  color: var(--text-accent);
+}
+
+/* The preview: rendered like the note (reading view's look), or its source lines */
+.topos-pane-preview {
+  margin-top: var(--size-4-1);
+  color: var(--text-normal);
+  font-size: var(--font-text-size);
+  line-height: var(--line-height-normal);
+  min-height: 1.5em;
+  overflow-wrap: anywhere;
+}
+.topos-pane-preview.markdown-rendered > :first-child {
+  margin-top: 0;
+}
+.topos-pane-preview.markdown-rendered > :last-child {
+  margin-bottom: 0;
+}
+.topos-pane-preview.markdown-rendered p,
+.topos-pane-preview.markdown-rendered ul,
+.topos-pane-preview.markdown-rendered ol,
+.topos-pane-preview.markdown-rendered blockquote {
+  margin-block: var(--size-2-3);
+}
+.topos-pane-preview.markdown-rendered :is(h1, h2, h3, h4, h5, h6) {
+  margin-block: var(--size-2-3);
+  font-size: 1.1em;
+}
+/* The result among the references in its lines */
+.topos-pane-preview .topos-pane-target {
+  border-radius: var(--radius-s);
+  background-color: color-mix(in srgb, var(--topos-pane-accent) 26%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--topos-pane-accent) 26%, transparent);
+  text-decoration-thickness: 2px;
+}
+.topos-pane-preview.topos-pane-source {
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+}
+/* An EPUB's text around a reference is prose, not source */
+.topos-pane-preview.topos-pane-source.is-prose {
+  font-family: var(--font-text);
+  font-size: var(--font-text-size);
+  color: var(--text-normal);
+}
+.topos-pane-source-line {
+  display: flex;
+  gap: var(--size-4-3);
+  white-space: pre-wrap;
+}
+.topos-pane-source-line.is-context {
+  color: var(--text-faint);
+}
+.topos-pane-line-number {
+  flex: none;
+  min-width: 2.5em;
+  text-align: right;
+  color: var(--text-faint);
+  user-select: none;
+}
+.topos-pane-source mark {
+  background: color-mix(in srgb, var(--topos-pane-accent) 28%, transparent);
+  color: var(--text-normal);
+  border-radius: 2px;
+}
+.topos-pane-verses {
+  margin-top: var(--size-4-2);
+  cursor: auto;
+}
+/* Not display: none while empty, or it would never be seen and filled */
+.topos-pane-verses:empty {
+  min-height: 1px;
+}
+.topos-pane-verses .topos-embed {
+  margin: 0;
+}
+.topos-pane-more {
+  align-self: center;
+  margin-top: var(--size-4-2);
 }

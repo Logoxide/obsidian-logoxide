@@ -40,6 +40,22 @@ to WebAssembly, embedded in the plugin, so it works offline and on mobile). The 
   its link
 - Results update as notes change
 
+**Verse search in a tab** (*Open verse search in a tab*, *… in a new tab*, or *Open in a tab* in
+the sidebar, which takes the sidebar's search along): the same search with room to read results.
+
+- Every filter beside the results (above them, folded, on phones and narrow tabs), and a query bar
+  that shows the filters as the CLI's options and takes them typed: `--nt -b John -o "John 3"
+  Sermons/2025`, then Enter
+- A chip for each file type the settings search (EPUBs too, when they're searched), with how many
+  references each has: click to toggle a type, Ctrl/Cmd-click for only that type, *All* for every
+  type
+- Each result shows its lines as they look in the note (Markdown rendered, references marked,
+  the result highlighted among them), or their source with line numbers; *Verses* (or the book
+  icon on a result) shows the passage's text from your Bibles
+- On a result: open it beside the search (Ctrl/Cmd-click: in a new tab), open the passage in the
+  Bible, copy the reference, find references that share a verse with it, or open its link
+- Saved searches are listed by name, with their options; each tab remembers its search and look
+
 **In the editor**
 
 - Autocomplete while typing: chapters after a book (`John ` → `John 1`…), verses after a colon,
@@ -57,6 +73,8 @@ to WebAssembly, embedded in the plugin, so it works offline and on mobile). The 
 | Command | |
 |---|---|
 | Open verse search | The sidebar |
+| Open verse search in a tab | Verse search in a tab (the open one, if any) |
+| Open verse search in a new tab | Another search tab |
 | Search references in the current note | The sidebar, scoped to the note |
 | Open a saved search | The sidebar with a saved search's filters |
 | Go to a reference in the vault | Type a passage, pick a note that references it |

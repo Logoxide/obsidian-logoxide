@@ -7,6 +7,7 @@ import {
   ToposIndex,
   ToposQuery,
   type EpubReference,
+  type ExtensionCount,
   type IndexHit,
   type IndexResults,
   type Topos,
@@ -86,6 +87,11 @@ export class QueryResults {
     return this.index.core.page(this.index.topos, this.results, offset, limit).map(toHit);
   }
 
+  /** How many references are in each kind of file (by extension, lowercase, without the dot) */
+  extensionCounts(): ExtensionCount[] {
+    return this.results ? this.index.core.extensionCounts(this.results) : [];
+  }
+
   /** The EPUB details a page needs that aren't loaded (to load, then read the page again) */
   missingDetails(offset: number, limit: number): string[] {
     return this.results ? this.index.core.missingDetails(this.results, offset, limit) : [];
@@ -132,15 +138,18 @@ export class ReferenceIndex {
     return this.core.fileHits(this.topos, path).map(toHit);
   }
 
-  /** The references the filters keep, in `scope`, sorted */
-  query(filters: Filters, scope: QueryScope = { kind: "vault" }, order: SortOrder = "file"): QueryResults {
+  /**
+   * The references the filters keep, in `scope`, sorted; with `extensions` (without the dot), only
+   * in files with one of them
+   */
+  query(filters: Filters, scope: QueryScope = { kind: "vault" }, order: SortOrder = "file", extensions: string[] = []): QueryResults {
     const compiled = compileFilters(this.topos, filters);
     if (compiled.conflict) return new QueryResults(this, null);
     const kind = { vault: IndexScope.All, file: IndexScope.File, folder: IndexScope.Folder }[scope.kind];
     const path = scope.kind === "vault" ? "" : scope.path;
     const query = toQuery(this.topos, filters);
     try {
-      const results = this.core.query(this.topos, query, kind, path, order === "bible" ? IndexOrder.Bible : IndexOrder.File);
+      const results = this.core.queryIn(this.topos, query, kind, path, extensions, order === "bible" ? IndexOrder.Bible : IndexOrder.File);
       return new QueryResults(this, results);
     } finally {
       query.dispose();

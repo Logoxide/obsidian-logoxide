@@ -10,6 +10,7 @@ import {
   written,
 } from "../src/core/references.ts";
 import { ReferenceIndex } from "../src/core/index.ts";
+import { chosenExtensions, extensionOf, toggleExtension } from "../src/core/file-types.ts";
 import { searchText, type Hit } from "../src/core/search.ts";
 import { groupHits, sortHits } from "../src/core/sort.ts";
 
@@ -181,6 +182,37 @@ test("the index follows file changes", () => {
   );
   index.remove("a.md");
   assert.equal(index.all().length, 1);
+});
+
+test("queries can be limited to file types, and count each type's references", () => {
+  const index = new ReferenceIndex(topos);
+  index.update("Notes/a.md", "John 3:16 and Gen 1:1");
+  index.update("Notes/b.TXT", "Rom 8:28");
+  index.update("Media/Talk.srt", "Ps 23 and John 1:1");
+  const show = (hits: Hit[]) => hits.map((h) => `${h.path} ${h.passage.reference}`);
+  const md = index.query(NO_FILTERS, { kind: "vault" }, "file", ["md"]);
+  assert.deepEqual(show(md.page(0, 10)), ["Notes/a.md John 3:16", "Notes/a.md Genesis 1:1"]);
+  const notes = index.query({ ...NO_FILTERS, testaments: ["new"] }, { kind: "folder", path: "Notes" }, "bible", ["txt", "srt"]);
+  assert.deepEqual(show(notes.page(0, 10)), ["Notes/b.TXT Romans 8:28"]);
+  const all = index.query(NO_FILTERS);
+  assert.deepEqual(
+    all.extensionCounts().map((c) => `${c.extension} ${c.references} ${c.files}`),
+    ["md 2 1", "srt 2 1", "txt 1 1"],
+  );
+});
+
+test("file types: every type is an empty choice, and the last can't be turned off", () => {
+  const types = ["md", "txt", "epub"];
+  assert.equal(extensionOf("Books/A.Book.EPUB"), "epub");
+  assert.equal(extensionOf("folder.d/README"), "");
+  assert.deepEqual(chosenExtensions([], types), []);
+  assert.deepEqual(chosenExtensions(["epub", "md", "gone"], types), ["md", "epub"]);
+  assert.deepEqual(chosenExtensions(["txt", "md", "epub"], types), []);
+  assert.deepEqual(toggleExtension([], types, "txt"), ["md", "epub"]);
+  assert.deepEqual(toggleExtension(["md", "epub"], types, "txt"), []);
+  assert.deepEqual(toggleExtension(["md"], types, "md"), ["md"]);
+  assert.deepEqual(toggleExtension(["md"], types, "epub", true), ["epub"]);
+  assert.deepEqual(toggleExtension([], ["md"], "md"), []);
 });
 
 test("the index's queries keep and order what the JS filters and sort did", () => {

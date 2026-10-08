@@ -190,11 +190,12 @@ export function named(passage: Passage, translation?: string): string {
   return translation ? `${passage.reference} (${translation})` : passage.reference;
 }
 
-/** The note view an element is in, which Obsidian's hover previews belong to */
+/** The note view (or other view with hover previews, like verse search) an element is in, which Obsidian's hover previews belong to */
 export function hoverParent(plugin: ToposPlugin, el: HTMLElement): HoverParent {
   let parent: HoverParent | null = null;
   plugin.app.workspace.iterateAllLeaves((leaf) => {
-    if (!parent && leaf.view instanceof MarkdownView && leaf.view.containerEl.contains(el)) parent = leaf.view;
+    const view = leaf.view;
+    if (!parent && (view instanceof MarkdownView || "hoverPopover" in view) && view.containerEl.contains(el)) parent = view as unknown as HoverParent;
   });
   return parent ?? { hoverPopover: null };
 }
