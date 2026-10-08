@@ -45,6 +45,7 @@ import { createBibleFormat } from "./bible/format.ts";
 import { BibleLibrary } from "./bible/library.ts";
 import { VerseCounts } from "./bible/counts.ts";
 import { BiblixBibles } from "./bible/packages.ts";
+import { BibleManager } from "./bible/manage.ts";
 import { addParallelCommands } from "./bible/parallel.ts";
 import { buildTranslations, parseAliases } from "./core/translations.ts";
 import type { BibleBook, BibleReader } from "./bible/reader.ts";
@@ -76,6 +77,8 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
     this.bibles.reset();
     this.resetTranslations(true);
   });
+  /** Adds, installs, and removes biblix packages */
+  bibleManager = new BibleManager(this);
   private translationsCache: ToposTranslations | null = null;
   private toposReady: Promise<Topos> | null = null;
   refs!: ReferenceIndex;

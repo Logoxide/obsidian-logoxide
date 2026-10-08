@@ -6,6 +6,7 @@ import type { BookCompletion } from "./core/completions.ts";
 import { FILTERS, linkUrl, PLACEHOLDERS, SITES, templateError } from "./core/links.ts";
 import { bookStyle, type StyleName } from "./core/settings.ts";
 import type ToposPlugin from "./main.ts";
+import { AddBibleModal, GitUrlModal } from "./bible/add.ts";
 
 export { bookStyle, DEFAULT_SETTINGS, type StyleName, type ToposSettings } from "./core/settings.ts";
 
@@ -244,6 +245,38 @@ export class ToposSettingsPanel {
    * sidebar, the dialogs, and "Normalize references" all use it
    */
   /** The references' color: the accent color until one is picked */
+  /** The library's packages: each one (with a button to remove it), and adding more */
+  private packageSettings(containerEl: HTMLElement): void {
+    const packages = this.plugin.packages;
+    for (const pkg of packages.installed) {
+      const info = pkg.info;
+      new Setting(containerEl)
+        .setName(info ? `${info.abbreviation} ${pkg.version}` : `${pkg.id} ${pkg.version}`)
+        .setDesc(pkg.problem ?? [info?.name, info?.license ?? "no license given", pkg.dir].filter(Boolean).join(" · "))
+        .addExtraButton((b) =>
+          b
+            .setIcon("trash")
+            .setTooltip(pkg.path && !pkg.dir.split("/").includes("imports") ? "Remove from biblix.toml (its folder stays)" : "Remove")
+            .onClick(async () => {
+              try {
+                await this.plugin.bibleManager.remove(pkg.id);
+                new Notice(`Removed ${info?.abbreviation ?? pkg.id}`);
+              } catch (error) {
+                new Notice(`Couldn't remove ${pkg.id}: ${error instanceof Error ? error.message : String(error)}`);
+              }
+              this.display();
+            }),
+        );
+    }
+    new Setting(containerEl)
+      .setName("Add a Bible")
+      .setDesc(
+        "Search the catalogs (eBible.org's 1,000+ translations unless biblix.toml's [settings] catalogs names others) and install one into the library, or add a biblix package from its git repository.",
+      )
+      .addButton((b) => b.setButtonText("Search").onClick(() => new AddBibleModal(this.app, this.plugin, () => this.display()).open()))
+      .addButton((b) => b.setButtonText("Git URL").onClick(() => new GitUrlModal(this.app, this.plugin, () => this.display()).open()));
+  }
+
   private bibleSettings(containerEl: HTMLElement): void {
     const settings = this.plugin.settings;
     const save = () => this.plugin.saveToposSettings();
@@ -280,6 +313,7 @@ export class ToposSettingsPanel {
             this.libraryTimer = setTimeout(() => void this.plugin.packages.load(), 800);
           }),
       );
+    this.packageSettings(containerEl);
     new Setting(containerEl)
       .setName("Translations")
       .setDesc(

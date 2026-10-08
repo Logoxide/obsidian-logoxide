@@ -111,10 +111,18 @@ search, whether to search EPUBs (below), excluded folders, and the search engine
 
 ### Bible text
 
-Put a Bible in the vault as a folder of USX files, one per book (`Bibles/BSB/JHN.usx`, as
-Paratext, the Digital Bible Library, and eBible.org publish them; the
-[BSB](https://github.com/gracious-tech/fetch_collection/tree/main/bibles/eng_bsb) is public domain).
-Each folder is a translation, named after the folder; pick one under *Settings → Bible*. Then:
+Install a Bible under *Settings → Add a Bible*: **Search** finds translations by name,
+abbreviation, or language (eBible.org's 1,000+, unless the vault's `biblix.toml` names other
+catalogs) and installs the one you pick; **Git URL** adds a [biblix](https://github.com/MasterTemple/biblix)
+package from its repository. Bibles go in the vault's `Biblix/` folder (*Biblix library*), with
+`Biblix/biblix.toml` and `biblix.lock` saying exactly which text the vault uses, so every device
+gets the same one; each is named by its abbreviation (`BSB`, `KJV`), and the trash button removes
+it.
+
+Or put a Bible in the vault as a folder of USX or USFM files, one per book (`Bibles/BSB/JHN.usx`,
+as Paratext, the Digital Bible Library, and eBible.org publish them; the
+[BSB](https://github.com/gracious-tech/fetch_collection/tree/main/bibles/eng_bsb) is public domain),
+named after the folder. Pick the one references use under *Settings → Bible*. Then:
 
 | In a note | |
 |---|---|

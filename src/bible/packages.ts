@@ -2,8 +2,8 @@ import { Biblix, PackageKind, type BiblixPackage, type LockedEntry, type Package
 import type ToposPlugin from "../main.ts";
 
 /** The vault's manifest: at its root, else in the library's folder */
-const MANIFEST = "biblix.toml";
-const LOCK = "biblix.lock";
+export const MANIFEST = "biblix.toml";
+export const LOCK = "biblix.lock";
 
 /** How many parsed books each package keeps */
 const BOOKS_KEPT = 3;
@@ -19,6 +19,19 @@ interface PackageBible {
   books: Map<number, ToposBook>;
   /** The package's folder, from the vault's root */
   dir: string;
+}
+
+/** A package the vault's lock file names, for the settings */
+export interface InstalledPackage {
+  id: string;
+  version: string;
+  /** Its folder, from the vault's root */
+  dir: string;
+  /** From an import (`imports/<id>`) or a path package rather than the library */
+  path: boolean;
+  /** What it is, once read (else why it couldn't be) */
+  info: { name: string; abbreviation: string; license: string | null; kind: PackageKind } | null;
+  problem: string | null;
 }
 
 /** A package Bible's book files in the vault, for the reader */
@@ -43,6 +56,10 @@ export class BiblixBibles {
   private defaultName: string | null = null;
   /** What couldn't be read, to show */
   problems: string[] = [];
+  /** Every package the lock file names, as last read */
+  installed: InstalledPackage[] = [];
+  /** The folder of the vault's biblix.toml ("" for its root), as last read */
+  base = "";
   private loading: Promise<void> | null = null;
 
   constructor(
@@ -78,6 +95,7 @@ export class BiblixBibles {
     const at = (name: string) => (base ? `${base}/${name}` : name);
     const problems: string[] = [];
     const bibles: PackageBible[] = [];
+    const installed: InstalledPackage[] = [];
     let defaultName: string | null = null;
     if (await adapter.exists(at(MANIFEST))) {
       await this.plugin.engine();
@@ -87,11 +105,16 @@ export class BiblixBibles {
         const project = biblix.parseProject(await adapter.read(at(MANIFEST)), lock);
         for (const name of project.unlocked()) problems.push(`${name}: not installed yet (run bx install)`);
         for (const entry of project.packages()) {
+          const dir = this.dirOf(entry, base);
+          const listed: InstalledPackage = { id: entry.id, version: entry.version, dir, path: entry.location.tag === "Path", info: null, problem: null };
+          installed.push(listed);
           try {
-            const bible = await this.open(biblix, entry, base, problems);
-            if (bible) bibles.push(bible);
+            const opened = await this.open(biblix, entry, base, problems);
+            listed.info = opened.info;
+            if (opened.bible) bibles.push(opened.bible);
           } catch (error) {
-            problems.push(`${entry.id} ${entry.version}: ${message(error)}`);
+            listed.problem = message(error);
+            problems.push(`${entry.id} ${entry.version}: ${listed.problem}`);
           }
         }
         const chosen = project.defaultBible();
@@ -105,14 +128,21 @@ export class BiblixBibles {
     this.bibles = bibles;
     this.defaultName = defaultName;
     this.problems = problems;
+    this.installed = installed;
+    this.base = base;
     if (problems.length > 0) console.warn("Topos Bible: biblix packages", problems);
     this.changed();
   }
 
-  /** A locked package, if it's a Bible */
-  private async open(biblix: Biblix, entry: LockedEntry, base: string, problems: string[]): Promise<PackageBible | null> {
+  /** A locked package's folder, from the vault's root */
+  dirOf(entry: LockedEntry, base = this.base): string {
+    return entry.location.tag === "Library" ? `${this.libraryDir()}/${entry.location.dir}` : join(base, entry.location.dir);
+  }
+
+  /** A locked package: what it is, and its Bible if it's one */
+  private async open(biblix: Biblix, entry: LockedEntry, base: string, problems: string[]): Promise<{ info: InstalledPackage["info"]; bible: PackageBible | null }> {
     const adapter = this.plugin.app.vault.adapter;
-    const dir = entry.location.tag === "Library" ? `${this.libraryDir()}/${entry.location.dir}` : join(base, entry.location.dir);
+    const dir = this.dirOf(entry, base);
     if (!(await adapter.exists(`${dir}/${MANIFEST}`))) throw new Error(`not installed in ${dir} (run bx install)`);
     const files = await readTree(this.plugin, dir);
     const cacheDir = this.cacheDir();
@@ -124,11 +154,12 @@ export class BiblixBibles {
     }
     await this.saveCache(pkg);
     const info = pkg.info();
+    const summary = { name: info.name, abbreviation: info.abbreviation, license: info.license ?? info.licenseFile ?? null, kind: info.kind };
     if (info.kind !== PackageKind.Bible) {
       pkg.dispose();
-      return null;
+      return { info: summary, bible: null };
     }
-    return { id: info.id, name: info.abbreviation, aliases: info.aliases, pkg, books: new Map(), dir };
+    return { info: summary, bible: { id: info.id, name: info.abbreviation, aliases: info.aliases, pkg, books: new Map(), dir } };
   }
 
   /** Writes what a package's cache wrote into the plugin's folder */
@@ -208,12 +239,12 @@ export class BiblixBibles {
   }
 }
 
-function message(error: unknown): string {
+export function message(error: unknown): string {
   const value = (error as { value?: { message?: string } })?.value;
   return value?.message ?? (error instanceof Error ? error.message : String(error));
 }
 
-function join(base: string, path: string): string {
+export function join(base: string, path: string): string {
   const parts = base ? base.split("/") : [];
   for (const part of path.split("/")) {
     if (part === "..") parts.pop();
@@ -223,7 +254,7 @@ function join(base: string, path: string): string {
 }
 
 /** Every file under a folder but git's, with paths relative to it (after `prefix`) */
-async function readTree(plugin: ToposPlugin, dir: string, prefix = ""): Promise<PackageFile[]> {
+export async function readTree(plugin: ToposPlugin, dir: string, prefix = ""): Promise<PackageFile[]> {
   const adapter = plugin.app.vault.adapter;
   const listed = await adapter.list(dir);
   const files: PackageFile[] = await Promise.all(
@@ -237,7 +268,7 @@ async function readTree(plugin: ToposPlugin, dir: string, prefix = ""): Promise<
   return files;
 }
 
-async function mkdirs(plugin: ToposPlugin, dir: string): Promise<void> {
+export async function mkdirs(plugin: ToposPlugin, dir: string): Promise<void> {
   const adapter = plugin.app.vault.adapter;
   if (!dir || (await adapter.exists(dir))) return;
   await mkdirs(plugin, dir.slice(0, Math.max(0, dir.lastIndexOf("/"))));
@@ -245,6 +276,6 @@ async function mkdirs(plugin: ToposPlugin, dir: string): Promise<void> {
 }
 
 /** The bytes as their own ArrayBuffer (Obsidian's writeBinary takes one) */
-function buffer(bytes: Uint8Array): ArrayBuffer {
+export function buffer(bytes: Uint8Array): ArrayBuffer {
   return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 }
