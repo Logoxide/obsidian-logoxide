@@ -230,4 +230,16 @@ test("with embedAlone, a reference alone on its line shows its text unless the c
   settings.embedAlone = false;
   relinkEditor(plugin, editorEl);
   assert.deepEqual(text(), ["Intro\nJn 3:16\nSee Rom 8:28", "Ps 23:1"]);
+  // A callout's title is a title, even one that's only a reference (`> > [!bible] Ezra 1:7-11`),
+  // while a line of its own in the callout is embedded
+  settings.embedAlone = true;
+  settings.embedAloneBlankLines = 0;
+  const calloutEl = document.createElement("div");
+  calloutEl.innerHTML =
+    '<div class="cm-content"><div class="cm-embed-block"><div class="callout"><div class="callout-title"><div class="callout-title-inner">Ezra 1:7-11</div></div><div class="callout-content"><div class="callout"><div class="callout-title"><div class="callout-title-inner">Ezra 1:7-11</div></div><div class="callout-content"><p>Ps 23:1</p></div></div></div></div></div></div>';
+  relinkEditor(plugin, calloutEl);
+  const titles = [...calloutEl.querySelectorAll(".callout-title-inner")];
+  assert.deepEqual(titles.map((t: any) => t.textContent), ["Ezra 1:7-11", "Ezra 1:7-11"]);
+  assert.ok(titles.every((t: any) => t.querySelector(".topos-reference") && !t.querySelector(".topos-embed")));
+  assert.equal(calloutEl.querySelector(".callout-content p")!.textContent, "<Psalm 23:1>");
 });

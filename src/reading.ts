@@ -115,6 +115,8 @@ export function linkElement(plugin: ToposPlugin, el: HTMLElement, owner: Compone
 function embedsAlone(plugin: ToposPlugin, node: Text, text: string, start: number, end: number, section?: SectionInfo): boolean {
   const parent = node.parentElement;
   if (!parent || !["P", "DIV"].includes(parent.tagName)) return false;
+  // A callout's title is a title, though it's only a reference once `[!type]` is taken out of it
+  if (parent.closest(".callout-title")) return false;
   if (text.slice(0, start).trim() || text.slice(end).trim()) return false;
   const blank = plugin.settings.embedAloneBlankLines;
   const lineEdge = (sibling: ChildNode | null) => sibling === null || sibling.nodeName === "BR";
