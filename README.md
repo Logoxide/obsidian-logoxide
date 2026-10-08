@@ -97,6 +97,25 @@ References are also found in other documents built on file-plus-plus: in EPUBs (
 EPUB files*, through EPUB++) and transcripts (Transcript++), they are marked the same way and
 preview the passage on hover (*Mark references in other documents*).
 
+#### Several translations
+
+With more than one Bible, a reference can name the one it means, right after it: `John 3:16 KJV`,
+`John 3:16, KJV`, `[John 3:16 (KJV)]`, `![John 3:16 KJV]`, or `[text](Jn 3:16 KJV)`. Its link opens
+that Bible, its hover and embed show that Bible's text, and completion offers the names
+(`John 3:16 K` → `KJV`). References that name none use the Bible in *Settings → Bible*.
+
+- Each folder's name is a translation; *Translations* adds other names and aliases, one per line
+  (`KJV: AV, King James`). A name the vault has no Bible for (`ESV`) still counts: its links open
+  the site with `{translation}` in the link template (see [Links](#links)), and its text comes from
+  your Bible
+- A reference is checked against its Bible's own verse counts (read from each book's verse
+  markers in the background and kept in the plugin's folder), so a verse one translation numbers
+  and another doesn't is a reference only in the one that has it
+- *Compare in embeds* (`KJV, NET`) shows those Bibles' text after the named one in every embed
+- In a Bible tab, the commands *Open this book in another Bible* and *Open this book in another
+  Bible beside it, on the same verse* open the same verse in another translation; beside it, the
+  two tabs keep the verse at the top of either one at the top of the other as you scroll
+
 A USX file opens in a reading tab built on file-plus-plus (the engine of EPUB++): the book
 as one page with a chapter list, search, verse numbers, headings (footnotes optional), and
 highlights. Links into a book are `[[JHN.usx#v=3:16-18]]` (verses, `v=3` for a chapter, `;` between
@@ -187,6 +206,7 @@ Placeholders, for 1 Corinthians 13:4-7 (values are URL-encoded):
 | `{end_chapter}` | The last chapter of the first part, when it spans chapters (`Gen 1-2` → `2`) |
 | `{reference}` | `1 Corinthians 13:4-7`, the whole reference |
 | `{osis}` | `1Cor.13.4-1Cor.13.7`, the whole reference |
+| `{translation}` | The translation the reference names (`1 Cor 13:4-7 ESV` → `ESV`), none otherwise: `[&version={translation}]` |
 
 Filters change a value before it goes in: `{book|lower|kebab}` is `1-corinthians`. They are
 `lower`, `upper`, `snake` (spaces to `_`), `kebab` (spaces to `-`), and `compact` (no spaces).

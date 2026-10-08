@@ -57,33 +57,35 @@ export function referenceDecorations(plugin: ToposPlugin) {
         const start = view.state.doc.lineAt(from).from;
         const end = view.state.doc.lineAt(to).to;
         const text = view.state.doc.sliceString(start, end);
-        for (const r of findReferences(plugin.topos, text)) {
+        for (const r of findReferences(plugin.topos, text, plugin.translations())) {
           const [a, b] = [start + r.start, start + r.end];
           const [labelA, labelB] = [start + r.labelStart, start + r.labelEnd];
           if (a < lastEnd) continue;
-          const data = { "data-topos-osis": r.passage.osis, "data-topos-kind": r.kind };
+          const data: Record<string, string> = { "data-topos-osis": r.passage.osis, "data-topos-kind": r.kind };
+          if (r.translation) data["data-topos-translation"] = r.translation;
           if (r.kind === "bare" && plugin.settings.embedAlone && live && hasBible) {
             const line = doc.lineAt(a);
             if (line.text.trim() === text.slice(r.start, r.end) && !nearCursor(line.number)) {
-              decorations.push(Decoration.replace({ widget: new EmbedWidget(plugin, r.passage, "") }).range(line.from, line.to));
+              decorations.push(Decoration.replace({ widget: new EmbedWidget(plugin, r.passage, "", r.translation) }).range(line.from, line.to));
               lastEnd = line.to;
               continue;
             }
           }
           if (r.kind === "bare") {
             if (!plugin.settings.linkInEditor) continue;
-            const url = plugin.referenceUrl(r.passage);
+            const url = plugin.referenceUrl(r.passage, r.translation);
             if (!url && !hasBible) continue;
-            const attributes: Record<string, string> = { ...data, title: url ? `${r.passage.reference}, opens in ${site}` : r.passage.reference };
+            const reference = named(r.passage, r.translation);
+            const attributes: Record<string, string> = { ...data, title: url ? `${reference}, opens in ${site}` : reference };
             if (url) attributes["data-topos-url"] = url;
             decorations.push(Decoration.mark({ class: "topos-reference", attributes }).range(a, b));
           } else if (r.kind === "embed" && live && !editing(a, b)) {
-            decorations.push(Decoration.replace({ widget: new EmbedWidget(plugin, r.passage, text.slice(r.labelStart, r.labelEnd)) }).range(a, b));
+            decorations.push(Decoration.replace({ widget: new EmbedWidget(plugin, r.passage, text.slice(r.labelStart, r.labelEnd), r.translation) }).range(a, b));
           } else {
             const hide = live && !editing(a, b);
             if (hide && labelA > a) decorations.push(Decoration.replace({}).range(a, labelA));
             if (labelB > labelA) {
-              const title = `${r.passage.reference}${r.kind === "embed" ? " (embedded)" : ""}`;
+              const title = `${named(r.passage, r.translation)}${r.kind === "embed" ? " (embedded)" : ""}`;
               decorations.push(Decoration.mark({ class: "topos-link", attributes: { ...data, title } }).range(labelA, labelB));
             }
             // Inclusive, to cover the external link icon Obsidian puts after `[text](John 3:16)`
@@ -136,7 +138,7 @@ export function referenceDecorations(plugin: ToposPlugin) {
         const el = target(event);
         if (!el || (el.dataset.toposKind === "bare" && !plugin.settings.previewBare)) return false;
         const passage = passageOf(el);
-        if (passage) void plugin.previewPassage(event, el, passage, hoverParent(plugin, view.dom));
+        if (passage) void plugin.previewPassage(event, el, passage, hoverParent(plugin, view.dom), el.dataset.toposTranslation);
         return false;
       },
     }),
@@ -171,9 +173,15 @@ export function interceptLinkClicks(plugin: ToposPlugin, doc: Document): void {
     event.stopPropagation();
     if (event.type === "mousedown") return;
     const passage = plugin.topos.parse(found.el.dataset.toposOsis ?? "", BookStyle.Name);
-    if (passage) void plugin.openPassage(passage, event.button === 1 || event.ctrlKey || event.metaKey ? "tab" : false);
+    const newLeaf = event.button === 1 || event.ctrlKey || event.metaKey ? "tab" : false;
+    if (passage) void plugin.openPassage(passage, newLeaf, found.el.dataset.toposTranslation);
   };
   for (const type of ["mousedown", "click", "auxclick"] as const) plugin.registerDomEvent(doc, type, handle, { capture: true });
+}
+
+/** A reference and the translation it names, for titles: `John 3:16 (KJV)` */
+export function named(passage: Passage, translation?: string): string {
+  return translation ? `${passage.reference} (${translation})` : passage.reference;
 }
 
 /** The note view an element is in, which Obsidian's hover previews belong to */
@@ -193,12 +201,13 @@ class EmbedWidget extends WidgetType {
     private readonly plugin: ToposPlugin,
     private readonly passage: Passage,
     private readonly label: string,
+    private readonly translation?: string,
   ) {
     super();
   }
 
   eq(other: EmbedWidget): boolean {
-    return other.passage.osis === this.passage.osis && other.label === this.label;
+    return other.passage.osis === this.passage.osis && other.label === this.label && other.translation === this.translation;
   }
 
   toDOM(): HTMLElement {
@@ -206,7 +215,7 @@ class EmbedWidget extends WidgetType {
     const owner = new Component();
     owner.load();
     EmbedWidget.owners.set(el, owner);
-    void this.plugin.embedPassage(el, this.passage, this.label || this.passage.reference, owner);
+    void this.plugin.embedPassage(el, this.passage, this.label || this.passage.reference, owner, this.translation);
     return el;
   }
 

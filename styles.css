@@ -45,6 +45,10 @@
   border-left: 2px solid var(--topos-reference-color, var(--interactive-accent));
   border-radius: var(--radius-s);
 }
+/* Several Bibles' text, one after another */
+.topos-embed-part + .topos-embed-part {
+  margin-top: var(--size-4-2);
+}
 .topos-embed-missing {
   padding: var(--size-4-1) var(--size-4-3);
   color: var(--text-muted);

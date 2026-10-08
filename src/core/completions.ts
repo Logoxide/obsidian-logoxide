@@ -1,4 +1,4 @@
-import { CompletionKind, OffsetUnit, type BookStyle, type Completion, type Topos } from "topos-bible";
+import { CompletionKind, OffsetUnit, type BookStyle, type Completion, type Topos, type ToposTranslations } from "topos-bible";
 import { DEFAULT_FORMAT, withFormat, type FormatSettings } from "./format.ts";
 
 export type BookCompletion = "off" | "capitalized" | "always";
@@ -15,6 +15,7 @@ export type BookCompletion = "off" | "capitalized" | "always";
  * - `format`: how completions are written (separators, joined ranges, ...)
  * - `after`: the text after the cursor on the line, so a book name doesn't get a second space
  *   (`1 Ti| 3:16` completes to `1 Timothy 3:16`)
+ * - `translations`: names a word after a reference completes to, first (`John 3:16 K` → `KJV`)
  */
 export function completionsBefore(
   topos: Topos,
@@ -26,14 +27,18 @@ export function completionsBefore(
     needsNumber = false,
     format = DEFAULT_FORMAT,
     after = "",
-  }: { needsNumber?: boolean; format?: FormatSettings; after?: string } = {},
+    translations,
+  }: { needsNumber?: boolean; format?: FormatSettings; after?: string; translations?: ToposTranslations } = {},
 ): Completion[] {
   const completions = withFormat(format, style, (f) =>
-    topos.completeWith(before + after, before.length, OffsetUnit.Utf16, f, 0),
+    translations
+      ? topos.completeWithTranslations(before + after, before.length, OffsetUnit.Utf16, f, 0, translations)
+      : topos.completeWith(before + after, before.length, OffsetUnit.Utf16, f, 0),
   );
   const waiting = needsNumber && !/[\d:.,;\-–—]\s*$/.test(before);
   return completions
     .filter((c) => {
+      if (c.kind === CompletionKind.Translation) return true;
       if (c.kind !== CompletionKind.Book) return !waiting;
       if (books === "off") return false;
       const typed = before.slice(c.start, c.end).trim();

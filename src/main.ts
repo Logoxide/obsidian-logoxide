@@ -17,7 +17,7 @@ import {
 import { around } from "file-plus-plus/obsidian";
 import { FilePlusPlusPlugin, type DocumentEmbed, type EmbedContext } from "file-plus-plus/obsidian";
 import type { FppSettings } from "file-plus-plus/obsidian";
-import { OffsetUnit, type BookTextOptions, type Passage, type Topos } from "topos-bible";
+import { OffsetUnit, type BookTextOptions, type Passage, type Topos, type ToposTranslations } from "topos-bible";
 import type { EditorView } from "@codemirror/view";
 import { DEFAULT_FORMAT } from "./core/format.ts";
 import { migrateQuery, parseQuery, type SavedQuery } from "./core/query.ts";
@@ -42,6 +42,9 @@ import { bookStyle, DEFAULT_SETTINGS, ToposSettingsPanel, type ToposSettings } f
 import { BibleEmbed } from "./bible/embed.ts";
 import { createBibleFormat } from "./bible/format.ts";
 import { BibleLibrary } from "./bible/library.ts";
+import { VerseCounts } from "./bible/counts.ts";
+import { addParallelCommands } from "./bible/parallel.ts";
+import { buildTranslations, parseAliases } from "./core/translations.ts";
 import type { BibleBook, BibleReader } from "./bible/reader.ts";
 import { formatVerseLocator, passageParts } from "./core/verse-locator.ts";
 import { wholeReference } from "./core/syntax.ts";
@@ -59,7 +62,13 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
   declare settings: PluginSettings;
   topos!: Topos;
   /** Bibles in the vault (folders of USX files) */
-  bibles = new BibleLibrary(this);
+  bibles = new BibleLibrary(this, () => {
+    this.resetTranslations();
+    void this.verseCounts.update();
+  });
+  /** Each Bible book's verse counts, for references that name its translation */
+  verseCounts = new VerseCounts(this, () => this.resetTranslations(true));
+  private translationsCache: ToposTranslations | null = null;
   private toposReady: Promise<Topos> | null = null;
   refs!: ReferenceIndex;
   search = new SearchStore();
@@ -77,6 +86,26 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
   indexer = new VaultIndexer(this);
   /** Names this device's index packs */
   device = "";
+
+  /**
+   * The translations references can name (`John 3:16 KJV`): the vault's Bibles and the settings'
+   * names and aliases, with each Bible's verse counts
+   */
+  translations(): ToposTranslations {
+    this.translationsCache ??= buildTranslations(
+      this.bibles.all().map((b) => b.name),
+      parseAliases(this.settings.bibleAliases),
+      this.verseCounts.all(),
+    );
+    return this.translationsCache;
+  }
+
+  /** Builds the translations again when next asked (and with `redraw`, redraws references) */
+  resetTranslations(redraw = false): void {
+    this.translationsCache?.dispose();
+    this.translationsCache = null;
+    if (redraw) this.refreshLinks();
+  }
 
   /** The engine, once its WebAssembly is loaded (file-plus-plus may open a Bible before `onLoaded`) */
   engine(): Promise<Topos> {
@@ -145,6 +174,7 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
 
     this.app.workspace.onLayoutReady(() => {
       this.bibles.start();
+      void this.verseCounts.start();
       void this.indexer.start();
       this.epubs.start();
       this.otherDocuments.start();
@@ -171,6 +201,7 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
     this.otherDocuments.stop();
     clearTimeout(this.notifyTimer);
     this.worker?.terminate();
+    this.translationsCache?.dispose();
     this.topos?.dispose();
   }
 
@@ -217,24 +248,29 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
   }
 
   /**
-   * Opens a reference link (`[John 1:1]`, `[text](John 1:1)`): in the Bible tab, or with the link
-   * template when that's the setting or there's no Bible with the book
+   * Opens a reference link (`[John 1:1]`, `[text](John 1:1)`): in the Bible tab (the Bible it names,
+   * `[John 1:1 KJV]`, else the current one), or with the link template when that's the setting or
+   * the vault has no such Bible with the book
    */
-  async openPassage(passage: Passage, newLeaf?: PaneType | boolean): Promise<void> {
-    const file = this.settings.referenceLinks === "bible" ? await this.bibles.bookFile(passage) : null;
+  async openPassage(passage: Passage, newLeaf?: PaneType | boolean, translation?: string | null): Promise<void> {
+    const bible = translation ? this.bibles.named(translation) : this.bibles.current();
+    const file = this.settings.referenceLinks === "bible" && bible ? await this.bibles.bookFile(passage, bible) : null;
     if (file) await this.openDocument(file, this.passageLocator(passage), newLeaf);
-    else this.openReference(passage);
+    else this.openReference(passage, translation);
   }
 
-  /** A link to a passage in the current Bible (`Bibles/BSB/JHN.usx#v=3:16`), if it has the book */
-  passageLink(passage: Passage): string | null {
-    const path = this.bibles.bookPath(passage.bookId);
+  /** A link to a passage in a Bible (`Bibles/BSB/JHN.usx#v=3:16`): the one named, else the current one, if it has the book */
+  passageLink(passage: Passage, translation?: string | null): string | null {
+    const path = this.bibles.bookPath(passage.bookId, this.bibles.forText(translation));
     return path ? `${path}#${this.passageLocator(passage)}` : null;
   }
 
-  /** Shows a passage's text in a hover preview (Obsidian's page preview, with the Bible's embed) */
-  async previewPassage(event: MouseEvent, targetEl: HTMLElement, passage: Passage, hoverParent: HoverParent): Promise<void> {
-    const file = await this.bibles.bookFile(passage);
+  /**
+   * Shows a passage's text in a hover preview (Obsidian's page preview, with the Bible's embed), from
+   * the Bible it names or the current one
+   */
+  async previewPassage(event: MouseEvent, targetEl: HTMLElement, passage: Passage, hoverParent: HoverParent, translation?: string | null): Promise<void> {
+    const file = await this.bibles.bookFile(passage, this.bibles.forText(translation));
     if (!file) return;
     this.app.workspace.trigger("hover-link", {
       event,
@@ -247,21 +283,39 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
   }
 
   /**
-   * Shows a passage's text in an element (`![John 1:1]`); the embed is a child of `owner`, so it is
+   * Shows a passage's text in an element (`![John 1:1]`), from the Bible it names (or the current
+   * one), then each Bible to compare with (the setting); each embed is a child of `owner`, so it is
    * unloaded with it. Without a Bible with the book, says so
    */
-  async embedPassage(containerEl: HTMLElement, passage: Passage, label: string, owner: Component): Promise<void> {
+  async embedPassage(containerEl: HTMLElement, passage: Passage, label: string, owner: Component, translation?: string | null): Promise<void> {
     containerEl.addClass("topos-embed");
-    const file = await this.bibles.bookFile(passage);
-    if (!file) {
+    const bibles = [this.bibles.forText(translation), ...this.compareBibles()].filter((b, i, all) => b && all.findIndex((o) => o?.folder === b.folder) === i);
+    const files: TFile[] = [];
+    for (const bible of bibles) {
+      const file = await this.bibles.bookFile(passage, bible);
+      if (file) files.push(file);
+    }
+    if (files.length === 0) {
       containerEl.setText(`${label}: ${this.bibles.all().length === 0 ? "add a Bible (a folder of USX files) to show its text" : "not in this Bible"}`);
       containerEl.addClass("topos-embed-missing");
       return;
     }
-    const embed = this.createEmbed({ app: this.app, containerEl }, file, this.passageLocator(passage)) as BibleEmbed;
-    embed.label = passage.reference;
-    owner.addChild(embed);
-    await embed.loadFile();
+    for (const file of files) {
+      const el = files.length > 1 ? containerEl.createDiv({ cls: "topos-embed-part" }) : containerEl;
+      const embed = this.createEmbed({ app: this.app, containerEl: el }, file, this.passageLocator(passage)) as BibleEmbed;
+      embed.label = passage.reference;
+      owner.addChild(embed);
+      await embed.loadFile();
+    }
+  }
+
+  /** The Bibles embeds show after the one a reference names (the setting, by name or alias) */
+  compareBibles(): NonNullable<ReturnType<BibleLibrary["named"]>>[] {
+    return this.settings.compareBibles
+      .split(",")
+      .map((name) => name.trim())
+      .filter(Boolean)
+      .flatMap((name) => this.bibles.named(name) ?? []);
   }
 
   /**
@@ -322,6 +376,8 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
   /** Saves a change to topos's own settings and redraws references for it */
   async saveToposSettings(): Promise<void> {
     await this.saveSettings();
+    // The translations' names and aliases may have changed
+    this.resetTranslations();
     this.refreshLinks();
   }
 
@@ -590,10 +646,13 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
   /** Each book's names, for links */
   private linkBooks: Map<number, LinkBook> | null = null;
 
-  /** The link for a passage, from the link template; null when links are off or it has none */
-  referenceUrl(passage: Passage): string | null {
+  /**
+   * The link for a passage, from the link template (with `{translation}`, the translation it names);
+   * null when links are off or it has none
+   */
+  referenceUrl(passage: Passage, translation?: string | null): string | null {
     this.linkBooks ??= new Map(this.topos.books().map((book) => [book.id, book]));
-    return linkUrl(this.settings.linkTemplate, passage, this.linkBooks.get(passage.bookId));
+    return linkUrl(this.settings.linkTemplate, passage, this.linkBooks.get(passage.bookId), translation ?? undefined);
   }
 
   /** Where references open, for menus and tooltips: `BibleHub` */
@@ -601,8 +660,8 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
     return siteName(this.settings.linkTemplate);
   }
 
-  openReference(passage: Passage): void {
-    const url = this.referenceUrl(passage);
+  openReference(passage: Passage, translation?: string | null): void {
+    const url = this.referenceUrl(passage, translation);
     if (url) window.open(url, "_blank");
     else if (!this.settings.linkTemplate.trim()) new Notice("Links are turned off in the Topos settings.");
     else new Notice(`${this.linkSite()} has no link for ${passage.reference}.`);
@@ -684,6 +743,7 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
         return true;
       },
     });
+    addParallelCommands(this);
     this.addCommand({
       id: "normalize-references",
       name: "Normalize references in the selection or note",

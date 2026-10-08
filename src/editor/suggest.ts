@@ -14,9 +14,10 @@ const KIND_LABELS: Record<number, string> = {
   [CompletionKind.Book]: "book",
   [CompletionKind.Chapter]: "chapter",
   [CompletionKind.Verse]: "verse",
+  [CompletionKind.Translation]: "translation",
 };
 
-/** Suggests books, chapters, and verses for the reference being typed in the editor */
+/** Suggests books, chapters, verses, and translations for the reference being typed in the editor */
 export class ReferenceSuggest extends EditorSuggest<Completion> {
   private readonly plugin: ToposPlugin;
 
@@ -39,7 +40,7 @@ export class ReferenceSuggest extends EditorSuggest<Completion> {
       bookStyle(settings.style),
       settings.suggestionLimit,
       settings.bookCompletion,
-      { needsNumber: true, format: settings.format, after: line.slice(cursor.ch) },
+      { needsNumber: true, format: settings.format, after: line.slice(cursor.ch), translations: this.plugin.translations() },
     );
   }
 

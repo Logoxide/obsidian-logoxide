@@ -1,7 +1,7 @@
 import { Component, MarkdownRenderChild, type MarkdownPostProcessor } from "obsidian";
 import type { Passage } from "topos-bible";
 import { findReferences, wholeReference } from "./core/syntax.ts";
-import { hoverParent } from "./editor/decorations.ts";
+import { hoverParent, named } from "./editor/decorations.ts";
 import type ToposPlugin from "./main.ts";
 
 /** The class of references this file links (the editor's own highlights are CodeMirror's) */
@@ -55,7 +55,7 @@ export function linkElement(plugin: ToposPlugin, el: HTMLElement, owner: Compone
   const hasBible = plugin.bibles.all().length > 0;
   for (const node of nodes) {
     const text = node.data;
-    const found = findReferences(plugin.topos, text);
+    const found = findReferences(plugin.topos, text, plugin.translations());
     if (found.length === 0) continue;
     const fragment = doc.createDocumentFragment();
     let last = 0;
@@ -66,31 +66,32 @@ export function linkElement(plugin: ToposPlugin, el: HTMLElement, owner: Compone
         element.classList.add(RENDERED);
         // Unlinking puts the reference back
         element.dataset.toposText = text.slice(r.start, r.end);
-        void plugin.embedPassage(element, r.passage, r.passage.reference, owner);
+        void plugin.embedPassage(element, r.passage, r.passage.reference, owner, r.translation);
       } else if (r.kind === "bare") {
-        const url = plugin.referenceUrl(r.passage);
+        const url = plugin.referenceUrl(r.passage, r.translation);
         if (!url && !hasBible) continue;
         element = doc.createElement("span");
         element.className = `topos-reference ${RENDERED}`;
         element.textContent = text.slice(r.start, r.end);
         if (url) element.dataset.toposUrl = url;
-        element.title = url ? `${r.passage.reference}, opens in ${plugin.linkSite()}` : r.passage.reference;
-        openOnClick(plugin, element, r.passage, false);
+        element.title = url ? `${named(r.passage, r.translation)}, opens in ${plugin.linkSite()}` : named(r.passage, r.translation);
+        openOnClick(plugin, element, r.passage, false, r.translation);
       } else if (r.kind === "embed") {
         element = doc.createElement("div");
         element.classList.add(RENDERED);
-        void plugin.embedPassage(element, r.passage, text.slice(r.labelStart, r.labelEnd) || r.passage.reference, owner);
+        void plugin.embedPassage(element, r.passage, text.slice(r.labelStart, r.labelEnd) || r.passage.reference, owner, r.translation);
       } else {
         element = doc.createElement("a");
         element.className = `topos-link ${RENDERED}`;
         element.textContent = text.slice(r.labelStart, r.labelEnd);
-        element.title = r.passage.reference;
-        openOnClick(plugin, element, r.passage, true);
+        element.title = named(r.passage, r.translation);
+        openOnClick(plugin, element, r.passage, true, r.translation);
       }
       element.dataset.toposOsis = r.passage.osis;
+      if (r.translation) element.dataset.toposTranslation = r.translation;
       const kind = element.dataset.toposText === undefined ? r.kind : "embed";
       element.dataset.toposKind = kind;
-      previewOnHover(plugin, element, r.passage, kind === "bare");
+      previewOnHover(plugin, element, r.passage, kind === "bare", r.translation);
       fragment.append(text.slice(last, r.start), element);
       last = r.end;
     }
@@ -128,14 +129,14 @@ function linkUnresolved(plugin: ToposPlugin, el: HTMLElement, sourcePath: string
   }
 }
 
-function openOnClick(plugin: ToposPlugin, element: HTMLElement, passage: Passage, link: boolean): void {
+function openOnClick(plugin: ToposPlugin, element: HTMLElement, passage: Passage, link: boolean, translation?: string): void {
   const open = (event: MouseEvent) => {
     // Links open on a plain click, like Obsidian's; bare references like in the editor
     if (link ? event.button > 1 : !plugin.clickOpens(event, false)) return;
     // In live preview, a click in a callout would otherwise start editing it
     event.preventDefault();
     event.stopPropagation();
-    if (link) void plugin.openPassage(passage, event.button === 1 || event.ctrlKey || event.metaKey ? "tab" : false);
+    if (link) void plugin.openPassage(passage, event.button === 1 || event.ctrlKey || event.metaKey ? "tab" : false, translation);
     else if (element.dataset.toposUrl) element.ownerDocument.defaultView?.open(element.dataset.toposUrl, "_blank");
   };
   element.addEventListener("click", open);
@@ -146,10 +147,10 @@ function openOnClick(plugin: ToposPlugin, element: HTMLElement, passage: Passage
   });
 }
 
-function previewOnHover(plugin: ToposPlugin, element: HTMLElement, passage: Passage, bare: boolean): void {
+function previewOnHover(plugin: ToposPlugin, element: HTMLElement, passage: Passage, bare: boolean, translation?: string): void {
   element.addEventListener("mouseover", (event) => {
     if (bare && !plugin.settings.previewBare) return;
-    void plugin.previewPassage(event, element, passage, hoverParent(plugin, element));
+    void plugin.previewPassage(event, element, passage, hoverParent(plugin, element), translation);
   });
 }
 

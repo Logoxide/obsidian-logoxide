@@ -251,7 +251,7 @@ export class ToposSettingsPanel {
       .setName("Bible")
       .setDesc(
         bibles.length > 0
-          ? "References open in this translation and show its text on hover and in embeds. A Bible is a folder of USX files (one per book, like JHN.usx)."
+          ? "References open in this translation and show its text on hover and in embeds, unless they name another (John 3:16 KJV). A Bible is a folder of USX files (one per book, like JHN.usx), named after its folder."
           : "No Bible in this vault yet. Add a folder of USX files (one per book, like JHN.usx), and references open in it and show its text on hover and in embeds (![John 1:1]).",
       )
       .addDropdown((d) => {
@@ -262,6 +262,29 @@ export class ToposSettingsPanel {
           void save();
         });
       });
+    new Setting(containerEl)
+      .setName("Translations")
+      .setDesc(
+        "A reference can name its translation: John 3:16 KJV, [John 3:16 (KJV)], ![John 3:16 KJV]. Each Bible's folder name is one; add other names and aliases here, one per line, like \"KJV: AV, King James\". A name the vault has no Bible for still opens its link with {translation} in the link template.",
+      )
+      .addTextArea((t) =>
+        t
+          .setPlaceholder("KJV: AV, King James")
+          .setValue(settings.bibleAliases)
+          .onChange((value) => {
+            settings.bibleAliases = value;
+            void save();
+          }),
+      );
+    new Setting(containerEl)
+      .setName("Compare in embeds")
+      .setDesc("Bibles whose text embeds (![John 1:1]) also show, after the one the reference names, separated by commas: KJV, NET.")
+      .addText((t) =>
+        t.setValue(settings.compareBibles).onChange((value) => {
+          settings.compareBibles = value;
+          void save();
+        }),
+      );
     new Setting(containerEl)
       .setName("Open reference links in")
       .setDesc("Where [John 1:1] and [text](John 1:1) open. Bare references open like before (see Link template).")

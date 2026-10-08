@@ -46,6 +46,7 @@ export const PLACEHOLDERS: Record<string, string> = {
   end_verse: "the last verse of the first part, when it is a range in one chapter: 7",
   reference: "the whole reference: 1 Corinthians 13:4-7",
   osis: "the whole reference in OSIS: 1Cor.13.4-1Cor.13.7",
+  translation: "the translation named after the reference (John 3:16 ESV), none otherwise: ESV",
 };
 
 /** Changes to a value: `{book|lower}` */
@@ -86,7 +87,7 @@ const BIBLEHUB = [
 export type LinkBook = Pick<BookInfo, "id" | "name" | "abbreviation" | "osis">;
 
 /** Each placeholder's value for a passage (missing when it has none) */
-function values(passage: Passage, book: LinkBook | undefined): Record<string, string | undefined> {
+function values(passage: Passage, book: LinkBook | undefined, translation?: string): Record<string, string | undefined> {
   const first = passage.segments[0];
   const known = passage.bookId >= 1 && passage.bookId <= 66;
   const result: Record<string, string | undefined> = {
@@ -99,6 +100,7 @@ function values(passage: Passage, book: LinkBook | undefined): Record<string, st
     "book.biblehub": known ? BIBLEHUB[passage.bookId - 1] : undefined,
     reference: passage.reference,
     osis: passage.osis,
+    translation,
   };
   if (first?.tag === "Verses") {
     result.chapter = String(first.start.chapter);
@@ -168,13 +170,13 @@ export function templateError(template: string): string | null {
 /**
  * The link for a passage, or null when there is none: no template, a template that can't be
  * used, or one that needs a value the passage doesn't have (like `{book.usfm}` for a book
- * outside the 66)
+ * outside the 66); `translation` is the one a reference names, for `{translation}`
  */
-export function linkUrl(template: string, passage: Passage, book?: LinkBook): string | null {
+export function linkUrl(template: string, passage: Passage, book?: LinkBook, translation?: string): string | null {
   if (!template.trim()) return null;
   const parsed = parse(template);
   if (typeof parsed === "string") return null;
-  const known = values(passage, book);
+  const known = values(passage, book, translation);
   const render = (parts: Part[]): string | null => {
     let out = "";
     for (const part of parts) {

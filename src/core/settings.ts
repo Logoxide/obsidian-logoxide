@@ -57,6 +57,10 @@ export interface ToposSettings {
   cliCache: boolean;
   /** The Bible references open in and preview from: a folder of USX files ("" for the first) */
   bible: string;
+  /** Translations' names and aliases, one per line: `KJV: AV, King James` (see core/translations.ts) */
+  bibleAliases: string;
+  /** Bibles embeds also show, by name, separated by commas: `KJV, NET` */
+  compareBibles: string;
   /** Show footnotes and cross references in Bible text */
   bibleNotes: boolean;
   /** Show section headings in Bible text */
@@ -100,6 +104,8 @@ export const DEFAULT_SETTINGS: ToposSettings = {
   cliPath: "",
   cliCache: true,
   bible: "",
+  bibleAliases: "",
+  compareBibles: "",
   bibleNotes: false,
   bibleHeadings: true,
   referenceLinks: "bible",

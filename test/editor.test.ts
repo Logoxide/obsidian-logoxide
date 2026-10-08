@@ -60,6 +60,7 @@ test("editor links follow the settings after a refresh", async () => {
     linkSite: () => "the site",
     clickOpens: (event: MouseEvent) => event.button === 1 || event.ctrlKey,
     bibles: { all: () => [] },
+    translations: () => undefined,
     embedPassage: async (el: HTMLElement, passage: any, label: string) => {
       el.className = "topos-embed";
       el.textContent = `${label}: ${passage.reference}`;
@@ -139,6 +140,7 @@ test("reference links and embeds in live preview hide their syntax unless the cu
     linkSite: () => "the site",
     clickOpens: () => false,
     bibles: { all: () => [{}] },
+    translations: () => undefined,
     embedPassage: async (el: HTMLElement, passage: any, label: string) => {
       el.className = "topos-embed";
       el.textContent = `${label} = ${passage.reference}`;
@@ -181,6 +183,7 @@ test("with embedAlone, a reference alone on its line shows its text unless the c
     linkSite: () => "the site",
     clickOpens: () => false,
     bibles: { all: () => [{}] },
+    translations: () => undefined,
     embedPassage: async (el: HTMLElement, passage: any) => {
       el.className += " topos-embed";
       el.textContent = `<${passage.reference}>`;
