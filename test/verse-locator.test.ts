@@ -10,6 +10,9 @@ test("verse locators round-trip", () => {
   // Markdown links may encode them
   assert.equal(formatVerseLocator(parseVerseLocator("v=3%3A16%3B4")!), "v=3:16;4");
   assert.deepEqual(parseVerseLocator("v=3"), [{ chapter: 3, verse: 0, endChapter: 3, endVerse: END }]);
+  // The exact words (file-plus-plus's units) don't change the verses
+  assert.deepEqual(parseVerseLocator("v=3:16:~:text=so%20loved"), parseVerseLocator("v=3:16"));
+  assert.deepEqual(parseVerseLocator("v=3%3A16%3A~%3Atext=so"), parseVerseLocator("v=3:16"));
   for (const bad of ["v=", "v=0", "v=3:16-2", "v=4-3", "t=3", "v=a"]) assert.equal(parseVerseLocator(bad), null, bad);
 });
 

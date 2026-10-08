@@ -20,7 +20,8 @@ export const END = 255;
 const PART = /^(\d+)(?::(\d+))?(?:-(\d+)(?::(\d+))?)?$/;
 
 export function parseVerseLocator(locator: string): VersePart[] | null {
-  const m = /^v=(.+)$/.exec(decode(locator.trim()));
+  // Without the exact words a locator may end with (`v=3:16:~:text=…`, see file-plus-plus's units)
+  const m = /^v=(.+)$/.exec(decode(locator.trim().replace(/(:~:|%3A~%3A).*$/i, "")));
   if (!m) return null;
   const parts: VersePart[] = [];
   for (const text of m[1].split(";")) {

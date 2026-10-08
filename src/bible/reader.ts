@@ -1,4 +1,4 @@
-import { DocumentReader, PREFIX, textFragmentScheme, type LocatorScheme, type ParsedLocator, type ReaderOptions, type TocItem } from "file-plus-plus/core";
+import { DocumentReader, PREFIX, splitTextDirective, textFragmentScheme, withTextDirective, type LocatorScheme, type ParsedLocator, type ReaderOptions, type TocItem } from "file-plus-plus/core";
 import type { BookTextOptions, ToposBook } from "topos-bible";
 import { END, formatVerseLocator, parseVerseLocator, partSegments, type VersePart } from "../core/verse-locator.ts";
 
@@ -19,7 +19,8 @@ export const verseScheme: LocatorScheme = {
     const m = /^v=[^&]*/.exec(s);
     if (!m) return null;
     const parts = parseVerseLocator(m[0]);
-    return parts ? { locator: formatVerseLocator(parts), rest: s.slice(m[0].length) } : null;
+    const { text } = splitTextDirective(m[0]);
+    return parts ? { locator: withTextDirective(formatVerseLocator(parts), text), rest: s.slice(m[0].length) } : null;
   },
   isRange: () => true,
 };
@@ -46,6 +47,7 @@ interface Marker {
 export class BibleReader extends DocumentReader {
   readonly schemes = BIBLE_SCHEMES;
   private markers: Marker[] = [];
+  private markerEls: HTMLElement[] = [];
   private _toc: TocItem[] = [];
   private readonly preview: VersePart[] | null;
 
@@ -165,6 +167,7 @@ p.topos-p { margin: 0 0 0.6em; }
       const chapter = place.chapter ?? sectionChapter(el) ?? this.markers.at(-1)?.chapter ?? 1;
       this.markers.push({ el, chapter, verse: place.verse, last: place.last });
     }
+    this.markerEls = this.markers.map((m) => m.el);
   }
 
   // Locators
@@ -173,6 +176,12 @@ p.topos-p { margin: 0 0 0.6em; }
     if (loc.scheme !== verseScheme.id || !loc.locator) return null;
     const parts = parseVerseLocator(loc.locator);
     if (!parts) return null;
+    // The exact words of one part: searched within its verses (the whole verses when they aren't there)
+    const { text } = splitTextDirective(loc.locator);
+    if (text && parts.length === 1) {
+      const range = this.partRange(parts[0]!);
+      return range && (this.resolveTextFragment(text, range) ?? range);
+    }
     // A preview shows only its parts, so it highlights all of them; the book, the first
     const first = this.partRange(parts[0]!);
     if (!first || !this.preview || parts.length === 1) return first;
@@ -206,33 +215,22 @@ p.topos-p { margin: 0 0 0.6em; }
     return range;
   }
 
+  /**
+   * The verses a range covers (`v=3:16-18`), and when it covers only part of them, the exact words
+   * (`v=3:16:~:text=so%20loved`), from file-plus-plus's units (the verse markers)
+   */
   locatorFromRange(range: Range): string | null {
-    const a = this.markerAt(range.startContainer, range.startOffset, true);
-    if (!a) return null;
-    const b = range.collapsed ? a : (this.markerAt(range.endContainer, range.endOffset, false) ?? a);
-    const end = b.chapter * 1000 + b.last < a.chapter * 1000 + a.verse ? a : b;
-    return formatVerseLocator([{ chapter: a.chapter, verse: a.verse, endChapter: end.chapter, endVerse: range.collapsed ? a.verse : end.last }]);
+    const units = this.unitsOfRange(range);
+    if (!units) return null;
+    const a = this.markers[units.first]!;
+    const b = this.markers[units.last]!;
+    const part = { chapter: a.chapter, verse: a.verse, endChapter: b.chapter, endVerse: range.collapsed ? a.verse : b.last };
+    return withTextDirective(formatVerseLocator([part]), units.text);
   }
 
-  /** The verse a point is in: the last marker before it (or the first verse, before any) */
-  private markerAt(node: Node, offset: number, start: boolean): Marker | null {
-    if (this.markers.length === 0) return null;
-    const point = this.doc.createRange();
-    point.setStart(node, offset);
-    let lo = 0;
-    let hi = this.markers.length;
-    while (lo < hi) {
-      const mid = (lo + hi) >> 1;
-      // Markers before the point (at it too, for a start: a selection ending right at a
-      // marker ends in the verse before it)
-      // The marker's own place (before it, in its parent), which a range set before it starts at
-      const el = this.markers[mid]!.el;
-      const parent = el.parentNode!;
-      const side = point.comparePoint(parent, Array.prototype.indexOf.call(parent.childNodes, el));
-      if (side < 0 || (start && side === 0)) lo = mid + 1;
-      else hi = mid;
-    }
-    return this.markers[Math.max(0, lo - 1)] ?? null;
+  /** Verse markers are the units of locators, so selections of part of a verse keep their words */
+  protected override unitElements(): readonly Element[] {
+    return this.markerEls;
   }
 }
 

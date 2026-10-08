@@ -82,7 +82,8 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
   }
 
   protected override defaultSettings(): PluginSettings {
-    return { ...super.defaultSettings(), ...structuredClone(DEFAULT_SETTINGS) };
+    // Links into a Bible are labeled with the reference (file-plus-plus's default: "book, chapter")
+    return { ...super.defaultSettings(), aliasTemplate: "{{reference}}", ...structuredClone(DEFAULT_SETTINGS) };
   }
 
   override createEmbed(ctx: EmbedContext, file: TFile, subpath: string): DocumentEmbed<BibleBook, BibleReader> {
@@ -177,6 +178,11 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
 
   private async migrateToposSettings(): Promise<void> {
     const saved = this.savedData ?? {};
+    // Saved before Bible links had their own default label
+    if (!this.settings.bibleAliasDefault) {
+      if (this.settings.aliasTemplate === "{{book}}, {{chapter}}") this.settings.aliasTemplate = "{{reference}}";
+      this.settings.bibleAliasDefault = true;
+    }
     // Format fields added later get their defaults; an earlier joinAdjacent setting carries over
     this.settings.format = {
       ...DEFAULT_FORMAT,

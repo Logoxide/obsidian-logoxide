@@ -65,6 +65,8 @@ export interface ToposSettings {
   referenceLinks: "bible" | "site";
   /** Show bare references' text on hover (links and explicit links always preview) */
   previewBare: boolean;
+  /** Once file-plus-plus's default link label has become `{{reference}}` */
+  bibleAliasDefault?: boolean;
 }
 
 export const DEFAULT_SETTINGS: ToposSettings = {

@@ -1,6 +1,6 @@
 import type { FileFormat } from "file-plus-plus/obsidian";
 import { ToposBook } from "topos-bible";
-import { parseVerseLocator } from "../core/verse-locator.ts";
+import { formatVerseLocator, parseVerseLocator } from "../core/verse-locator.ts";
 import type ToposPlugin from "../main.ts";
 import { BIBLE_SCHEMES, BibleReader, type BibleBook } from "./reader.ts";
 
@@ -35,11 +35,13 @@ export function createBibleFormat(plugin: ToposPlugin): FileFormat<BibleBook, Bi
     info: (doc, file) => ({ title: doc.bible ? `${doc.name} (${doc.bible})` : doc.name || file.basename, author: "" }),
     createReader: (host, doc, opts, preview) =>
       new BibleReader(host, doc, { ...opts, text: plugin.bookTextOptions() }, preview),
+    // Besides the shared ones ({{book}} is the title, "John (BSB)"; {{chapter}} the chapter, "John 3")
     templateVars: (info, doc) => {
-      const part = parseVerseLocator(info.locator)?.[0];
-      return { book: doc?.name ?? "", bible: doc?.bible ?? "", chapter: part ? String(part.chapter) : "", verse: part?.verse ? String(part.verse) : "" };
+      const parts = parseVerseLocator(info.locator) ?? [];
+      const verses = parts.length > 0 ? formatVerseLocator(parts).slice(2).replaceAll(";", "; ") : "";
+      return { reference: [doc?.name, verses].filter(Boolean).join(" "), verses, bible: doc?.bible ?? "" };
     },
-    extraTemplateVars: "{{book}} (John), {{bible}} (the translation), {{chapter}}, {{verse}}",
+    extraTemplateVars: "{{reference}} (John 3:16-18), {{verses}} (3:16-18), {{bible}} (the translation)",
     appearance: { hidden: ["dimImages"], publisherName: null },
   };
 }
