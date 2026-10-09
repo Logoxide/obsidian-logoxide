@@ -106,7 +106,7 @@ export class BibleReader extends DocumentReader {
 .topos-title.topos-r, .topos-title.topos-mr { font-weight: normal; font-style: italic; font-size: 0.9em; }
 .topos-woj { color: var(--tpb-woj-color, inherit); }
 .topos-nd { font-variant: small-caps; }
-.topos-l { display: inline-block; padding-left: 1.5em; text-indent: -1em; }
+.topos-l { display: inline-block; padding-left: 2em; text-indent: -1em; }
 p.topos-p { margin: 0 0 0.6em; }
 .topos-note { font-size: 0.85em; opacity: 0.75; }
 .topos-note::before { content: " ["; }
@@ -178,6 +178,7 @@ ${USX_CSS}
       if (!place) continue;
       const chapter = place.chapter ?? sectionChapter(el) ?? this.markers.at(-1)?.chapter ?? 1;
       this.markers.push({ el, chapter, verse: place.verse, last: place.last });
+      if (startsLine(el)) el.classList.add("tpb-line-start");
     }
     this.markerEls = this.markers.map((m) => m.el);
   }
@@ -259,10 +260,15 @@ p.topos-p[data-style^="li"], p.topos-p[data-style^="ph"] { padding-left: 2em; te
 p.topos-p[data-style="li2"], p.topos-p[data-style="ph2"] { padding-left: 3.5em; }
 p.topos-p[data-style="li3"], p.topos-p[data-style="ph3"] { padding-left: 5em; }
 p.topos-p[data-style="lit"] { text-align: right; font-weight: 600; }
-/* Poetry: q1 is .topos-l's indent, each level deeper another step */
-.topos-l[data-style="q2"], .topos-l[data-style="qm2"] { padding-left: 3em; }
-.topos-l[data-style="q3"], .topos-l[data-style="qm3"] { padding-left: 4.5em; }
-.topos-l[data-style="q4"] { padding-left: 6em; }
+/*
+ * Poetry: a line starts at its level's indent (q1 at 1em, q2 at 3em, ...) and wraps a step
+ * further in; a verse number that starts a line hangs to its left, so the words line up
+ */
+.topos-l[data-style="q2"], .topos-l[data-style="qm2"] { padding-left: 4em; }
+.topos-l[data-style="q3"], .topos-l[data-style="qm3"] { padding-left: 6em; }
+.topos-l[data-style="q4"] { padding-left: 8em; }
+.topos-verse.tpb-line-start { display: inline-block; width: 0; text-indent: 0; }
+.topos-verse.tpb-line-start::before { display: inline-block; box-sizing: border-box; width: 2em; margin-left: -2em; padding: 0 0.3em 0 0; text-align: right; }
 .topos-l[data-style="qr"] { display: block; text-align: right; }
 .topos-l[data-style="qc"] { display: block; text-align: center; }
 .topos-l[data-style="qa"] { font-style: italic; font-weight: 600; padding-left: 0; text-indent: 0; }
@@ -296,6 +302,16 @@ function verseOf(el: HTMLElement): { chapter: number | null; verse: number; last
   if (!Number.isFinite(verse)) return null;
   const last = n?.[2] ? Number(n[2]) : m?.[3] ? Number(m[3]) : verse;
   return { chapter: m ? Number(m[1]) : null, verse, last: Math.max(verse, last) };
+}
+
+/** Whether a verse marker starts a poetry line (nothing but space before it in the line) */
+function startsLine(el: HTMLElement): boolean {
+  const line = el.closest(".topos-l");
+  if (!line) return false;
+  const range = el.ownerDocument.createRange();
+  range.setStart(line, 0);
+  range.setEndBefore(el);
+  return range.toString().trim() === "";
 }
 
 function sectionBody(el: HTMLElement): HTMLElement | null {
