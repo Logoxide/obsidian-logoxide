@@ -34,7 +34,7 @@ export class BibleManager {
     return { project: biblix.parseProject(manifest, lock), base };
   }
 
-  /** Every catalog the vault names (else eBible.org's list), downloaded at most once a day */
+  /** Every catalog the vault searches (its own, then eBible.org's and fetch.bible's), downloaded at most once a day */
   async catalogs(): Promise<BiblixCatalog> {
     if (this.catalog) return this.catalog;
     this.catalogLoading ??= this.loadCatalogs().finally(() => (this.catalogLoading = null));
@@ -83,6 +83,46 @@ export class BibleManager {
       await this.adapter.write(saved, text);
     }
     return text;
+  }
+
+  /** The catalogs searched, in order, and whether each is one of the defaults (eBible.org's, fetch.bible's) */
+  async catalogList(): Promise<{ location: string; isDefault: boolean }[]> {
+    await this.plugin.engine();
+    const { project } = await this.project(Biblix.new());
+    const list = project.catalogs().map((location) => ({ location, isDefault: project.isDefaultCatalog(location) }));
+    project.dispose();
+    return list;
+  }
+
+  /** Searches a catalog too (a URL, or a path relative to biblix.toml), after reading it to check it; how many packages it lists */
+  async addCatalog(location: string): Promise<number> {
+    await this.plugin.engine();
+    const biblix = Biblix.new();
+    const { project, base } = await this.project(biblix);
+    const catalog = biblix.parseCatalog(location, await this.catalogText(location, base));
+    const count = catalog.count();
+    catalog.dispose();
+    const added = project.addCatalog(location);
+    project.dispose();
+    await this.saveManifest(added, base);
+    return count;
+  }
+
+  /** Stops searching a catalog (removing a default one turns the defaults off, keeping the other) */
+  async removeCatalog(location: string): Promise<void> {
+    await this.plugin.engine();
+    const { project, base } = await this.project(Biblix.new());
+    const removed = project.removeCatalog(location);
+    project.dispose();
+    await this.saveManifest(removed, base);
+  }
+
+  private async saveManifest(project: BiblixProject, base: string): Promise<void> {
+    await mkdirs(this.plugin, base);
+    await this.adapter.write(join(base, MANIFEST), project.manifestText());
+    project.dispose();
+    this.catalog?.dispose();
+    this.catalog = null;
   }
 
   /** The catalogs' packages that `query` matches, best first */

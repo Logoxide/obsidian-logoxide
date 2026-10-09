@@ -271,10 +271,11 @@ export class ToposSettingsPanel {
     new Setting(containerEl)
       .setName("Add a Bible")
       .setDesc(
-        "Search the catalogs (eBible.org's and fetch.bible's 2,000+ translations, unless biblix.toml's [settings] catalogs names others) and install one into the library, or add a biblix package from its git repository.",
+        "Search the catalogs (eBible.org's and fetch.bible's 2,000+ translations, and any added below) and install one into the library, or add a biblix package from its git repository.",
       )
       .addButton((b) => b.setButtonText("Search").onClick(() => new AddBibleModal(this.app, this.plugin, () => this.display()).open()))
       .addButton((b) => b.setButtonText("Git URL").onClick(() => new GitUrlModal(this.app, this.plugin, () => this.display()).open()));
+    void this.catalogSettings(containerEl.createDiv());
     if (packages.installed.some((p) => !p.path)) {
       new Setting(containerEl)
         .setName("Update Bibles")
@@ -294,6 +295,55 @@ export class ToposSettingsPanel {
           }),
         );
     }
+  }
+
+  /** The catalogs Add a Bible searches: each with a remove button, and a field to add one */
+  private async catalogSettings(containerEl: HTMLElement): Promise<void> {
+    const manager = this.plugin.bibleManager;
+    const failed = (what: string, error: unknown) => new Notice(`${what}: ${error instanceof Error ? error.message : String(error)}`, 10000);
+    let catalogs: { location: string; isDefault: boolean }[];
+    try {
+      catalogs = await manager.catalogList();
+    } catch (error) {
+      failed("Couldn't read the catalogs", error);
+      return;
+    }
+    new Setting(containerEl).setName("Catalogs").setHeading();
+    for (const { location, isDefault } of catalogs) {
+      new Setting(containerEl)
+        .setName(location)
+        .setDesc(isDefault ? "One of the defaults: removing it keeps the other" : "Added in biblix.toml")
+        .addExtraButton((b) =>
+          b
+            .setIcon("trash")
+            .setTooltip("Stop searching it")
+            .onClick(async () => {
+              try {
+                await manager.removeCatalog(location);
+              } catch (error) {
+                failed(`Couldn't remove ${location}`, error);
+              }
+              this.display();
+            }),
+        );
+    }
+    let location = "";
+    new Setting(containerEl)
+      .setName("Add a catalog")
+      .setDesc("A list of packages to search too: a catalog.toml's URL (anyone can host one), eBible.org's translations.csv, fetch.bible's manifest.json, or a file's path relative to biblix.toml.")
+      .addText((t) => t.setPlaceholder("https://example.org/catalog.toml").onChange((value) => (location = value.trim())))
+      .addButton((b) =>
+        b.setButtonText("Add").onClick(async () => {
+          if (!location) return;
+          try {
+            const count = await manager.addCatalog(location);
+            new Notice(`Added ${location}: ${count} package${count === 1 ? "" : "s"}`);
+          } catch (error) {
+            failed(`Couldn't add ${location}`, error);
+          }
+          this.display();
+        }),
+      );
   }
 
   private bibleSettings(containerEl: HTMLElement): void {

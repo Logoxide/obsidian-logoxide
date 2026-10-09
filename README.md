@@ -112,8 +112,8 @@ search, whether to search EPUBs (below), excluded folders, and the search engine
 ### Bible text
 
 Install a Bible under *Settings → Add a Bible*: **Search** finds translations by name,
-abbreviation, or language (eBible.org's and fetch.bible's, about 2,900, unless the vault's
-`biblix.toml` names other catalogs) and installs the one you pick; **Git URL** adds a [biblix](https://github.com/MasterTemple/biblix)
+abbreviation, or language (eBible.org's and fetch.bible's, about 2,900, and any catalogs you add
+under *Catalogs*: a `catalog.toml`'s URL, or a file in the vault) and installs the one you pick; **Git URL** adds a [biblix](https://github.com/MasterTemple/biblix)
 package from its repository. Bibles go in the vault's `Biblix/` folder (*Biblix library*), with
 `Biblix/biblix.toml` and `biblix.lock` saying exactly which text the vault uses, so every device
 gets the same one; each is named by its abbreviation (`BSB`, `KJV`), and the trash button removes

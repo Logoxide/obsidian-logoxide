@@ -485,7 +485,12 @@ test("the built plugin loads, indexes, and runs its commands", async (t) => {
   plugin.saveData = async () => {};
   // topos's settings, which file-plus-plus's settings tab shows first
   const tab = {
-    containerEl: { settings: [] as any[] },
+    containerEl: {
+      settings: [] as any[],
+      createDiv() {
+        return this;
+      },
+    },
     display() {
       this.containerEl.settings = [];
       plugin.displaySettings(this.containerEl, () => this.display());
