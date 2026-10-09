@@ -121,6 +121,10 @@ the web; local repositories need `bx`). The vault's `Biblix/` folder (*Packages 
 each Bible is named by its abbreviation (`BSB`, `KJV`), and the trash button removes it.
 *Hide the packages folder* leaves `Biblix/` out of the file explorer and Obsidian's search.
 
+*Registries* name catalogs (a `catalog.toml`'s URL, which `bx registry init` prints): their
+packages are searched first, and a registry's releases install as single archives, checked by
+their hash.
+
 Books are packages too (`kind = "book"`, an EPUB), and a collection brings in several (listed
 under it in the settings). Each book's EPUB is copied into the packages folder
 (`Biblix/the-dorean-principle/epub/the-dorean-principle.epub`), where EPUB++ opens it, and verse

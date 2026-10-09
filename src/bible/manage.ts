@@ -47,7 +47,9 @@ export class BibleManager {
     const { project, base } = await this.project(biblix);
     let merged: BiblixCatalog | null = null;
     const failed: string[] = [];
-    for (const location of project.catalogs()) {
+    // The vault's registries first (catalogs; a folder of repositories is only for bx), then its catalogs
+    const registries = project.registries().map((r) => r.location);
+    for (const location of [...registries, ...project.catalogs()]) {
       try {
         const text = await this.catalogText(location, base);
         const catalog = biblix.parseCatalog(location, text);
@@ -108,6 +110,37 @@ export class BibleManager {
     return count;
   }
 
+  /** The vault's registries, by name */
+  async registryList(): Promise<{ name: string; location: string }[]> {
+    await this.plugin.engine();
+    const { project } = await this.project(Biblix.new());
+    const list = project.registries().map((r) => ({ name: r.name, location: r.location }));
+    project.dispose();
+    return list;
+  }
+
+  /** Names a registry (a catalog's URL, or a file in the vault), after reading it to check it; how many packages it lists */
+  async addRegistry(name: string, location: string): Promise<number> {
+    await this.plugin.engine();
+    const biblix = Biblix.new();
+    const { project, base } = await this.project(biblix);
+    const catalog = biblix.parseCatalog(location, await this.catalogText(location, base));
+    const count = catalog.count();
+    catalog.dispose();
+    const added = project.addRegistry(name, location);
+    project.dispose();
+    await this.saveManifest(added, base);
+    return count;
+  }
+
+  async removeRegistry(name: string): Promise<void> {
+    await this.plugin.engine();
+    const { project, base } = await this.project(Biblix.new());
+    const removed = project.removeRegistry(name);
+    project.dispose();
+    await this.saveManifest(removed, base);
+  }
+
   /** Stops searching a catalog (removing a default one turns the defaults off, keeping the other) */
   async removeCatalog(location: string): Promise<void> {
     await this.plugin.engine();
@@ -132,6 +165,13 @@ export class BibleManager {
 
   /** Answers what an installer asks for: downloads, or files in the vault */
   private async answer(installer: BiblixInstaller, request: FetchRequest, base: string): Promise<void> {
+    // A registry's catalog or a release's archive: from the web, or a file in the vault
+    if (request.tag === "Download") {
+      if (/^(\/|file:\/\/)/.test(request.url)) throw new Error(`${request.url} is a file outside the vault: use bx for it, or a registry on the web`);
+      const bytes = /^https?:\/\//.test(request.url) ? await download(request.url) : await this.adapter.readBinary(join(base, request.url));
+      installer.provideDownload(request.url, new Uint8Array(bytes));
+      return;
+    }
     if (request.tag !== "Files" && !/^https?:\/\//.test(request.repository)) {
       throw new Error(`${request.repository} isn't on the web: use bx for it (bx install, bx update, or bx install --repair to restore it)`);
     }
@@ -192,7 +232,7 @@ export class BibleManager {
       step = installer.inspect(url, null, null, null);
     }
     const { info } = step.inspected;
-    const added = project.addDependency(info.id, { git: url, path: null, version: info.version, tag: null, branch: null, rev: null, features: [], defaultFeatures: true, packageId: null, abbreviation: null, aliases: null });
+    const added = project.addDependency(info.id, { git: url, registry: null, path: null, version: info.version, tag: null, branch: null, rev: null, features: [], defaultFeatures: true, packageId: null, abbreviation: null, aliases: null });
     project.dispose();
     // The same installer: it has the archive already
     await this.install(biblix, added, base, installer);
@@ -200,9 +240,23 @@ export class BibleManager {
     return info.abbreviation;
   }
 
-  /** Installs a catalog entry: adds its repository, or imports eBible.org's or fetch.bible's download */
+  /** Adds a registry's package (its newest release, as `bx add` would) and installs it; its abbreviation */
+  private async addRelease(entry: CatalogEntry, catalog: string): Promise<string> {
+    await this.plugin.engine();
+    const biblix = Biblix.new();
+    const { project, base } = await this.project(biblix);
+    const newest = entry.releases.at(-1)?.version ?? null;
+    const added = project.addDependency(entry.id, { git: null, registry: catalog, path: null, version: newest, tag: null, branch: null, rev: null, features: [], defaultFeatures: true, packageId: null, abbreviation: null, aliases: null });
+    project.dispose();
+    await this.install(biblix, added, base);
+    added.dispose();
+    return entry.abbreviation;
+  }
+
+  /** Installs a catalog entry: adds its repository or its registry's newest release, or imports eBible.org's or fetch.bible's download */
   async addEntry(entry: CatalogEntry): Promise<string> {
     if (entry.source.tag === "Git") return this.addGit(entry.source.url);
+    if (entry.source.tag === "Registry") return this.addRelease(entry, entry.source.catalog);
     await this.plugin.engine();
     const biblix = Biblix.new();
     const { project, base } = await this.project(biblix);
@@ -218,7 +272,7 @@ export class BibleManager {
       await mkdirs(this.plugin, path.slice(0, path.lastIndexOf("/")));
       await this.adapter.writeBinary(path, buffer(file.bytes));
     }
-    const added = project.addDependency(entry.id, { git: null, path: relative, version: null, tag: null, branch: null, rev: null, features: [], defaultFeatures: true, packageId: null, abbreviation: null, aliases: null });
+    const added = project.addDependency(entry.id, { git: null, registry: null, path: relative, version: null, tag: null, branch: null, rev: null, features: [], defaultFeatures: true, packageId: null, abbreviation: null, aliases: null });
     project.dispose();
     await this.install(biblix, added, base);
     added.dispose();

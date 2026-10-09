@@ -322,6 +322,7 @@ export class ToposSettingsPanel {
       )
       .addButton((b) => b.setButtonText("Search").onClick(() => new AddBibleModal(this.app, this.plugin, () => this.display()).open()))
       .addButton((b) => b.setButtonText("Git URL").onClick(() => new GitUrlModal(this.app, this.plugin, () => this.display()).open()));
+    void this.registrySettings(containerEl.createDiv());
     void this.catalogSettings(containerEl.createDiv());
     if (packages.changedPackages.length > 0) {
       new Setting(containerEl)
@@ -401,6 +402,57 @@ export class ToposSettingsPanel {
             new Notice(`Added ${location}: ${count} package${count === 1 ? "" : "s"}`);
           } catch (error) {
             failed(`Couldn't add ${location}`, error);
+          }
+          this.display();
+        }),
+      );
+  }
+
+  /** The vault's registries (named catalogs, which `bx add name:id` uses too): each with a remove button, and adding one */
+  private async registrySettings(containerEl: HTMLElement): Promise<void> {
+    const manager = this.plugin.bibleManager;
+    const failed = (what: string, error: unknown) => new Notice(`${what}: ${error instanceof Error ? error.message : String(error)}`, 10000);
+    let registries: { name: string; location: string }[];
+    try {
+      registries = await manager.registryList();
+    } catch (error) {
+      failed("Couldn't read the registries", error);
+      return;
+    }
+    new Setting(containerEl).setName("Registries").setHeading();
+    for (const { name, location } of registries) {
+      new Setting(containerEl)
+        .setName(name)
+        .setDesc(/^https?:\/\//.test(location) || location.endsWith(".toml") ? location : `${location} (a folder of repositories: only bx reads it)`)
+        .addExtraButton((b) =>
+          b
+            .setIcon("trash")
+            .setTooltip("Remove")
+            .onClick(async () => {
+              try {
+                await manager.removeRegistry(name);
+              } catch (error) {
+                failed(`Couldn't remove ${name}`, error);
+              }
+              this.display();
+            }),
+        );
+    }
+    let name = "";
+    let location = "";
+    new Setting(containerEl)
+      .setName("Add a registry")
+      .setDesc("A catalog with a name: its packages are searched first, and bx adds them as name:id. Its catalog.toml's URL (bx registry init prints it), or a file's path relative to biblix.toml.")
+      .addText((t) => t.setPlaceholder("name").onChange((value) => (name = value.trim())))
+      .addText((t) => t.setPlaceholder("https://github.com/owner/repo/releases/download/index/catalog.toml").onChange((value) => (location = value.trim())))
+      .addButton((b) =>
+        b.setButtonText("Add").onClick(async () => {
+          if (!name || !location) return;
+          try {
+            const count = await manager.addRegistry(name, location);
+            new Notice(`Added ${name}: ${count} package${count === 1 ? "" : "s"}`);
+          } catch (error) {
+            failed(`Couldn't add ${name}`, error);
           }
           this.display();
         }),
