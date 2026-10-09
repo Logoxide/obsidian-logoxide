@@ -1141,3 +1141,8 @@ body:not(.is-mobile) .topos-pane.is-narrow .topos-pane-card:is(:hover, :focus-wi
 .topos-sidebar-view .topos-pane-summary {
   background: color-mix(in srgb, var(--background-secondary) 92%, transparent);
 }
+
+/* A collection's packages, under it in the settings */
+.topos-package-member {
+  padding-inline-start: 2em;
+}

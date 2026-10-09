@@ -114,7 +114,7 @@ export class EpubSupport {
   private register(api: EpubPlusPlusApi): () => void {
     const plugin = this.plugin;
     const annotations = async (file: TFile) => {
-      if (!this.enabled) return [];
+      if (!this.enabled && !plugin.packages.isBookCopy(file.path)) return [];
       await plugin.indexer.loadFileDetails(file.path);
       const style = bookStyle(plugin.settings.style);
       return plugin.refs

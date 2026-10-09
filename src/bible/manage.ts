@@ -21,9 +21,9 @@ export class BibleManager {
     return this.plugin.app.vault.adapter;
   }
 
-  /** Where the vault's biblix.toml is: at its root if it has one there, else in the library */
+  /** Where the vault's biblix.toml is: at its root if it has one there, else in the packages folder */
   private async base(): Promise<string> {
-    return (await this.adapter.exists(MANIFEST)) ? "" : this.plugin.packages.libraryDir();
+    return (await this.adapter.exists(MANIFEST)) ? "" : this.plugin.packages.booksDir();
   }
 
   private async project(biblix: Biblix): Promise<{ project: BiblixProject; base: string }> {
@@ -237,6 +237,18 @@ export class BibleManager {
     await this.install(biblix, project, base, biblix.installer(), { tag: "Repair" });
     project.dispose();
     return changed;
+  }
+
+  /**
+   * Installs what the vault's biblix.lock pins and this device's library doesn't have (the lock
+   * synced from another device), exactly as locked
+   */
+  async installLocked(): Promise<void> {
+    await this.plugin.engine();
+    const biblix = Biblix.new();
+    const { project, base } = await this.project(biblix);
+    await this.install(biblix, project, base);
+    project.dispose();
   }
 
   /** Moves every git package to the newest release its requirement allows (like `bx update`); what changed */

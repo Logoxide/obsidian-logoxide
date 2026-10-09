@@ -30,7 +30,11 @@ interface PackageBible {
 /** A package the vault's lock file names, for the settings */
 export interface InstalledPackage {
   id: string;
+  /** What the vault's biblix.toml calls it (its id, or a fork's own name) */
+  name: string;
   version: string;
+  /** The package biblix.toml asks for that brings it in (a collection), when it doesn't ask for this one itself */
+  dependencyOf: string | null;
   /** Its folder, from the vault's root */
   dir: string;
   /** From an import (`imports/<id>`) or a path package rather than the library */
@@ -40,6 +44,18 @@ export interface InstalledPackage {
   problem: string | null;
 }
 
+/** A book package's EPUBs, copied into the packages folder (EPUB++ opens only vault files) */
+interface PackageBook {
+  dependency: string;
+  /** The package's folder, from the vault's root */
+  dir: string;
+  /** Its EPUBs, relative to its folder */
+  files: string[];
+}
+
+/** Where the copies of book packages' EPUBs are recorded (in the plugin's folder), so only those are ever removed */
+const COPIES = "biblix-copies.json";
+
 /** A package Bible's book files in the vault, for the reader */
 export interface PackageFiles {
   dir: string;
@@ -48,17 +64,23 @@ export interface PackageFiles {
 }
 
 /**
- * The Bibles a vault's `biblix.toml` asks for, as its `biblix.lock` pins them, read from the library
- * (a folder in the vault, `Biblix/` by default) or a path package's folder with biblix. They're
- * Bibles like the vault's USX folders (their books are vault files the reader opens), and give the
- * translations references can name, with their own verse counts. Their parsed cache is kept in the
- * plugin's folder.
+ * The Bibles and books a vault's `biblix.toml` asks for (and those its collections bring in), as
+ * its `biblix.lock` pins them, read with biblix from the library (`.biblix/` by default: hidden and
+ * not synced, so each device installs what the lock pins) or a path package's folder. They show in
+ * the packages folder (`Biblix/` by default, with the vault's `biblix.toml`): a stub for each Bible
+ * book, which the reader opens, and a copy of each book package's EPUBs, which EPUB++ opens and
+ * verse search reads. Bibles give the translations references can name, with their own verse
+ * counts. Their parsed cache is kept in the plugin's folder.
  *
- * Installing from the settings comes later; `bx install` (with `BIBLIX_HOME` set to the library)
- * puts packages there.
+ * `bx install` (with `BIBLIX_HOME` set to the library, in the packages folder) installs them too.
  */
 export class BiblixBibles {
   private bibles: PackageBible[] = [];
+  private books: PackageBook[] = [];
+  /** The EPUB copies in the packages folder, as last written */
+  private copies = new Set<string>();
+  /** The lock file last installed from on its own (missing packages are installed once per lock) */
+  private installedFrom: string | null = null;
   private defaultName: string | null = null;
   /** What couldn't be read, to show */
   problems: string[] = [];
@@ -76,9 +98,27 @@ export class BiblixBibles {
     private readonly changed: () => void,
   ) {}
 
-  /** The library's folder in the vault (the setting; `Biblix` by default) */
+  /** The library's folder in the vault: installed packages (the setting; `.biblix` by default) */
   libraryDir(): string {
-    return this.plugin.settings.biblixLibrary.trim().replace(/^\/+|\/+$/g, "") || "Biblix";
+    return this.plugin.settings.biblixLibrary.trim().replace(/^\/+|\/+$/g, "") || ".biblix";
+  }
+
+  /** The packages folder: biblix.toml, imports, stubs, and EPUB copies (the setting; `Biblix` by default) */
+  booksDir(): string {
+    return this.plugin.settings.biblixBooks.trim().replace(/^\/+|\/+$/g, "") || "Biblix";
+  }
+
+  /**
+   * Installed packages in the packages folder (from before the library was its own folder) move to
+   * the library, when it has none
+   */
+  private async moveOldLibrary(): Promise<void> {
+    const adapter = this.plugin.app.vault.adapter;
+    const from = `${this.booksDir()}/packages`;
+    const to = `${this.libraryDir()}/packages`;
+    if (from === to || !(await adapter.exists(from)) || (await adapter.exists(to))) return;
+    await mkdirs(this.plugin, this.libraryDir());
+    await adapter.rename(from, to);
   }
 
   private cacheDir(): string | null {
@@ -99,28 +139,47 @@ export class BiblixBibles {
 
   private async read(): Promise<void> {
     const adapter = this.plugin.app.vault.adapter;
-    const base = (await adapter.exists(MANIFEST)) ? "" : this.libraryDir();
+    try {
+      await this.moveOldLibrary();
+    } catch (error) {
+      console.warn("Topos Bible: moving the installed packages into the library", error);
+    }
+    const base = (await adapter.exists(MANIFEST)) ? "" : this.booksDir();
     const at = (name: string) => (base ? `${base}/${name}` : name);
     const problems: string[] = [];
     const bibles: PackageBible[] = [];
+    const books: PackageBook[] = [];
     const installed: InstalledPackage[] = [];
     const changed: string[] = [];
     let defaultName: string | null = null;
+    let lock: string | null = null;
+    let missing = false;
     if (await adapter.exists(at(MANIFEST))) {
       await this.plugin.engine();
       const biblix = Biblix.new();
       try {
-        const lock = (await adapter.exists(at(LOCK))) ? await adapter.read(at(LOCK)) : null;
+        lock = (await adapter.exists(at(LOCK))) ? await adapter.read(at(LOCK)) : null;
         const project = biblix.parseProject(await adapter.read(at(MANIFEST)), lock);
         for (const name of project.unlocked()) problems.push(`${name}: not installed yet (run bx install)`);
+        // What each package biblix.toml asks for is, so a collection's packages count as the vault's
+        const kinds = new Map<string, PackageKind>();
         for (const entry of project.packages()) {
           const dir = this.dirOf(entry, base);
-          const listed: InstalledPackage = { id: entry.id, version: entry.version, dir, path: entry.location.tag === "Path", info: null, problem: null };
+          const listed: InstalledPackage = { id: entry.id, name: entry.name, version: entry.version, dependencyOf: entry.dependencyOf, dir, path: entry.location.tag === "Path", info: null, problem: null };
           installed.push(listed);
+          // Another package's own dependencies (a commentary's Bible) are its, not the vault's
+          const ours = entry.dependencyOf === null || kinds.get(entry.dependencyOf) === PackageKind.Collection;
           try {
+            if (!(await adapter.exists(`${dir}/${MANIFEST}`))) {
+              missing = true;
+              throw new Error(`not installed in ${dir} yet`);
+            }
             const opened = await this.open(biblix, entry, base, problems, changed);
             listed.info = opened.info;
-            if (opened.bible) bibles.push(opened.bible);
+            if (entry.dependencyOf === null) kinds.set(entry.name, opened.info.kind);
+            if (opened.bible && ours) bibles.push(opened.bible);
+            else opened.bible?.pkg.dispose();
+            if (opened.book && ours) books.push(opened.book);
           } catch (error) {
             listed.problem = message(error);
             problems.push(`${entry.id} ${entry.version}: ${listed.problem}`);
@@ -135,6 +194,7 @@ export class BiblixBibles {
     }
     for (const old of this.bibles) this.dispose(old);
     this.bibles = bibles;
+    this.books = books;
     this.defaultName = defaultName;
     this.problems = problems;
     this.installed = installed;
@@ -149,8 +209,20 @@ export class BiblixBibles {
     } catch (error) {
       problems.push(`book stubs: ${message(error)}`);
     }
+    try {
+      await this.syncCopies();
+    } catch (error) {
+      problems.push(`books: ${message(error)}`);
+    }
     if (problems.length > 0) console.warn("Topos Bible: biblix packages", problems);
     this.changed();
+    // A device the lock was synced to installs what it pins (once for each lock file)
+    if (missing && lock !== null && lock !== this.installedFrom) {
+      this.installedFrom = lock;
+      void this.plugin.bibleManager.installLocked().catch((error: unknown) => {
+        new Notice(`Topos Bible: couldn't install the vault's Bible packages: ${message(error)}`, 10000);
+      });
+    }
   }
 
   /** A locked package's folder, from the vault's root */
@@ -158,11 +230,16 @@ export class BiblixBibles {
     return entry.location.tag === "Library" ? `${this.libraryDir()}/${entry.location.dir}` : join(base, entry.location.dir);
   }
 
-  /** A locked package: what it is, and its Bible if it's one */
-  private async open(biblix: Biblix, entry: LockedEntry, base: string, problems: string[], changed: string[]): Promise<{ info: InstalledPackage["info"]; bible: PackageBible | null }> {
+  /** A locked package: what it is, and its Bible or its books */
+  private async open(
+    biblix: Biblix,
+    entry: LockedEntry,
+    base: string,
+    problems: string[],
+    changed: string[],
+  ): Promise<{ info: NonNullable<InstalledPackage["info"]>; bible: PackageBible | null; book: PackageBook | null }> {
     const adapter = this.plugin.app.vault.adapter;
     const dir = this.dirOf(entry, base);
-    if (!(await adapter.exists(`${dir}/${MANIFEST}`))) throw new Error(`not installed in ${dir} (run bx install)`);
     const files = await readTree(this.plugin, dir);
     const cacheDir = this.cacheDir();
     // The cache is per package (`<id>/<version>-<checksum>/`)
@@ -176,13 +253,14 @@ export class BiblixBibles {
     const info = pkg.info();
     const summary = { name: info.name, abbreviation: info.abbreviation, license: info.license ?? info.licenseFile ?? null, kind: info.kind };
     if (info.kind !== PackageKind.Bible) {
+      const files = pkg.epubFiles();
       pkg.dispose();
-      return { info: summary, bible: null };
+      return { info: summary, bible: null, book: files.length > 0 ? { dependency: entry.name, dir, files } : null };
     }
     // The vault's own names for it, when its biblix.toml gives them (a fork's)
     const name = entry.abbreviation ?? info.abbreviation;
     const aliases = entry.aliases ?? info.aliases;
-    return { info: summary, bible: { id: info.id, dependency: entry.name, name, aliases, pkg, books: new Map(), dir, stubs: new Map() } };
+    return { info: summary, bible: { id: info.id, dependency: entry.name, name, aliases, pkg, books: new Map(), dir, stubs: new Map() }, book: null };
   }
 
   /** Writes what a package's cache wrote into the plugin's folder */
@@ -231,7 +309,56 @@ export class BiblixBibles {
 
   /** The folder of a package's stubs */
   private stubDir(bible: PackageBible): string {
-    return `${this.libraryDir()}/${bible.dependency}`;
+    return `${this.booksDir()}/${bible.dependency}`;
+  }
+
+  /**
+   * Copies each book package's EPUBs into the packages folder (`Biblix/<package>/epub/book.epub`),
+   * where EPUB++ opens them and verse search reads them; a copy that differs from the package (an
+   * update, or an edit) is written again, so links and highlights keep their path. Copies of books
+   * the vault no longer has are removed: only files this wrote, never others
+   */
+  private async syncCopies(): Promise<void> {
+    const { vault } = this.plugin.app;
+    const adapter = vault.adapter;
+    const root = this.booksDir();
+    const record = this.plugin.manifest?.dir ? `${this.plugin.manifest.dir}/${COPIES}` : null;
+    const written = new Set<string>(record && (await adapter.exists(record)) ? (JSON.parse(await adapter.read(record)) as string[]) : []);
+    const books = this.books.filter((b) => !RESERVED.includes(b.dependency));
+    const wanted = new Set(books.flatMap((b) => b.files.map((f) => `${root}/${b.dependency}/${f}`)));
+    // Known before they're written, so the index takes them as they're created
+    const before = this.copies;
+    this.copies = wanted;
+    for (const book of books) {
+      for (const file of book.files) {
+        const path = `${root}/${book.dependency}/${file}`;
+        const bytes = await adapter.readBinary(`${book.dir}/${file}`);
+        const existing = vault.getFileByPath(path);
+        if (existing) {
+          if (existing.stat.size !== bytes.byteLength || !same(await vault.readBinary(existing), bytes)) await vault.modifyBinary(existing, bytes);
+        } else {
+          await this.folder(path.slice(0, path.lastIndexOf("/")));
+          await vault.createBinary(path, bytes);
+        }
+        written.add(path);
+      }
+    }
+    // A package listed but not installed here keeps its copies (they may have synced from another device)
+    const kept = this.installed.filter((p) => p.problem !== null).map((p) => `${root}/${p.name}/`);
+    for (const path of [...written]) {
+      if (wanted.has(path) || kept.some((dir) => path.startsWith(dir))) continue;
+      const file = vault.getFileByPath(path);
+      if (file) await vault.delete(file);
+      written.delete(path);
+    }
+    if (record) await adapter.write(record, JSON.stringify([...written].sort()));
+    // Books the index may have passed over before they were known as the vault's
+    if ([...wanted].some((path) => !before.has(path))) this.plugin.reindexSoon();
+  }
+
+  /** Whether a path is a book package's EPUB copy (searched for references whatever the settings say) */
+  isBookCopy(path: string): boolean {
+    return this.copies.has(path);
   }
 
   /**
@@ -241,7 +368,7 @@ export class BiblixBibles {
    */
   private async syncStubs(): Promise<void> {
     const { vault } = this.plugin.app;
-    const root = this.libraryDir();
+    const root = this.booksDir();
     const wanted = new Set<string>();
     for (const bible of this.bibles) {
       bible.stubs = new Map();
@@ -304,7 +431,7 @@ export class BiblixBibles {
   stubOf(path: string): string | null {
     for (const bible of this.bibles) {
       if (!path.startsWith(`${bible.dir}/`)) continue;
-      const stub = stubPath(this.libraryDir(), { package: bible.dependency, path: path.slice(bible.dir.length + 1) });
+      const stub = stubPath(this.booksDir(), { package: bible.dependency, path: path.slice(bible.dir.length + 1) });
       if ([...bible.stubs.values()].includes(stub)) return stub;
     }
     return null;
@@ -386,6 +513,15 @@ export async function mkdirs(plugin: ToposPlugin, dir: string): Promise<void> {
   if (!dir || (await adapter.exists(dir))) return;
   await mkdirs(plugin, dir.slice(0, Math.max(0, dir.lastIndexOf("/"))));
   await adapter.mkdir(dir);
+}
+
+/** Whether two files' bytes are the same */
+function same(a: ArrayBuffer, b: ArrayBuffer): boolean {
+  if (a.byteLength !== b.byteLength) return false;
+  const x = new Uint8Array(a);
+  const y = new Uint8Array(b);
+  for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return false;
+  return true;
 }
 
 /** The bytes as their own ArrayBuffer (Obsidian's writeBinary takes one) */

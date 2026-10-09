@@ -64,8 +64,9 @@ export class VaultIndexer {
 
   /** Whether a file is indexed, and as what */
   kind(file: TFile): Kind | null {
-    if (this.plugin.settings.searchEpubs && file.extension.toLowerCase() === "epub" && !this.plugin.isExcluded(file.path))
-      return "epub";
+    // A book package's EPUBs are searched whatever the setting says: they're the vault's library
+    const searched = this.plugin.settings.searchEpubs || this.plugin.packages.isBookCopy(file.path);
+    if (searched && file.extension.toLowerCase() === "epub" && !this.plugin.isExcluded(file.path)) return "epub";
     return this.plugin.isSearchable(file) ? "note" : null;
   }
 
@@ -247,9 +248,10 @@ export class VaultIndexer {
     if (files.length === 0) return;
     const done = await this.searchWithCli(files, current);
     if (!current()) return;
-    if (!Platform.isDesktopApp && !this.plugin.settings.searchEpubsOnMobile) return;
+    // On a phone, only a book package's few books unless it's allowed
+    const here = Platform.isDesktopApp || this.plugin.settings.searchEpubsOnMobile ? files : files.filter((f) => this.plugin.packages.isBookCopy(f.path));
     const { vault } = this.plugin.app;
-    for (const file of files) {
+    for (const file of here) {
       if (done.has(file.path)) continue;
       const { size, mtime } = file.stat;
       const result = await this.plugin.indexBook({ path: file.path, size, mtime, bytes: await vault.readBinary(file) });

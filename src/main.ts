@@ -191,9 +191,10 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
       this.bibles.start();
       void this.verseCounts.start();
       void this.packages.load();
-      // The vault's biblix.toml and biblix.lock, at its root or in the library's folder
+      this.applyBiblixHiding();
+      // The vault's biblix.toml and biblix.lock, at its root or in the packages folder
       const biblixFiles = (file: TAbstractFile) => {
-        const library = this.packages.libraryDir();
+        const library = this.packages.booksDir();
         const names = ["biblix.toml", "biblix.lock"];
         if (names.some((n) => file.path === n || file.path === `${library}/${n}`)) void this.packages.load();
       };
@@ -221,6 +222,7 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
   override onunload(): void {
     super.onunload();
     for (const doc of this.windowDocuments()) doc.body.style.removeProperty("--topos-reference-color");
+    this.hidingStyle?.remove();
     this.indexer.stop();
     this.epubs.stop();
     this.otherDocuments.stop();
@@ -229,6 +231,37 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
     this.translationsCache?.dispose();
     this.packages.unload();
     this.topos?.dispose();
+  }
+
+  private hidingStyle: HTMLStyleElement | null = null;
+
+  /**
+   * Hides the packages folder (`Biblix/`) when the setting says: from the file explorer (a style
+   * rule) and from Obsidian's search, quick switcher, and graph (an entry in its excluded files,
+   * which this takes out again when it's turned off or the folder changes). Verse search still
+   * reads its books
+   */
+  applyBiblixHiding(): void {
+    const dir = this.packages.booksDir();
+    const hide = this.settings.hideBiblixBooks;
+    this.hidingStyle?.remove();
+    this.hidingStyle = null;
+    if (hide) {
+      this.hidingStyle = document.head.createEl("style", { attr: { id: "topos-hide-biblix" } });
+      this.hidingStyle.textContent = `.nav-folder:has(> .nav-folder-title[data-path="${CSS.escape(dir)}"]) { display: none; }`;
+    }
+    const vault = this.app.vault as unknown as { getConfig?(key: string): unknown; setConfig?(key: string, value: unknown): void };
+    if (!vault.getConfig || !vault.setConfig) return;
+    const filters = Array.isArray(vault.getConfig("userIgnoreFilters")) ? (vault.getConfig("userIgnoreFilters") as string[]) : [];
+    const entry = hide ? `${dir}/` : undefined;
+    const old = this.settings.hiddenFilter;
+    let next = old && old !== entry ? filters.filter((f) => f !== old) : filters;
+    if (entry && !next.includes(entry)) next = [...next, entry];
+    if (next.length !== filters.length || next.some((f, i) => f !== filters[i])) vault.setConfig("userIgnoreFilters", next);
+    if (old !== entry) {
+      this.settings.hiddenFilter = entry;
+      void this.saveData(this.settings);
+    }
   }
 
   /** Settings saved by older versions, before file-plus-plus's are merged in */
@@ -257,6 +290,13 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
       this.settings.linkTemplate = templateFromTranslation(saved.translation);
     }
     delete (this.settings as { translation?: string }).translation;
+    // Before the library was hidden, one folder held the packages and the vault's biblix.toml: it's
+    // the packages folder now, and its installed packages move to the hidden library on load
+    if (typeof saved.biblixLibrary === "string" && saved.biblixBooks === undefined) {
+      this.settings.biblixBooks = saved.biblixLibrary || DEFAULT_SETTINGS.biblixBooks;
+      this.settings.biblixLibrary = DEFAULT_SETTINGS.biblixLibrary;
+      await this.saveData(this.settings);
+    }
     this.settings.queries = (this.settings.queries ?? []).filter((q) => q && typeof q.name === "string");
     // Saved searches from before 0.4.0 used -o for any overlap
     if ((this.settings.queryFormat ?? 1) < 2) {

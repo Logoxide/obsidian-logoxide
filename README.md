@@ -114,12 +114,20 @@ search, whether to search EPUBs (below), excluded folders, and the search engine
 Install a Bible under *Settings → Add a Bible*: **Search** finds translations by name,
 abbreviation, or language (eBible.org's and fetch.bible's, about 2,900, and any catalogs you add
 under *Catalogs*: a `catalog.toml`'s URL, or a file in the vault) and installs the one you pick; **Git URL** adds a [biblix](https://github.com/MasterTemple/biblix)
-package from its repository. Bibles go in the vault's `Biblix/` folder (*Biblix library*), with
-`Biblix/biblix.toml` and `biblix.lock` saying exactly which text the vault uses, so every device
-gets the same one; each is named by its abbreviation (`BSB`, `KJV`), and the trash button removes
-it.
+package from its repository. Packages are installed in a hidden folder, `.biblix/` (*Library
+folder*), which isn't synced: each device installs what `Biblix/biblix.lock` pins by itself (from
+the web; local repositories need `bx`). The vault's `Biblix/` folder (*Packages folder*) holds
+`biblix.toml` and `biblix.lock`, saying exactly which text the vault uses, and what you open:
+each Bible is named by its abbreviation (`BSB`, `KJV`), and the trash button removes it.
+*Hide the packages folder* leaves `Biblix/` out of the file explorer and Obsidian's search.
 
-Each book of an installed Bible opens through a small stub beside the library's packages
+Books are packages too (`kind = "book"`, an EPUB), and a collection brings in several (listed
+under it in the settings). Each book's EPUB is copied into the packages folder
+(`Biblix/the-dorean-principle/epub/the-dorean-principle.epub`), where EPUB++ opens it, and verse
+search reads it whether or not *Search EPUB files* is on, so its references show in the book and
+in search results.
+
+Each book of an installed Bible opens through a small stub in the packages folder
 (`Biblix/bsb/usx/JHN.bible`): links, highlights, and annotation files point at the stub, which
 names the package and the book but not its version, so they keep working when the Bible is
 updated, and annotation files sit beside it rather than among the package's files. *Toggle plain

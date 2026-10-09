@@ -83,7 +83,7 @@ class FakeSetting {
     containerEl.settings.push(this);
   }
   private control(kind: string, build: (c: any) => void) {
-    const control: any = { kind, inputEl: { addClass() {} } };
+    const control: any = { kind, inputEl: { addClass() {}, addEventListener() {} } };
     for (const method of ["setPlaceholder", "setValue", "addOptions", "addOption", "setLimits", "setDynamicTooltip", "setButtonText", "setIcon", "setTooltip"]) {
       control[method] = (value: any) => {
         if (method === "setValue") control.value = value;

@@ -6,6 +6,7 @@ dist/
 test-vault/Bibles/
 test-vault/Books/
 test-vault/Biblix/
+test-vault/.biblix/
 test-vault/.obsidian/*
 !test-vault/.obsidian/plugins/
 test-vault/.obsidian/plugins/*

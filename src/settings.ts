@@ -1,5 +1,5 @@
 import { App, Notice, type DropdownComponent, Platform, Setting } from "obsidian";
-import { BookStyle } from "biblix";
+import { BookStyle, PackageKind } from "biblix";
 import { DEFAULT_FORMAT, written, type FormatSettings } from "./core/format.ts";
 import { parseQuery } from "./core/query.ts";
 import type { BookCompletion } from "./core/completions.ts";
@@ -7,6 +7,7 @@ import { FILTERS, linkUrl, PLACEHOLDERS, SITES, templateError } from "./core/lin
 import { bookStyle, type StyleName } from "./core/settings.ts";
 import type ToposPlugin from "./main.ts";
 import { AddBibleModal, GitUrlModal } from "./bible/add.ts";
+import { mkdirs } from "./bible/packages.ts";
 
 export { bookStyle, DEFAULT_SETTINGS, type StyleName, type ToposSettings } from "./core/settings.ts";
 
@@ -16,7 +17,6 @@ export { bookStyle, DEFAULT_SETTINGS, type StyleName, type ToposSettings } from 
  */
 export class ToposSettingsPanel {
   private readonly app: App;
-  private libraryTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(
     private readonly plugin: ToposPlugin,
@@ -245,15 +245,62 @@ export class ToposSettingsPanel {
    * sidebar, the dialogs, and "Normalize references" all use it
    */
   /** The references' color: the accent color until one is picked */
+  /** Moves the packages folder (links to its files are updated) and reads the packages again */
+  private async moveBooks(value: string): Promise<void> {
+    const packages = this.plugin.packages;
+    const from = packages.booksDir();
+    this.plugin.settings.biblixBooks = value;
+    const to = packages.booksDir();
+    if (from !== to) {
+      const folder = this.app.vault.getFolderByPath(from);
+      try {
+        if (folder && !this.app.vault.getAbstractFileByPath(to)) await this.app.fileManager.renameFile(folder, to);
+      } catch (error) {
+        new Notice(`Couldn't move ${from} to ${to}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    await this.plugin.saveData(this.plugin.settings);
+    this.plugin.applyBiblixHiding();
+    await packages.load();
+    this.display();
+  }
+
+  /** Moves the library (what's installed) and reads the packages again */
+  private async moveLibrary(value: string): Promise<void> {
+    const packages = this.plugin.packages;
+    const adapter = this.app.vault.adapter;
+    const from = packages.libraryDir();
+    this.plugin.settings.biblixLibrary = value;
+    const to = packages.libraryDir();
+    if (from !== to && (await adapter.exists(from)) && !(await adapter.exists(to))) {
+      try {
+        await mkdirs(this.plugin, to.slice(0, Math.max(0, to.lastIndexOf("/"))));
+        await adapter.rename(from, to);
+      } catch (error) {
+        new Notice(`Couldn't move ${from} to ${to}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    await this.plugin.saveData(this.plugin.settings);
+    await packages.load();
+    this.display();
+  }
+
   /** The library's packages: each one (with a button to remove it), and adding more */
   private packageSettings(containerEl: HTMLElement): void {
     const packages = this.plugin.packages;
     for (const pkg of packages.installed) {
       const info = pkg.info;
-      new Setting(containerEl)
+      const kind = info && info.kind !== PackageKind.Bible ? kindName(info.kind) : null;
+      const setting = new Setting(containerEl)
         .setName(info ? `${info.abbreviation} ${pkg.version}` : `${pkg.id} ${pkg.version}`)
-        .setDesc(pkg.problem ?? [info?.name, info?.license ?? "no license given", pkg.dir].filter(Boolean).join(" · "))
-        .addExtraButton((b) =>
+        .setDesc(pkg.problem ?? [kind, info?.name, info?.license ?? "no license given", pkg.dir].filter(Boolean).join(" · "));
+      // A collection's packages are listed under it, and go with it
+      if (pkg.dependencyOf !== null) {
+        setting.settingEl.addClass("topos-package-member");
+        setting.setDesc(`In ${pkg.dependencyOf} · ${setting.descEl.getText()}`);
+        continue;
+      }
+      setting.addExtraButton((b) =>
           b
             .setIcon("trash")
             .setTooltip(pkg.path && !pkg.dir.split("/").includes("imports") ? "Remove from biblix.toml (its folder stays)" : "Remove")
@@ -380,21 +427,33 @@ export class ToposSettingsPanel {
         });
       });
     new Setting(containerEl)
-      .setName("Biblix library")
+      .setName("Packages folder")
       .setDesc(
-        "The folder Bible packages are installed in (packages/<id>/<version>/), with this vault's biblix.toml and biblix.lock unless they're at its root. Packages there are Bibles like a folder of USX files, named by their abbreviation. Each book opens through a stub beside them (<package>/usx/JHN.bible), which links and annotations point at, so updates don't move them.",
+        "Bible packages show here: each Bible book as a stub (<package>/usx/JHN.bible), which opens the book and which links and annotations point at, so updates don't move them, and each book package's EPUBs. This vault's biblix.toml and biblix.lock are here unless they're at its root. Renaming it moves the folder and updates links to it.",
       )
-      .addText((t) =>
-        t
-          .setPlaceholder("Biblix")
-          .setValue(settings.biblixLibrary)
-          .onChange((value) => {
-            settings.biblixLibrary = value;
-            void save();
-            // Read the packages again once typing stops
-            clearTimeout(this.libraryTimer);
-            this.libraryTimer = setTimeout(() => void this.plugin.packages.load(), 800);
-          }),
+      .addText((t) => {
+        t.setPlaceholder("Biblix").setValue(settings.biblixBooks);
+        // Moved when the field is left (not as each letter is typed)
+        t.inputEl.addEventListener("change", () => void this.moveBooks(t.getValue()));
+      });
+    new Setting(containerEl)
+      .setName("Library folder")
+      .setDesc(
+        "Where packages are installed (packages/<id>/<version>/). A folder whose name starts with a dot is hidden and isn't synced: each device installs what biblix.lock pins, by itself. Renaming it moves what's installed.",
+      )
+      .addText((t) => {
+        t.setPlaceholder(".biblix").setValue(settings.biblixLibrary);
+        t.inputEl.addEventListener("change", () => void this.moveLibrary(t.getValue()));
+      });
+    new Setting(containerEl)
+      .setName("Hide the packages folder")
+      .setDesc("Leave it out of the file explorer, and out of Obsidian's search, quick switcher, and graph (as an excluded file). Bibles and books still open from references, and verse search still reads them.")
+      .addToggle((t) =>
+        t.setValue(settings.hideBiblixBooks).onChange(async (value) => {
+          settings.hideBiblixBooks = value;
+          await save();
+          this.plugin.applyBiblixHiding();
+        }),
       );
     this.packageSettings(containerEl);
     new Setting(containerEl)
@@ -743,4 +802,10 @@ function accentColor(el: HTMLElement): string {
   } catch {
     return "#000000";
   }
+}
+
+/** What a package kind is called, for the settings (`book`, `collection`) */
+function kindName(kind: PackageKind): string {
+  const name = Object.entries(PackageKind).find(([, value]) => value === kind)?.[0] ?? "";
+  return name.replace(/(?<!^)([A-Z])/g, " $1").toLowerCase();
 }

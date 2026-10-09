@@ -58,10 +58,17 @@ export interface ToposSettings {
   /** The Bible references open in and preview from: a folder of USX files ("" for the first) */
   bible: string;
   /**
-   * The biblix library's folder in the vault: installed packages (`packages/<id>/<version>/`), and
-   * the vault's `biblix.toml` and `biblix.lock` unless they're at its root
+   * The biblix library's folder: installed packages (`packages/<id>/<version>/`). A dot-folder by
+   * default, so it isn't synced or shown: each device installs what `biblix.lock` pins
    */
   biblixLibrary: string;
+  /**
+   * The vault's Bible packages folder: its `biblix.toml` and `biblix.lock` (unless they're at the
+   * vault's root), imports, each Bible book's stub, and each book package's EPUBs
+   */
+  biblixBooks: string;
+  /** Hide the packages folder from the file explorer and from Obsidian's search */
+  hideBiblixBooks: boolean;
   /** Translations' names and aliases, one per line: `KJV: AV, King James` (see core/translations.ts) */
   bibleAliases: string;
   /** Bibles embeds also show, by name, separated by commas: `KJV, NET` */
@@ -87,6 +94,8 @@ export interface ToposSettings {
   markInDocuments: boolean;
   /** Once file-plus-plus's default link label has become `{{reference}}` */
   bibleAliasDefault?: boolean;
+  /** The entry this plugin added to Obsidian's excluded files to hide the packages folder (`Biblix/`), to take out again */
+  hiddenFilter?: string;
 }
 
 export const DEFAULT_SETTINGS: ToposSettings = {
@@ -113,7 +122,9 @@ export const DEFAULT_SETTINGS: ToposSettings = {
   cliPath: "",
   cliCache: true,
   bible: "",
-  biblixLibrary: "Biblix",
+  biblixLibrary: ".biblix",
+  biblixBooks: "Biblix",
+  hideBiblixBooks: false,
   bibleAliases: "",
   compareBibles: "",
   bibleNotes: false,
