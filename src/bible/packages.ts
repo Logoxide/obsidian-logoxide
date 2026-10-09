@@ -1,7 +1,8 @@
 import { Notice, TFile, TFolder } from "obsidian";
 import { Biblix, PackageKind, type BiblixPackage, type LockedEntry, type PackageFile, type Passage, type ToposBook, type ToposTranslations } from "biblix";
-import { RESERVED, STUB_EXTENSION, parseStub, staleStubs, stubPath, stubText } from "../core/stubs.ts";
+import { RESERVED, STUB_EXTENSION, parseStub, staleStubs, stubNames, stubPath, stubText } from "../core/stubs.ts";
 import type ToposPlugin from "../main.ts";
+import type { BookEdition } from "./reader.ts";
 
 /** The vault's manifest: at its root, else in the library's folder */
 export const MANIFEST = "biblix.toml";
@@ -25,6 +26,12 @@ interface PackageBible {
   dir: string;
   /** Each book's stub (see `core/stubs.ts`), by book id */
   stubs: Map<number, string>;
+  /** Each book's stub, by its file's path in the package */
+  stubFiles: Map<string, string>;
+  /** The version installed */
+  version: string;
+  /** Each book's verse hashes (8 hex digits) by `chapter:verse`, as read */
+  hashes: Map<number, Map<string, string>>;
 }
 
 /** A package the vault's lock file names, for the settings */
@@ -49,8 +56,16 @@ interface PackageBook {
   dependency: string;
   /** The package's folder, from the vault's root */
   dir: string;
-  /** Its EPUBs, relative to its folder */
-  files: string[];
+  /** Its EPUBs, relative to its folder, and their titles */
+  files: { path: string; title: string | null }[];
+}
+
+/** A copy of a book package's file in the packages folder, as recorded */
+interface Copy {
+  path: string;
+  /** The package (as biblix.toml calls it) and its file, when recorded (older records have neither) */
+  package?: string;
+  file?: string;
 }
 
 /** Where the copies of book packages' EPUBs are recorded (in the plugin's folder), so only those are ever removed */
@@ -253,14 +268,15 @@ export class BiblixBibles {
     const info = pkg.info();
     const summary = { name: info.name, abbreviation: info.abbreviation, license: info.license ?? info.licenseFile ?? null, kind: info.kind };
     if (info.kind !== PackageKind.Bible) {
-      const files = pkg.epubFiles();
+      const titles = pkg.titles();
+      const files = pkg.epubFiles().map((path) => ({ path, title: titles.find((t) => t.path === path)?.title ?? null }));
       pkg.dispose();
       return { info: summary, bible: null, book: files.length > 0 ? { dependency: entry.name, dir, files } : null };
     }
     // The vault's own names for it, when its biblix.toml gives them (a fork's)
     const name = entry.abbreviation ?? info.abbreviation;
     const aliases = entry.aliases ?? info.aliases;
-    return { info: summary, bible: { id: info.id, dependency: entry.name, name, aliases, pkg, books: new Map(), dir, stubs: new Map() }, book: null };
+    return { info: summary, bible: { id: info.id, dependency: entry.name, name, aliases, pkg, books: new Map(), dir, stubs: new Map(), stubFiles: new Map(), version: entry.version, hashes: new Map() }, book: null };
   }
 
   /** Writes what a package's cache wrote into the plugin's folder */
@@ -323,37 +339,74 @@ export class BiblixBibles {
     const adapter = vault.adapter;
     const root = this.booksDir();
     const record = this.plugin.manifest?.dir ? `${this.plugin.manifest.dir}/${COPIES}` : null;
-    const written = new Set<string>(record && (await adapter.exists(record)) ? (JSON.parse(await adapter.read(record)) as string[]) : []);
+    // Each copy written, and the package file it's of (older records have paths alone)
+    const saved = record && (await adapter.exists(record)) ? (JSON.parse(await adapter.read(record)) as (string | Copy)[]) : [];
+    const written = new Map<string, Copy>(saved.map((c) => (typeof c === "string" ? [c, { path: c }] : [c.path, c])));
     const books = this.books.filter((b) => !RESERVED.includes(b.dependency));
-    const wanted = new Set(books.flatMap((b) => b.files.map((f) => `${root}/${b.dependency}/${f}`)));
+    // Each copy's path: its title in its package's folder (`Biblix/tdp/The Dorean Principle.epub`)
+    const copies = books.flatMap((book) => {
+      const names = stubNames(book.files);
+      return book.files.map((file) => {
+        const extension = file.path.slice(file.path.lastIndexOf(".") + 1);
+        const stub = { package: book.dependency, path: file.path };
+        return { book, file, path: names.get(file.path) ? stubPath(root, stub, names.get(file.path) ?? null, extension) : `${root}/${book.dependency}/${file.path}`, old: `${root}/${book.dependency}/${file.path}` };
+      });
+    });
+    const wanted = new Set(copies.map((c) => c.path));
     // Known before they're written, so the index takes them as they're created
     const before = this.copies;
     this.copies = wanted;
-    for (const book of books) {
-      for (const file of book.files) {
-        const path = `${root}/${book.dependency}/${file}`;
-        const bytes = await adapter.readBinary(`${book.dir}/${file}`);
-        const existing = vault.getFileByPath(path);
-        if (existing) {
-          if (existing.stat.size !== bytes.byteLength || !same(await vault.readBinary(existing), bytes)) await vault.modifyBinary(existing, bytes);
-        } else {
-          await this.folder(path.slice(0, path.lastIndexOf("/")));
-          await vault.createBinary(path, bytes);
-        }
-        written.add(path);
+    for (const { book, file, path, old } of copies) {
+      const bytes = await adapter.readBinary(`${book.dir}/${file.path}`);
+      let existing = vault.getFileByPath(path);
+      // The same file copied under another name before (its path in the package, or an older
+      // title): renamed, so links and highlights follow it
+      const earlier = [...written.values()].find(
+        (c) => c.path !== path && ((c.package === book.dependency && c.file === file.path) || (c.package === undefined && c.path === old)),
+      );
+      const moving = !existing && earlier ? vault.getFileByPath(earlier.path) : null;
+      if (moving && earlier) {
+        await this.folder(path.slice(0, path.lastIndexOf("/")));
+        await this.rename(moving, path);
+        written.delete(earlier.path);
+        existing = vault.getFileByPath(path);
       }
+      if (existing) {
+        if (existing.stat.size !== bytes.byteLength || !same(await vault.readBinary(existing), bytes)) await vault.modifyBinary(existing, bytes);
+      } else {
+        await this.folder(path.slice(0, path.lastIndexOf("/")));
+        await vault.createBinary(path, bytes);
+      }
+      written.set(path, { path, package: book.dependency, file: file.path });
     }
     // A package listed but not installed here keeps its copies (they may have synced from another device)
     const kept = this.installed.filter((p) => p.problem !== null).map((p) => `${root}/${p.name}/`);
-    for (const path of [...written]) {
+    for (const path of [...written.keys()]) {
       if (wanted.has(path) || kept.some((dir) => path.startsWith(dir))) continue;
       const file = vault.getFileByPath(path);
       if (file) await vault.delete(file);
       written.delete(path);
     }
-    if (record) await adapter.write(record, JSON.stringify([...written].sort()));
+    if (record) await adapter.write(record, JSON.stringify([...written.values()].sort((a, b) => a.path.localeCompare(b.path))));
+    await this.removeEmptyFolders([...new Set(copies.map((c) => `${root}/${c.book.dependency}`))]);
     // Books the index may have passed over before they were known as the vault's
     if ([...wanted].some((path) => !before.has(path))) this.plugin.reindexSoon();
+  }
+
+  /** Removes the empty folders inside these (left by stubs and copies that moved); never a folder with anything in it */
+  private async removeEmptyFolders(dirs: string[]): Promise<void> {
+    const { vault } = this.plugin.app;
+    const prune = async (folder: TFolder): Promise<void> => {
+      for (const child of [...folder.children]) if (child instanceof TFolder) await prune(child);
+      // Only a folder with nothing in it on disk (no hidden files either)
+      const listed = folder.children.length === 0 ? await vault.adapter.list(folder.path) : null;
+      if (listed && listed.files.length === 0 && listed.folders.length === 0) await vault.adapter.rmdir(folder.path, true);
+    };
+    for (const dir of dirs) {
+      const folder = vault.getFolderByPath(dir);
+      if (!folder) continue;
+      for (const child of [...folder.children]) if (child instanceof TFolder) await prune(child);
+    }
   }
 
   /** Whether a path is a book package's EPUB copy (searched for references whatever the settings say) */
@@ -369,29 +422,7 @@ export class BiblixBibles {
   private async syncStubs(): Promise<void> {
     const { vault } = this.plugin.app;
     const root = this.booksDir();
-    const wanted = new Set<string>();
-    for (const bible of this.bibles) {
-      bible.stubs = new Map();
-      if (RESERVED.includes(bible.dependency)) {
-        this.problems.push(`${bible.dependency}: a package named like the library's own folders gets no book stubs`);
-        continue;
-      }
-      for (const file of bible.pkg.bookFiles()) {
-        const stub = { package: bible.dependency, path: file.path };
-        const path = stubPath(root, stub);
-        wanted.add(path);
-        bible.stubs.set(file.bookId, path);
-        const text = stubText(stub);
-        const existing = vault.getFileByPath(path);
-        if (existing) {
-          if ((await vault.read(existing)) !== text) await vault.modify(existing, text);
-        } else {
-          await this.folder(path.slice(0, path.lastIndexOf("/")));
-          await vault.create(path, text);
-        }
-      }
-    }
-    // Stubs of packages (or books) the vault no longer has
+    // The stubs there now, by what they name (to rename one whose name changed, not make another)
     const library = vault.getFolderByPath(root);
     const existing: TFile[] = [];
     const walk = (folder: TFolder) => {
@@ -401,10 +432,86 @@ export class BiblixBibles {
       }
     };
     if (library) walk(library);
-    const stale = new Set(staleStubs(existing.map((f) => f.path), wanted));
-    for (const file of existing.filter((f) => stale.has(f.path))) {
+    const named = new Map<string, TFile>();
+    for (const file of existing) {
+      const stub = parseStub(await vault.cachedRead(file));
+      if (stub) named.set(`${stub.package}\n${stub.path}`, file);
+    }
+    const wanted = new Set<string>();
+    for (const bible of this.bibles) {
+      bible.stubs = new Map();
+      bible.stubFiles = new Map();
+      if (RESERVED.includes(bible.dependency)) {
+        this.problems.push(`${bible.dependency}: a package named like the library's own folders gets no book stubs`);
+        continue;
+      }
+      const files = bible.pkg.bookFiles();
+      const names = stubNames(files.map((f) => ({ path: f.path, title: f.title ?? null })));
+      for (const file of files) {
+        const stub = { package: bible.dependency, path: file.path };
+        const path = stubPath(root, stub, names.get(file.path) ?? null);
+        wanted.add(path);
+        bible.stubs.set(file.bookId, path);
+        bible.stubFiles.set(file.path, path);
+        const text = stubText(stub);
+        // Named otherwise before (its file's path, or an older title): renamed, so links follow
+        const before = named.get(`${stub.package}\n${stub.path}`);
+        if (before && before.path !== path && !vault.getAbstractFileByPath(path)) {
+          await this.folder(path.slice(0, path.lastIndexOf("/")));
+          await this.rename(before, path);
+        }
+        const current = vault.getFileByPath(path);
+        if (current) {
+          if ((await vault.read(current)) !== text) await vault.modify(current, text);
+        } else {
+          await this.folder(path.slice(0, path.lastIndexOf("/")));
+          await vault.create(path, text);
+        }
+      }
+    }
+    // Stubs of packages (or books) the vault no longer has
+    const now: TFile[] = [];
+    if (library) {
+      const again = (folder: TFolder) => {
+        for (const child of folder.children) {
+          if (child instanceof TFolder && !(folder === library && RESERVED.includes(child.name))) again(child);
+          else if (child instanceof TFile && child.extension === STUB_EXTENSION) now.push(child);
+        }
+      };
+      again(library);
+    }
+    const stale = new Set(staleStubs(now.map((f) => f.path), wanted));
+    for (const file of now.filter((f) => stale.has(f.path))) {
       // Only what is a stub (a file named .bible that isn't one stays)
       if (parseStub(await vault.read(file))) await vault.delete(file);
+    }
+    await this.removeEmptyFolders(this.bibles.map((b) => `${root}/${b.dependency}`));
+  }
+
+  /**
+   * Moves a stub or copy, updating every link to it (and the annotation file that names it):
+   * these are the plugin's moves, so the vault's "update links" setting isn't asked about each
+   */
+  private async rename(file: TFile, path: string): Promise<void> {
+    const vault = this.plugin.app.vault as unknown as { getConfig?(key: string): unknown; setConfig?(key: string, value: unknown): void };
+    const before = vault.getConfig?.("alwaysUpdateLinks");
+    if (before !== true) vault.setConfig?.("alwaysUpdateLinks", true);
+    const { metadataCache, vault: files } = this.plugin.app;
+    const to = path.slice(0, path.lastIndexOf("/"));
+    // Its annotation files (notes beside it whose properties link to it), found before it moves
+    const beside = file.parent && file.parent.path !== to ? file.parent.children : [];
+    const notes = beside.filter((note): note is TFile => {
+      if (!(note instanceof TFile) || note.extension !== "md") return false;
+      const links = metadataCache.getFileCache(note)?.frontmatterLinks ?? [];
+      return links.some((l) => metadataCache.getFirstLinkpathDest(l.link.split("#")[0] ?? "", note.path) === file);
+    });
+    try {
+      await this.plugin.app.fileManager.renameFile(file, path);
+      for (const note of notes) {
+        if (!files.getAbstractFileByPath(`${to}/${note.name}`)) await this.plugin.app.fileManager.renameFile(note, `${to}/${note.name}`);
+      }
+    } finally {
+      if (before !== true) vault.setConfig?.("alwaysUpdateLinks", before ?? false);
     }
   }
 
@@ -427,12 +534,44 @@ export class BiblixBibles {
     return named && bible ? { path: `${bible.dir}/${named.path}`, bible: bible.name } : null;
   }
 
+  /**
+   * A stub's book as this version has it: the version, and its verses by the hash of their words,
+   * so links made in it record them and find their verses again after an update
+   */
+  async edition(stub: TFile, bookId: number): Promise<BookEdition | null> {
+    await this.loading;
+    const named = parseStub(await this.plugin.app.vault.cachedRead(stub));
+    const bible = named && this.bibles.find((b) => b.dependency === named.package);
+    if (!bible) return null;
+    let hashes = bible.hashes.get(bookId);
+    if (!hashes) {
+      try {
+        hashes = new Map(bible.pkg.verseHashes(bookId).map((v) => [`${v.chapter}:${v.verse}`, v.hash.slice(0, 8)]));
+      } catch {
+        return null;
+      }
+      bible.hashes.set(bookId, hashes);
+      await this.saveCache(bible.pkg);
+    }
+    const byHash = new Map([...hashes].map(([at, hash]) => [hash, at]));
+    return {
+      version: bible.version,
+      hashOf: (chapter, verse) => hashes.get(`${chapter}:${verse}`),
+      find: (hash) => {
+        const at = byHash.get(hash.slice(0, 8));
+        const [chapter, verse] = at?.split(":").map(Number) ?? [];
+        return chapter && verse ? { chapter, verse } : undefined;
+      },
+      said: (message) => new Notice(message, 8000),
+    };
+  }
+
   /** The stub of a package's book file (its path from the vault's root), if it has one */
   stubOf(path: string): string | null {
     for (const bible of this.bibles) {
       if (!path.startsWith(`${bible.dir}/`)) continue;
-      const stub = stubPath(this.booksDir(), { package: bible.dependency, path: path.slice(bible.dir.length + 1) });
-      if ([...bible.stubs.values()].includes(stub)) return stub;
+      const stub = bible.stubFiles.get(path.slice(bible.dir.length + 1));
+      if (stub) return stub;
     }
     return null;
   }

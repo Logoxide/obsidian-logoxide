@@ -115,5 +115,7 @@ async function loadBook(plugin: ToposPlugin, app: App, file: TFile): Promise<Bib
   const info = topos.books().find((b) => b.id === bookId);
   // A package's books are in `usx/`: its name is the package's abbreviation
   const bible = stubBible ?? plugin.bibles.ofFile(file.path)?.name ?? file.parent?.name ?? "";
-  return { book, bookId, name: info?.name ?? file.basename, bible };
+  // A package's book: its version and verse hashes, which links record and follow
+  const edition = stubBible === null ? null : await plugin.packages.edition(file, bookId);
+  return { book, bookId, name: info?.name ?? file.basename, bible, ...(edition ? { edition } : {}) };
 }

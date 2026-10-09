@@ -1,6 +1,6 @@
 import { DocumentReader, PREFIX, splitTextDirective, textFragmentScheme, withTextDirective, type LocatorScheme, type ParsedLocator, type ReaderOptions, type TocItem } from "file-plus-plus/core";
 import type { BookTextOptions, ToposBook } from "biblix";
-import { END, formatVerseLocator, parseVerseLocator, partSegments, type VersePart } from "../core/verse-locator.ts";
+import { END, formatVerseLocator, parseVerseLocator, partSegments, splitEdition, withEdition, type VersePart } from "../core/verse-locator.ts";
 
 /** A Bible book opened from a USX file */
 export interface BibleBook {
@@ -10,17 +10,33 @@ export interface BibleBook {
   name: string;
   /** The translation (the folder's name): `BSB` */
   bible: string;
+  /** For a package's Bible: its version and verse hashes, so links record them and find their verses again */
+  edition?: BookEdition;
+}
+
+/** A package Bible's version, and its verses by the hash of their words */
+export interface BookEdition {
+  version: string;
+  /** A verse's hash (8 hex digits) */
+  hashOf(chapter: number, verse: number): string | undefined;
+  /** Where words with this hash are now */
+  find(hash: string): { chapter: number; verse: number } | undefined;
+  /** Says a link's verse moved, or its words changed */
+  said(message: string): void;
 }
 
 /** `v=3:16-18`: verses, chapters, and parts joined by `;` (see verse-locator.ts) */
 export const verseScheme: LocatorScheme = {
   id: "verse",
   match(s) {
-    const m = /^v=[^&]*/.exec(s);
+    // The verses, then the edition the link was made with (`&ver=…&vh=…`), then the exact words
+    const m = /^v=[^&]*(?:&(?:ver|vh)=[^&]*)*/.exec(s);
     if (!m) return null;
     const parts = parseVerseLocator(m[0]);
     const { text } = splitTextDirective(m[0]);
-    return parts ? { locator: withTextDirective(formatVerseLocator(parts), text), rest: s.slice(m[0].length) } : null;
+    const { edition } = splitEdition(m[0]);
+    const base = formatVerseLocator(parts ?? []);
+    return parts ? { locator: withTextDirective(edition ? withEdition(base, edition) : base, text), rest: s.slice(m[0].length) } : null;
   },
   isRange: () => true,
 };
@@ -189,7 +205,7 @@ ${USX_CSS}
 
   protected resolveLocator(loc: ParsedLocator): Range | null {
     if (loc.scheme !== verseScheme.id || !loc.locator) return null;
-    const parts = parseVerseLocator(loc.locator);
+    const parts = this.followed(loc.locator, parseVerseLocator(loc.locator));
     if (!parts) return null;
     // The exact words of one part: searched within its verses (the whole verses when they aren't there)
     const { text } = splitTextDirective(loc.locator);
@@ -205,6 +221,32 @@ ${USX_CSS}
     range.setStart(first.startContainer, first.startOffset);
     range.setEnd(last.endContainer, last.endOffset);
     return range;
+  }
+
+  /**
+   * A link's verses where they are in this version: when the link was made with another version
+   * whose words at its first verse aren't these, the words are looked for (renumbered: the link
+   * goes there, keeping its length) and the reader is told
+   */
+  private followed(locator: string, parts: VersePart[] | null): VersePart[] | null {
+    const { edition: made } = splitEdition(locator);
+    const now = this.bible.edition;
+    const first = parts?.[0];
+    if (!parts || !first || !made?.hash || !now || first.verse === 0) return parts;
+    if (now.hashOf(first.chapter, first.verse) === made.hash) return parts;
+    const where = `${this.bible.name} ${first.chapter}:${first.verse}`;
+    const found = now.find(made.hash);
+    if (!found) {
+      now.said(`The words of ${where} changed since this link was made (${this.bible.bible} ${made.version}, now ${now.version})`);
+      return parts;
+    }
+    now.said(`${where} (${this.bible.bible} ${made.version}) is ${found.chapter}:${found.verse} in ${now.version}`);
+    const moved = { ...first, chapter: found.chapter, verse: found.verse };
+    if (first.endChapter === first.chapter) {
+      moved.endChapter = found.chapter;
+      moved.endVerse = first.endVerse === END ? END : first.endVerse - first.verse + found.verse;
+    }
+    return [moved, ...parts.slice(1)];
   }
 
   /** From the first verse of a part to the next verse after it (or the end of its chapter) */
@@ -240,7 +282,11 @@ ${USX_CSS}
     const a = this.markers[units.first]!;
     const b = this.markers[units.last]!;
     const part = { chapter: a.chapter, verse: a.verse, endChapter: b.chapter, endVerse: range.collapsed ? a.verse : b.last };
-    return withTextDirective(formatVerseLocator([part]), units.text);
+    // A package's Bible: the version, and the first verse's words, so the link can find them again
+    const edition = this.bible.edition;
+    const hash = edition?.hashOf(a.chapter, a.verse);
+    const base = formatVerseLocator([part]);
+    return withTextDirective(edition ? withEdition(base, { version: edition.version, hash: hash ?? null }) : base, units.text);
   }
 
   /** Verse markers are the units of locators, so selections of part of a verse keep their words */

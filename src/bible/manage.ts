@@ -87,6 +87,14 @@ export class BibleManager {
     return text;
   }
 
+  /** Downloads every catalog again when next searched (new releases show without waiting a day) */
+  async refreshCatalogs(): Promise<void> {
+    const dir = this.plugin.manifest?.dir;
+    if (dir && (await this.adapter.exists(`${dir}/catalogs`))) await this.adapter.rmdir(`${dir}/catalogs`, true);
+    this.catalog?.dispose();
+    this.catalog = null;
+  }
+
   /** The catalogs searched, in order, and whether each is one of the defaults (eBible.org's, fetch.bible's) */
   async catalogList(): Promise<{ location: string; isDefault: boolean }[]> {
     await this.plugin.engine();

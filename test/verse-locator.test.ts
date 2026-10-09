@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { BookStyle, Topos } from "biblix";
-import { END, formatVerseLocator, parseVerseLocator, partSegments, passageParts } from "../src/core/verse-locator.ts";
+import { END, formatVerseLocator, parseVerseLocator, partSegments, passageParts, splitEdition, withEdition } from "../src/core/verse-locator.ts";
 
 test("verse locators round-trip", () => {
   for (const s of ["v=3:16", "v=3:16-18", "v=3:16-4:2", "v=3", "v=3-4", "v=3:16;4:1-5;5"]) {
@@ -26,4 +26,15 @@ test("passages and locators", () => {
   // Back to segments that topos formats like the original
   const passage = topos.parse("John 3:16-18; 4", BookStyle.Name)!;
   assert.deepEqual(partSegments(passageParts(passage)), passage.segments);
+});
+
+test("a link to a package's Bible keeps the edition it was made with", () => {
+  const made = withEdition("v=3:16", { version: "1.0.2", hash: "9f86d081" });
+  assert.equal(made, "v=3:16&ver=1.0.2&vh=9f86d081");
+  // Before the exact words
+  assert.equal(withEdition("v=3:16:~:text=so%20loved", { version: "2.0.0", hash: null }), "v=3:16&ver=2.0.0:~:text=so%20loved");
+  assert.deepEqual(splitEdition("v=3:16&ver=1.0.2&vh=9F86D081:~:text=x"), { locator: "v=3:16:~:text=x", edition: { version: "1.0.2", hash: "9f86d081" } });
+  assert.deepEqual(splitEdition("v=3:16"), { locator: "v=3:16", edition: null });
+  // The verses read the same with or without it
+  assert.deepEqual(parseVerseLocator("v=3:16-18&ver=1.0.2&vh=9f86d081:~:text=so"), parseVerseLocator("v=3:16-18"));
 });

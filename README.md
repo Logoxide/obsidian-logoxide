@@ -131,10 +131,15 @@ under it in the settings). Each book's EPUB is copied into the packages folder
 search reads it whether or not *Search EPUB files* is on, so its references show in the book and
 in search results.
 
-Each book of an installed Bible opens through a small stub in the packages folder
-(`Biblix/bsb/usx/JHN.bible`): links, highlights, and annotation files point at the stub, which
+Each book of an installed Bible opens through a small stub in the packages folder, named by the
+book's title (`Biblix/bsb/John.bible`; a book's EPUB likewise, `Biblix/the-dorean-principle/The
+Dorean Principle.epub`). Stubs and copies named the older way are renamed, with links and
+annotation files following. Links, highlights, and annotation files point at the stub, which
 names the package and the book but not its version, so they keep working when the Bible is
-updated, and annotation files sit beside it rather than among the package's files. *Toggle plain
+updated, and annotation files sit beside it rather than among the package's files. A link to a
+passage of a package's Bible remembers the version it was made with and its verse's words
+(`#v=3:16&ver=1.0.2&vh=…`): after an update that renumbers that verse, the link opens where the
+words are now and says so, and if the words changed it says that. *Toggle plain
 text* on a stub shows the book's file, read-only. If a package's own files are edited, the plugin
 says so; *Restore edited Bible packages* downloads them again (notes beside them stay).
 

@@ -370,7 +370,19 @@ export class ToposSettingsPanel {
       failed("Couldn't read the catalogs", error);
       return;
     }
-    new Setting(containerEl).setName("Catalogs").setHeading();
+    new Setting(containerEl)
+      .setName("Catalogs")
+      .setDesc("Downloaded catalogs are kept a day; refresh to see new releases now.")
+      .setHeading()
+      .addExtraButton((b) =>
+        b
+          .setIcon("refresh-cw")
+          .setTooltip("Refresh catalogs and registries")
+          .onClick(async () => {
+            await manager.refreshCatalogs();
+            new Notice("Catalogs will be downloaded again");
+          }),
+      );
     for (const { location, isDefault } of catalogs) {
       new Setting(containerEl)
         .setName(location)

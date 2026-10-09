@@ -19,9 +19,36 @@ export const END = 255;
 
 const PART = /^(\d+)(?::(\d+))?(?:-(\d+)(?::(\d+))?)?$/;
 
+/**
+ * What a link to a package's Bible was made with: the package's version, and the hash of its
+ * first verse's words (8 hex digits of biblix's verse hash). `v=3:16&ver=1.0.2&vh=9f86d081`: when
+ * the installed version has other words at 3:16, the link finds them where they are now
+ */
+export interface Edition {
+  version: string;
+  hash: string | null;
+}
+
+const EDITION = /&ver=([^&:%]+)(?:&vh=([0-9a-f]+))?/i;
+
+/** A locator without its edition, and the edition */
+export function splitEdition(locator: string): { locator: string; edition: Edition | null } {
+  const m = EDITION.exec(locator);
+  if (!m) return { locator, edition: null };
+  return { locator: locator.replace(m[0], ""), edition: { version: m[1]!, hash: m[2]?.toLowerCase() ?? null } };
+}
+
+/** A locator with an edition, before its exact words (`v=3:16&ver=1.0.2&vh=…:~:text=…`) */
+export function withEdition(locator: string, edition: Edition): string {
+  const params = `&ver=${edition.version}${edition.hash ? `&vh=${edition.hash}` : ""}`;
+  const at = locator.search(/(:~:|%3A~%3A)/i);
+  return at === -1 ? locator + params : locator.slice(0, at) + params + locator.slice(at);
+}
+
 export function parseVerseLocator(locator: string): VersePart[] | null {
-  // Without the exact words a locator may end with (`v=3:16:~:text=…`, see file-plus-plus's units)
-  const m = /^v=(.+)$/.exec(decode(locator.trim().replace(/(:~:|%3A~%3A).*$/i, "")));
+  // Without the exact words a locator may end with (`v=3:16:~:text=…`, see file-plus-plus's
+  // units), and without the edition it was made with
+  const m = /^v=(.+)$/.exec(decode(splitEdition(locator.trim()).locator.replace(/(:~:|%3A~%3A).*$/i, "")));
   if (!m) return null;
   const parts: VersePart[] = [];
   for (const text of m[1].split(";")) {
