@@ -182,6 +182,20 @@ parts), which work in any translation's file; selecting part of a verse keeps th
 `![[JHN.usx#v=3:16-18]]` embeds the verses. The tab's reading and highlight settings follow the
 plugin's own, under *Reading*, *Highlights*, and *Links* in the settings.
 
+Bible text keeps every USX marker as a `data-style` (`<span class="topos-l" data-style="q2">`,
+`<span class="topos-char" data-style="pn">`, `<p class="topos-p" data-style="pi1">`), and the
+plugin styles the common ones (poetry levels, indented, centered, and list paragraphs, footnotes'
+quotations; a footnote's `3:16` is hidden, being right beside its verse). To style them yourself,
+name a CSS file in the vault under **Bible stylesheet**: it applies to Bible tabs, previews, and
+embeds (which Obsidian's CSS snippets don't reach), wins over the plugin's own rules, and applies
+as soon as you save it:
+
+```css
+[data-style="q2"] { padding-left: 4em; }
+[data-style="pn"] { text-decoration: underline dotted; }
+.topos-note [data-style="fr"] { display: inline; font-weight: bold; }
+```
+
 ### EPUBs
 
 With **Search EPUB files** on (off by default), EPUBs in the vault are searched too. topos reads

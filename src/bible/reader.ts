@@ -29,6 +29,8 @@ export const BIBLE_SCHEMES: LocatorScheme[] = [verseScheme, textFragmentScheme];
 
 export interface BibleReaderOptions extends ReaderOptions {
   text: BookTextOptions;
+  /** The vault's Bible stylesheet for this document (see styles.ts), after the reader's own */
+  stylesheet?: (doc: Document) => CSSStyleSheet | null;
 }
 
 /** A verse marker in the rendered text */
@@ -58,6 +60,10 @@ export class BibleReader extends DocumentReader {
     preview?: ParsedLocator,
   ) {
     super(host, opts);
+    const sheet = opts.stylesheet?.(this.doc);
+    if (sheet && this.shadow.adoptedStyleSheets && !this.shadow.adoptedStyleSheets.includes(sheet)) {
+      this.shadow.adoptedStyleSheets = [...this.shadow.adoptedStyleSheets, sheet];
+    }
     this.preview = preview?.scheme === verseScheme.id && preview.locator ? parseVerseLocator(preview.locator) : null;
   }
 
@@ -70,8 +76,13 @@ export class BibleReader extends DocumentReader {
     return this.preview !== null;
   }
 
+  /**
+   * The reader's look, and USX's markers (topos-bible-markup gives each its \`data-style\`: \`q2\`,
+   * \`pn\`, \`fr\`), in file-plus-plus's \`document\` layer: the vault's Bible stylesheet isn't in a
+   * layer, so its rules win whatever their specificity
+   */
   protected override extraCss(): string {
-    return /* css */ `
+    return /* css */ `@layer document {
 .topos-verse::before {
   content: attr(data-n);
   font-size: 0.65em;
@@ -100,7 +111,8 @@ p.topos-p { margin: 0 0 0.6em; }
 .topos-note { font-size: 0.85em; opacity: 0.75; }
 .topos-note::before { content: " ["; }
 .topos-note::after { content: "]"; }
-`;
+${USX_CSS}
+}`;
   }
 
   protected async renderContent(): Promise<void> {
@@ -233,6 +245,40 @@ p.topos-p { margin: 0 0 0.6em; }
     return this.markerEls;
   }
 }
+
+/** USX's paragraph and character styles, as USFM's stylesheet (usfm.sty) describes them */
+const USX_CSS = /* css */ `
+/* Paragraphs */
+p.topos-p[data-style="nb"] { margin-top: -0.6em; }
+p.topos-p[data-style="pi"], p.topos-p[data-style="pi1"], p.topos-p[data-style="mi"], p.topos-p[data-style^="pm"] { padding-left: 1.5em; }
+p.topos-p[data-style="pi2"] { padding-left: 3em; }
+p.topos-p[data-style="pi3"] { padding-left: 4.5em; }
+p.topos-p[data-style="pc"], p.topos-p[data-style="pmc"] { text-align: center; }
+p.topos-p[data-style="pr"], p.topos-p[data-style="pmr"], p.topos-p[data-style="cls"] { text-align: right; }
+p.topos-p[data-style^="li"], p.topos-p[data-style^="ph"] { padding-left: 2em; text-indent: -1em; margin-bottom: 0.2em; }
+p.topos-p[data-style="li2"], p.topos-p[data-style="ph2"] { padding-left: 3.5em; }
+p.topos-p[data-style="li3"], p.topos-p[data-style="ph3"] { padding-left: 5em; }
+p.topos-p[data-style="lit"] { text-align: right; font-weight: 600; }
+/* Poetry: q1 is .topos-l's indent, each level deeper another step */
+.topos-l[data-style="q2"], .topos-l[data-style="qm2"] { padding-left: 3em; }
+.topos-l[data-style="q3"], .topos-l[data-style="qm3"] { padding-left: 4.5em; }
+.topos-l[data-style="q4"] { padding-left: 6em; }
+.topos-l[data-style="qr"] { display: block; text-align: right; }
+.topos-l[data-style="qc"] { display: block; text-align: center; }
+.topos-l[data-style="qa"] { font-style: italic; font-weight: 600; padding-left: 0; text-indent: 0; }
+.topos-l[data-style="qd"] { font-style: italic; padding-left: 0; text-indent: 0; }
+/* Characters */
+[data-style="k"], [data-style="sls"], [data-style="sig"], [data-style="rq"], [data-style="qs"], [data-style="iqt"] { font-style: italic; }
+[data-style="qs"], [data-style="rq"] { float: right; }
+[data-style="rq"] { font-size: 0.85em; }
+[data-style="qac"], [data-style="fk"], [data-style="xk"], [data-style="lik"] { font-weight: 600; }
+[data-style="ord"], [data-style="fv"] { vertical-align: super; font-size: 0.65em; line-height: 0; }
+[data-style="fq"], [data-style="fqa"], [data-style="xq"] { font-style: italic; }
+[data-style="jmp"] { text-decoration: underline; }
+[data-style="dc"] { opacity: 0.85; }
+/* A note sits beside its verse: its origin (\`fr\`, \`xo\`: "3:16") says nothing there */
+.topos-note [data-style="fr"], .topos-note [data-style="xo"] { display: none; }
+`;
 
 function gap(doc: Document): HTMLElement {
   const el = doc.createElement("div");

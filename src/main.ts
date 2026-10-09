@@ -47,6 +47,7 @@ import { BibleLibrary } from "./bible/library.ts";
 import { VerseCounts } from "./bible/counts.ts";
 import { BiblixBibles } from "./bible/packages.ts";
 import { BibleManager } from "./bible/manage.ts";
+import { BibleStyles } from "./bible/styles.ts";
 import { addParallelCommands } from "./bible/parallel.ts";
 import { buildTranslations, parseAliases } from "./core/translations.ts";
 import type { BibleBook, BibleReader } from "./bible/reader.ts";
@@ -80,6 +81,8 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
   });
   /** Adds, installs, and removes biblix packages */
   bibleManager = new BibleManager(this);
+  /** The vault's CSS for Bible text (the `bibleCss` setting) */
+  bibleStyles = new BibleStyles(this);
   private translationsCache: ToposTranslations | null = null;
   private toposReady: Promise<Topos> | null = null;
   refs!: ReferenceIndex;
@@ -144,6 +147,7 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
   override async onExternalSettingsChange(): Promise<void> {
     await super.onExternalSettingsChange();
     this.refreshLinks();
+    void this.bibleStyles.load();
   }
 
   /** file-plus-plus's settings and topos's, with topos's from older versions updated */
@@ -154,6 +158,7 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
 
   protected override async onLoaded(): Promise<void> {
     await this.engine();
+    await this.bibleStyles.load();
     this.device = this.indexDevice();
     this.refs = new ReferenceIndex(this.topos, this.device, this.manifest?.version ?? "");
     const { sort, groupBy, context } = this.settings;
@@ -184,6 +189,7 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
         interceptLinkClicks(this, win.document);
       }),
     );
+    this.registerEvent(this.app.workspace.on("window-close", (_win, win) => this.bibleStyles.forget(win.document)));
     interceptLinkClicks(this, document);
     this.addCommands();
 
@@ -201,6 +207,10 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
       this.registerEvent(this.app.vault.on("modify", biblixFiles));
       this.registerEvent(this.app.vault.on("create", biblixFiles));
       this.registerEvent(this.app.vault.on("delete", biblixFiles));
+      for (const event of ["modify", "create", "delete"] as const) {
+        this.registerEvent(this.app.vault.on(event as "modify", (file) => this.bibleStyles.changed(file)));
+      }
+      this.registerEvent(this.app.vault.on("rename", (file, oldPath) => this.bibleStyles.changed(file, oldPath)));
       void this.indexer.start();
       this.epubs.start();
       this.otherDocuments.start();

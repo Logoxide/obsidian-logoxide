@@ -77,6 +77,11 @@ export interface ToposSettings {
   bibleNotes: boolean;
   /** Show section headings in Bible text */
   bibleHeadings: boolean;
+  /**
+   * A CSS file in the vault for Bible text (its tab, previews, and embeds), which render where
+   * Obsidian's CSS snippets don't reach; "" for none
+   */
+  bibleCss: string;
   /** Where links to references (`[John 1:1]`, `[text](John 1:1)`) open: the Bible tab or the link site */
   referenceLinks: "bible" | "site";
   /** Show bare references' text on hover (links and explicit links always preview) */
@@ -129,6 +134,7 @@ export const DEFAULT_SETTINGS: ToposSettings = {
   compareBibles: "",
   bibleNotes: false,
   bibleHeadings: true,
+  bibleCss: "",
   referenceLinks: "bible",
   previewBare: true,
   embedAlone: false,

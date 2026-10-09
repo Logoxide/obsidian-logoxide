@@ -569,6 +569,21 @@ export class ToposSettingsPanel {
           void save();
         }),
       );
+    new Setting(containerEl)
+      .setName("Bible stylesheet")
+      .setDesc(
+        "A CSS file in the vault for Bible text: its tab, previews, and embeds (Obsidian's CSS snippets don't reach them). Every USX marker is a data-style: [data-style=\"q2\"], [data-style=\"pn\"], .topos-note [data-style=\"fr\"]. Changes to the file apply at once.",
+      )
+      .addText((t) =>
+        t
+          .setPlaceholder("Bibles/bible.css")
+          .setValue(settings.bibleCss)
+          .onChange((value) => {
+            settings.bibleCss = value.trim();
+            void this.plugin.bibleStyles.load();
+            void save();
+          }),
+      );
   }
 
   private referenceColor(containerEl: HTMLElement): void {
