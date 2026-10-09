@@ -42,6 +42,7 @@ import { linkReferences, relinkEditor } from "./reading.ts";
 import { bookStyle, DEFAULT_SETTINGS, ToposSettingsPanel, type ToposSettings } from "./settings.ts";
 import { BibleEmbed } from "./bible/embed.ts";
 import { createBibleFormat } from "./bible/format.ts";
+import { STUB_EXTENSION } from "./core/stubs.ts";
 import { BibleLibrary } from "./bible/library.ts";
 import { VerseCounts } from "./bible/counts.ts";
 import { BiblixBibles } from "./bible/packages.ts";
@@ -477,8 +478,9 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
 
   isSearchable(file: TAbstractFile): file is TFile {
     if (!(file instanceof TFile)) return false;
-    // The biblix library holds Bibles and their license files, not notes
-    if (file.path.startsWith(`${this.packages.libraryDir()}/`)) return false;
+    // Installed packages hold Bibles and their license files, not notes (the notes beside book
+    // stubs in the library's folder are searched)
+    if (this.packages.isPackageFile(file.path)) return false;
     return this.extensions().includes(file.extension) && !this.isExcluded(file.path);
   }
 
@@ -609,6 +611,42 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
 
   // Navigation
 
+  /** Puts back the files of Bible packages edited in the library (through biblix's installer) */
+  async restorePackages(): Promise<void> {
+    const notice = new Notice("Restoring Bible packages…", 0);
+    try {
+      const restored = await this.bibleManager.restore();
+      notice.hide();
+      new Notice(restored.length > 0 ? `Restored ${restored.join(", ")}` : "No Bible package was edited");
+    } catch (error) {
+      notice.hide();
+      new Notice(`Couldn't restore: ${error instanceof Error ? error.message : String(error)}`, 10000);
+    }
+  }
+
+  /**
+   * A book stub's plain text is its package's book (read only: the package's files aren't edited),
+   * and from that, back to the stub
+   */
+  override async toggleSource(leaf: WorkspaceLeaf, mode: "read" | "edit" = "read"): Promise<void> {
+    const state = leaf.getViewState();
+    const path = (state.state as { file?: string } | undefined)?.file;
+    if (path && state.type === this.viewType && path.endsWith(`.${STUB_EXTENSION}`)) {
+      const stub = this.app.vault.getFileByPath(path);
+      const target = stub && (await this.packages.stubTarget(stub));
+      if (target) {
+        await leaf.setViewState({ type: this.sourceViewType, state: { file: target.path, mode: "read" }, active: true });
+        return;
+      }
+    }
+    const stub = path && state.type === this.sourceViewType ? this.packages.stubOf(path) : null;
+    if (stub) {
+      await leaf.setViewState({ type: this.viewType, state: { file: stub }, active: true });
+      return;
+    }
+    return super.toggleSource(leaf, mode);
+  }
+
   async activateSearch(): Promise<void> {
     const { workspace } = this.app;
     let leaf = workspace.getLeavesOfType(SEARCH_VIEW)[0];
@@ -727,6 +765,11 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
   // Commands and menus
 
   private addCommands(): void {
+    this.addCommand({
+      id: "restore-biblix-packages",
+      name: "Restore edited Bible packages",
+      callback: () => void this.restorePackages(),
+    });
     this.addCommand({
       id: "reload-biblix-packages",
       name: "Read biblix packages again",

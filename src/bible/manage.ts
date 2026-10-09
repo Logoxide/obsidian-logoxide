@@ -133,7 +133,7 @@ export class BibleManager {
   /** Answers what an installer asks for: downloads, or files in the vault */
   private async answer(installer: BiblixInstaller, request: FetchRequest, base: string): Promise<void> {
     if (request.tag !== "Files" && !/^https?:\/\//.test(request.repository)) {
-      throw new Error(`${request.repository} isn't on the web: install or update it with bx (bx install, bx update)`);
+      throw new Error(`${request.repository} isn't on the web: use bx for it (bx install, bx update, or bx install --repair to restore it)`);
     }
     if (request.tag === "Refs") {
       installer.provideRefs(request.repository, new Uint8Array(await download(request.url)));
@@ -192,7 +192,7 @@ export class BibleManager {
       step = installer.inspect(url, null, null, null);
     }
     const { info } = step.inspected;
-    const added = project.addDependency(info.id, { git: url, path: null, version: info.version, tag: null, branch: null, rev: null, features: [], defaultFeatures: true });
+    const added = project.addDependency(info.id, { git: url, path: null, version: info.version, tag: null, branch: null, rev: null, features: [], defaultFeatures: true, packageId: null, abbreviation: null, aliases: null });
     project.dispose();
     // The same installer: it has the archive already
     await this.install(biblix, added, base, installer);
@@ -218,11 +218,25 @@ export class BibleManager {
       await mkdirs(this.plugin, path.slice(0, path.lastIndexOf("/")));
       await this.adapter.writeBinary(path, buffer(file.bytes));
     }
-    const added = project.addDependency(entry.id, { git: null, path: relative, version: null, tag: null, branch: null, rev: null, features: [], defaultFeatures: true });
+    const added = project.addDependency(entry.id, { git: null, path: relative, version: null, tag: null, branch: null, rev: null, features: [], defaultFeatures: true, packageId: null, abbreviation: null, aliases: null });
     project.dispose();
     await this.install(biblix, added, base);
     added.dispose();
     return entry.abbreviation;
+  }
+
+  /**
+   * Puts back the files of installed packages that were edited (downloading them again; files
+   * beside them that aren't the package's, like annotations, stay); which were restored
+   */
+  async restore(): Promise<string[]> {
+    await this.plugin.engine();
+    const changed = [...this.plugin.packages.changedPackages];
+    const biblix = Biblix.new();
+    const { project, base } = await this.project(biblix);
+    await this.install(biblix, project, base, biblix.installer(), { tag: "Repair" });
+    project.dispose();
+    return changed;
   }
 
   /** Moves every git package to the newest release its requirement allows (like `bx update`); what changed */

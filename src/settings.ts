@@ -276,6 +276,20 @@ export class ToposSettingsPanel {
       .addButton((b) => b.setButtonText("Search").onClick(() => new AddBibleModal(this.app, this.plugin, () => this.display()).open()))
       .addButton((b) => b.setButtonText("Git URL").onClick(() => new GitUrlModal(this.app, this.plugin, () => this.display()).open()));
     void this.catalogSettings(containerEl.createDiv());
+    if (packages.changedPackages.length > 0) {
+      new Setting(containerEl)
+        .setName("Restore edited Bibles")
+        .setDesc(`The files of ${packages.changedPackages.join(", ")} were edited in the library. Restoring downloads them again; notes and annotations beside them stay.`)
+        .addButton((b) =>
+          b
+            .setButtonText("Restore")
+            .setCta()
+            .onClick(async () => {
+              await this.plugin.restorePackages();
+              this.display();
+            }),
+        );
+    }
     if (packages.installed.some((p) => !p.path)) {
       new Setting(containerEl)
         .setName("Update Bibles")
@@ -368,7 +382,7 @@ export class ToposSettingsPanel {
     new Setting(containerEl)
       .setName("Biblix library")
       .setDesc(
-        "The folder Bible packages are installed in (packages/<id>/<version>/), with this vault's biblix.toml and biblix.lock unless they're at its root. Packages there are Bibles like a folder of USX files, named by their abbreviation.",
+        "The folder Bible packages are installed in (packages/<id>/<version>/), with this vault's biblix.toml and biblix.lock unless they're at its root. Packages there are Bibles like a folder of USX files, named by their abbreviation. Each book opens through a stub beside them (<package>/usx/JHN.bible), which links and annotations point at, so updates don't move them.",
       )
       .addText((t) =>
         t

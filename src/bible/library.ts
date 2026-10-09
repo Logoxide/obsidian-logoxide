@@ -41,10 +41,10 @@ export class BibleLibrary {
 
   all(): Bible[] {
     if (!this.cached) {
-      // Installed packages are Bibles of their own, named by their abbreviation
-      const installed = `${this.plugin.packages.libraryDir()}/packages/`;
+      // Installed packages are Bibles of their own, named by their abbreviation (their books
+      // open through their stubs), so their files aren't folder Bibles
       const packages = this.plugin.packages.files();
-      const inPackage = (path: string) => path.startsWith(installed) || packages.some((p) => path.startsWith(`${p.dir}/`));
+      const inPackage = (path: string) => this.plugin.packages.isPackageFile(path);
       const files = this.plugin.app.vault
         .getFiles()
         .filter((f) => BOOK_EXTENSIONS.includes(f.extension) && !inPackage(f.path))

@@ -5,6 +5,7 @@ import { Biblix, ToposBook, type BookVerse, type PassageSegment } from "biblix";
 import { formatVerseLocator, parseVerseLocator } from "../core/verse-locator.ts";
 import type ToposPlugin from "../main.ts";
 import { BOOK_EXTENSIONS } from "../core/bibles.ts";
+import { STUB_EXTENSION } from "../core/stubs.ts";
 import { BIBLE_SCHEMES, BibleReader, type BibleBook } from "./reader.ts";
 
 /**
@@ -15,7 +16,8 @@ export function createBibleFormat(plugin: ToposPlugin): FileFormat<BibleBook, Bi
   return {
     name: "Bible",
     noun: "book",
-    extensions: BOOK_EXTENSIONS,
+    // A biblix package's books open through their stubs (`.bible`, see core/stubs.ts)
+    extensions: [...BOOK_EXTENSIONS, STUB_EXTENSION],
     plainText: true,
     icon: "book-open-text",
     frontmatterKey: "bible",
@@ -93,13 +95,25 @@ export function createBibleFormat(plugin: ToposPlugin): FileFormat<BibleBook, Bi
 
 async function loadBook(plugin: ToposPlugin, app: App, file: TFile): Promise<BibleBook> {
   const topos = await plugin.engine();
-  let text = await app.vault.cachedRead(file);
-  if (file.extension === "usfm") text = Biblix.new().usfmToUsx(text);
+  let text: string;
+  let extension = file.extension;
+  let stubBible: string | null = null;
+  if (file.extension === STUB_EXTENSION) {
+    // A package's book: read from the library, where its stub says
+    const target = await plugin.packages.stubTarget(file);
+    if (!target) throw new Error(`${file.path}: its package isn't installed (run bx install, or add it again)`);
+    text = await app.vault.adapter.read(target.path);
+    extension = target.path.slice(target.path.lastIndexOf(".") + 1).toLowerCase();
+    stubBible = target.bible;
+  } else {
+    text = await app.vault.cachedRead(file);
+  }
+  if (extension === "usfm" || extension === "sfm") text = Biblix.new().usfmToUsx(text);
   const book = ToposBook.parse(topos, "usx", text);
   if (!book) throw new Error("not a USX file");
   const bookId = book.bookId() ?? 0;
   const info = topos.books().find((b) => b.id === bookId);
   // A package's books are in `usx/`: its name is the package's abbreviation
-  const bible = plugin.bibles.ofFile(file.path)?.name ?? file.parent?.name ?? "";
+  const bible = stubBible ?? plugin.bibles.ofFile(file.path)?.name ?? file.parent?.name ?? "";
   return { book, bookId, name: info?.name ?? file.basename, bible };
 }

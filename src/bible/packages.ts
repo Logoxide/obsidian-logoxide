@@ -1,4 +1,6 @@
+import { Notice, TFile, TFolder } from "obsidian";
 import { Biblix, PackageKind, type BiblixPackage, type LockedEntry, type PackageFile, type Passage, type ToposBook, type ToposTranslations } from "biblix";
+import { RESERVED, STUB_EXTENSION, parseStub, staleStubs, stubPath, stubText } from "../core/stubs.ts";
 import type ToposPlugin from "../main.ts";
 
 /** The vault's manifest: at its root, else in the library's folder */
@@ -11,6 +13,8 @@ const BOOKS_KEPT = 3;
 /** A Bible from a biblix package */
 interface PackageBible {
   id: string;
+  /** What the vault's `biblix.toml` calls it (its id, or a fork's own name) */
+  dependency: string;
   /** What references name it by (`BSB`) */
   name: string;
   aliases: string[];
@@ -19,6 +23,8 @@ interface PackageBible {
   books: Map<number, ToposBook>;
   /** The package's folder, from the vault's root */
   dir: string;
+  /** Each book's stub (see `core/stubs.ts`), by book id */
+  stubs: Map<number, string>;
 }
 
 /** A package the vault's lock file names, for the settings */
@@ -58,6 +64,8 @@ export class BiblixBibles {
   problems: string[] = [];
   /** Every package the lock file names, as last read */
   installed: InstalledPackage[] = [];
+  /** Packages whose own files changed since the lock was written (edited in the library): restore them */
+  changedPackages: string[] = [];
   /** The folder of the vault's biblix.toml ("" for its root), as last read */
   base = "";
   private loading: Promise<void> | null = null;
@@ -96,6 +104,7 @@ export class BiblixBibles {
     const problems: string[] = [];
     const bibles: PackageBible[] = [];
     const installed: InstalledPackage[] = [];
+    const changed: string[] = [];
     let defaultName: string | null = null;
     if (await adapter.exists(at(MANIFEST))) {
       await this.plugin.engine();
@@ -109,7 +118,7 @@ export class BiblixBibles {
           const listed: InstalledPackage = { id: entry.id, version: entry.version, dir, path: entry.location.tag === "Path", info: null, problem: null };
           installed.push(listed);
           try {
-            const opened = await this.open(biblix, entry, base, problems);
+            const opened = await this.open(biblix, entry, base, problems, changed);
             listed.info = opened.info;
             if (opened.bible) bibles.push(opened.bible);
           } catch (error) {
@@ -130,6 +139,16 @@ export class BiblixBibles {
     this.problems = problems;
     this.installed = installed;
     this.base = base;
+    // Said once each time the set of edited packages changes
+    if (changed.length > 0 && changed.join() !== this.changedPackages.join()) {
+      new Notice(`Topos Bible: the files of ${changed.join(", ")} were edited in the library. Run "Restore edited Bible packages" to put them back (notes beside them stay).`, 15000);
+    }
+    this.changedPackages = changed;
+    try {
+      await this.syncStubs();
+    } catch (error) {
+      problems.push(`book stubs: ${message(error)}`);
+    }
     if (problems.length > 0) console.warn("Topos Bible: biblix packages", problems);
     this.changed();
   }
@@ -140,7 +159,7 @@ export class BiblixBibles {
   }
 
   /** A locked package: what it is, and its Bible if it's one */
-  private async open(biblix: Biblix, entry: LockedEntry, base: string, problems: string[]): Promise<{ info: InstalledPackage["info"]; bible: PackageBible | null }> {
+  private async open(biblix: Biblix, entry: LockedEntry, base: string, problems: string[], changed: string[]): Promise<{ info: InstalledPackage["info"]; bible: PackageBible | null }> {
     const adapter = this.plugin.app.vault.adapter;
     const dir = this.dirOf(entry, base);
     if (!(await adapter.exists(`${dir}/${MANIFEST}`))) throw new Error(`not installed in ${dir} (run bx install)`);
@@ -150,7 +169,8 @@ export class BiblixBibles {
     const cache = cacheDir && (await adapter.exists(`${cacheDir}/${entry.id}`)) ? await readTree(this.plugin, `${cacheDir}/${entry.id}`, `${entry.id}/`) : [];
     const pkg = biblix.openPackage(files, entry.features, cache);
     if (entry.checksum && pkg.checksum() !== entry.checksum) {
-      problems.push(`${entry.id} ${entry.version}: its files changed since biblix.lock was written`);
+      problems.push(`${entry.id} ${entry.version}: its files changed since biblix.lock was written (Restore puts them back)`);
+      changed.push(entry.name);
     }
     await this.saveCache(pkg);
     const info = pkg.info();
@@ -159,7 +179,10 @@ export class BiblixBibles {
       pkg.dispose();
       return { info: summary, bible: null };
     }
-    return { info: summary, bible: { id: info.id, name: info.abbreviation, aliases: info.aliases, pkg, books: new Map(), dir } };
+    // The vault's own names for it, when its biblix.toml gives them (a fork's)
+    const name = entry.abbreviation ?? info.abbreviation;
+    const aliases = entry.aliases ?? info.aliases;
+    return { info: summary, bible: { id: info.id, dependency: entry.name, name, aliases, pkg, books: new Map(), dir, stubs: new Map() } };
   }
 
   /** Writes what a package's cache wrote into the plugin's folder */
@@ -194,13 +217,103 @@ export class BiblixBibles {
     return this.bibles.find((b) => b.name === this.defaultName) ?? this.bibles[0] ?? null;
   }
 
-  /** Each package Bible's book files (in the vault, so the reader opens them) */
+  /**
+   * Each package Bible's books, as their stubs (`Biblix/bsb/usx/JHN.bible`): the reader, hover, and
+   * embeds open those, so links and annotations point at a path no update moves
+   */
   files(): PackageFiles[] {
     return this.bibles.map((bible) => ({
-      dir: bible.dir,
+      dir: this.stubDir(bible),
       name: bible.name,
-      books: new Map(bible.pkg.bookFiles().map((f) => [f.bookId, `${bible.dir}/${f.path}`])),
+      books: new Map(bible.pkg.bookFiles().map((f) => [f.bookId, bible.stubs.get(f.bookId) ?? `${bible.dir}/${f.path}`])),
     }));
+  }
+
+  /** The folder of a package's stubs */
+  private stubDir(bible: PackageBible): string {
+    return `${this.libraryDir()}/${bible.dependency}`;
+  }
+
+  /**
+   * Writes a stub for each package Bible's book (when it isn't there, or names something else),
+   * and removes stubs no package has now. Only stubs are removed: annotation files and notes
+   * beside them stay
+   */
+  private async syncStubs(): Promise<void> {
+    const { vault } = this.plugin.app;
+    const root = this.libraryDir();
+    const wanted = new Set<string>();
+    for (const bible of this.bibles) {
+      bible.stubs = new Map();
+      if (RESERVED.includes(bible.dependency)) {
+        this.problems.push(`${bible.dependency}: a package named like the library's own folders gets no book stubs`);
+        continue;
+      }
+      for (const file of bible.pkg.bookFiles()) {
+        const stub = { package: bible.dependency, path: file.path };
+        const path = stubPath(root, stub);
+        wanted.add(path);
+        bible.stubs.set(file.bookId, path);
+        const text = stubText(stub);
+        const existing = vault.getFileByPath(path);
+        if (existing) {
+          if ((await vault.read(existing)) !== text) await vault.modify(existing, text);
+        } else {
+          await this.folder(path.slice(0, path.lastIndexOf("/")));
+          await vault.create(path, text);
+        }
+      }
+    }
+    // Stubs of packages (or books) the vault no longer has
+    const library = vault.getFolderByPath(root);
+    const existing: TFile[] = [];
+    const walk = (folder: TFolder) => {
+      for (const child of folder.children) {
+        if (child instanceof TFolder && !(folder === library && RESERVED.includes(child.name))) walk(child);
+        else if (child instanceof TFile && child.extension === STUB_EXTENSION) existing.push(child);
+      }
+    };
+    if (library) walk(library);
+    const stale = new Set(staleStubs(existing.map((f) => f.path), wanted));
+    for (const file of existing.filter((f) => stale.has(f.path))) {
+      // Only what is a stub (a file named .bible that isn't one stays)
+      if (parseStub(await vault.read(file))) await vault.delete(file);
+    }
+  }
+
+  /** Makes a folder in the vault (and its parents) when it isn't there */
+  private async folder(path: string): Promise<void> {
+    const { vault } = this.plugin.app;
+    if (!path || vault.getAbstractFileByPath(path)) return;
+    await this.folder(path.slice(0, Math.max(0, path.lastIndexOf("/"))));
+    await vault.createFolder(path);
+  }
+
+  /**
+   * The book a stub names: its file in the library (or a path package's folder), and the Bible it's
+   * in. Null when the stub names a package the vault doesn't have (or isn't a stub)
+   */
+  async stubTarget(stub: TFile): Promise<{ path: string; bible: string } | null> {
+    await this.loading;
+    const named = parseStub(await this.plugin.app.vault.cachedRead(stub));
+    const bible = named && this.bibles.find((b) => b.dependency === named.package);
+    return named && bible ? { path: `${bible.dir}/${named.path}`, bible: bible.name } : null;
+  }
+
+  /** The stub of a package's book file (its path from the vault's root), if it has one */
+  stubOf(path: string): string | null {
+    for (const bible of this.bibles) {
+      if (!path.startsWith(`${bible.dir}/`)) continue;
+      const stub = stubPath(this.libraryDir(), { package: bible.dependency, path: path.slice(bible.dir.length + 1) });
+      if ([...bible.stubs.values()].includes(stub)) return stub;
+    }
+    return null;
+  }
+
+  /** Whether a path is in an installed package (or a path package): the packages' own files, not notes */
+  isPackageFile(path: string): boolean {
+    const dirs = [`${this.libraryDir()}/packages`, ...this.installed.map((p) => p.dir)];
+    return dirs.some((dir) => path === dir || path.startsWith(`${dir}/`));
   }
 
   /** Whether a package Bible has this name or alias */

@@ -119,6 +119,13 @@ package from its repository. Bibles go in the vault's `Biblix/` folder (*Biblix 
 gets the same one; each is named by its abbreviation (`BSB`, `KJV`), and the trash button removes
 it.
 
+Each book of an installed Bible opens through a small stub beside the library's packages
+(`Biblix/bsb/usx/JHN.bible`): links, highlights, and annotation files point at the stub, which
+names the package and the book but not its version, so they keep working when the Bible is
+updated, and annotation files sit beside it rather than among the package's files. *Toggle plain
+text* on a stub shows the book's file, read-only. If a package's own files are edited, the plugin
+says so; *Restore edited Bible packages* downloads them again (notes beside them stay).
+
 Or put a Bible in the vault as a folder of USX or USFM files, one per book (`Bibles/BSB/JHN.usx`,
 as Paratext, the Digital Bible Library, and eBible.org publish them; the
 [BSB](https://github.com/gracious-tech/fetch_collection/tree/main/bibles/eng_bsb) is public domain),
