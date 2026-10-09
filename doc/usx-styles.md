@@ -32,8 +32,8 @@ Counted in the BSB (USX) and the KJV (USFM) from biblix. Get these right first.
 | `para q1`, `q2` (`qm`, `q3`, `q4`) | 24,112 | 2,461 | `span.topos-l` then `br.topos-l` | Lines are inline-block with a hanging indent: q1 at 1em, each level 2em more. `display: block` would make the `br`s blank lines |
 | `para p` | 12,507 | 4,635 | `p.topos-p` | |
 | `note f` + `char fr`, `ft`, `fqa`, `fq`, `fv` | 4,854 | 6,959 | `span.topos-note.topos-footnote` with `span.topos-char` | Shown inline in `[ ]`. `fr`/`xo` are hidden (the note is beside its verse). Pop-up footnotes would need a reader change, not just CSS |
-| `char add` | | 41,774 | `span.topos-added` | KJV italics. **Not styled yet**: probably `font-style: italic` |
-| `char nd` | | 13,752 | `span.topos-divine-name` | **Unstyled**: the reader's CSS has `.topos-nd { font-variant: small-caps }`, but the class is `topos-divine-name` (fix the selector) |
+| `char add` | | 41,774 | `span.topos-added` | Italic (KJV italics) |
+| `char nd` | | 13,752 | `span.topos-divine-name` | Small caps |
 | `char wj` | | 4,076 | `span.topos-woj` | Color from `--tpb-woj-color` (unset, so it inherits) |
 | `para b` | 3,303 | 209 | `br.topos-lb[data-style=b]` | A stanza break: one `br` after a line's own `br` gives a blank line |
 | `para s1`, `s2`, `ms`, `mt1`, `mt2`, `d`, `qa` | 3,327 | 220 | `div.topos-title.topos-<style>` | `d` (Psalm titles) often holds verse 1, so hiding headings can hide a verse's start |
@@ -71,7 +71,7 @@ Found by rendering samples through the HTML renderer. Each item says where to fi
   `cell` `align`, `figure` `file`/`ref`.
 - **Introductions** (`imt`, `is`, `ip`, `io1`, `iot`, `ili`…) have their `data-style` but no
   styles. Outlines (`io1`–`io3`) need indents like `li`.
-- **Unstyled characters** worth defaults: `add`, `tl`, `pro`, `fw`, `xt` (a cross reference's
+- **Unstyled characters** worth defaults: `tl`, `pro`, `fw`, `xt` (a cross reference's
   targets), `w` (nothing, by design). Among highlights, `it`, `em`, and `bk` are `<i>` and `bd`
   is `<b>`, so the browser styles them. `sc` (`span.topos-hi.topos-small-caps`) and `bdit`
   (`span.topos-hi.topos-bold-italic`) are spans with no style yet.

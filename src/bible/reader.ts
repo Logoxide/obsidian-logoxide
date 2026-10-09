@@ -105,7 +105,9 @@ export class BibleReader extends DocumentReader {
 .topos-title.topos-d, .topos-title.topos-sp { font-weight: normal; font-style: italic; margin-top: 0.3em; }
 .topos-title.topos-r, .topos-title.topos-mr { font-weight: normal; font-style: italic; font-size: 0.9em; }
 .topos-woj { color: var(--tpb-woj-color, inherit); }
-.topos-nd { font-variant: small-caps; }
+.topos-divine-name { font-variant: small-caps; }
+/* Translators' additions (KJV italics) */
+.topos-added { font-style: italic; }
 .topos-l { display: inline-block; padding-left: 2em; text-indent: -1em; }
 p.topos-p { margin: 0 0 0.6em; }
 .topos-note { font-size: 0.85em; opacity: 0.75; }
