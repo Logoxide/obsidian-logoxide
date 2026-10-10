@@ -37,8 +37,9 @@ import { indexBook, type BookRequest, type BookResult, type IndexRequest } from 
 import { EpubSupport } from "./epub/support.ts";
 import { DocumentSupport } from "./documents/support.ts";
 import workerSource from "topos-worker-source";
-import type { Bible } from "./core/bibles.ts";
+import { bookFiles, type Bible } from "./core/bibles.ts";
 import { openPassagePicker, pickPassage } from "./bible/picker.ts";
+import { FolderStubs } from "./bible/folder-stubs.ts";
 import { GoToReferenceModal, InsertReferenceModal, SavedQueryModal } from "./modals.ts";
 import { linkReferences, relinkEditor } from "./reading.ts";
 import { bookStyle, DEFAULT_SETTINGS, openSettings, ToposSettingsPanel, type ToposSettings } from "./settings.ts";
@@ -77,7 +78,10 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
   bibles = new BibleLibrary(this, () => {
     this.resetTranslations();
     void this.verseCounts.update();
+    this.folderStubs.soon();
   });
+  /** Folder Bibles' books, named by their titles (`John.bible` beside `JHN.usx`) */
+  folderStubs = new FolderStubs(this);
   /** Each Bible book's verse counts, for references that name its translation */
   verseCounts = new VerseCounts(this, () => this.resetTranslations(true));
   /** Bibles from logoxide packages: the ones the vault's `logoxide.toml` asks for */
@@ -210,6 +214,8 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
     this.app.workspace.onLayoutReady(() => {
       this.bibles.start();
       void this.verseCounts.start();
+      void this.folderStubs.start();
+      this.applyBookFileHiding();
       void this.packages.load();
       this.applyLogoxideHiding();
       // The vault's logoxide.toml and logoxide.lock, at its root or in the packages folder
@@ -247,6 +253,7 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
     super.onunload();
     for (const doc of this.windowDocuments()) doc.body.style.removeProperty("--topos-reference-color");
     this.hidingStyle?.remove();
+    this.bookFileStyle?.remove();
     this.indexer.stop();
     this.epubs.stop();
     this.otherDocuments.stop();
@@ -286,6 +293,29 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
       this.settings.hiddenFilter = entry;
       void this.saveData(this.settings);
     }
+  }
+
+  private bookFileStyle: HTMLStyleElement | null = null;
+
+  /**
+   * Hides the book files (USX, USFM) of folder Bibles whose books have stubs, in the file explorer
+   * (a style rule per folder), with the `hideBookFiles` setting: the stubs show the books
+   */
+  applyBookFileHiding(): void {
+    this.bookFileStyle?.remove();
+    this.bookFileStyle = null;
+    if (!this.settings.folderStubs || !this.settings.hideBookFiles) return;
+    const folders = this.bibles
+      .all()
+      .filter((b) => b.files)
+      .map((b) => b.folder);
+    if (folders.length === 0) return;
+    const file = (folder: string) => {
+      const inFolder = folder ? `[data-path^="${CSS.escape(`${folder}/`)}"]` : "";
+      return `.nav-file:has(> .nav-file-title${inFolder}:is([data-path$=".usx" i], [data-path$=".usfm" i]))`;
+    };
+    this.bookFileStyle = document.head.createEl("style", { attr: { id: "topos-hide-book-files" } });
+    this.bookFileStyle.textContent = `${folders.map(file).join(",\n")} { display: none; }`;
   }
 
   /** Settings saved by older versions, before file-plus-plus's are merged in */
@@ -379,7 +409,7 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
   chapterVerses(bible: Bible | null, bookId: number): number[] | null {
     if (!bible) return null;
     if (bible.package) return this.packages.chapterVerses(bible.name, bookId);
-    const path = bible.books.get(bookId);
+    const path = bookFiles(bible).get(bookId);
     return path ? this.verseCounts.of(path, bookId) : null;
   }
 
@@ -809,13 +839,19 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
     const path = (state.state as { file?: string } | undefined)?.file;
     if (path && state.type === this.viewType && path.endsWith(`.${STUB_EXTENSION}`)) {
       const stub = this.app.vault.getFileByPath(path);
+      // A folder Bible's book: its file, which can be edited
+      const source = stub && (await this.folderStubs.resolve(stub));
+      if (source) {
+        await leaf.setViewState({ type: this.sourceViewType, state: { file: source.path, mode }, active: true });
+        return;
+      }
       const target = stub && (await this.packages.stubTarget(stub));
       if (target) {
         await leaf.setViewState({ type: this.sourceViewType, state: { file: target.path, mode: "read" }, active: true });
         return;
       }
     }
-    const stub = path && state.type === this.sourceViewType ? this.packages.stubOf(path) : null;
+    const stub = path && state.type === this.sourceViewType ? (this.packages.stubOf(path) ?? this.folderStubs.stubOf(path)) : null;
     if (stub) {
       await leaf.setViewState({ type: this.viewType, state: { file: stub }, active: true });
       return;

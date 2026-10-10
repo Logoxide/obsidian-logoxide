@@ -321,6 +321,37 @@ export class ToposSettingsPanel {
           }),
       );
 
+    const files = section(el, "Book files", "A Bible that's a folder of USX or USFM files (`Bibles/BSB/JHN.usx`).").items;
+    let hide: Setting | null = null;
+    new Setting(files)
+      .setName("Name books by their titles")
+      .setDesc(
+        md(
+          "A small file beside each book, named after it (`John.bible` beside `JHN.usx`), opens the book: its tab, links, and annotation file have the book's name. Links to the book files move to them; turned off, they move back. The book files aren't changed.",
+        ),
+      )
+      .addToggle((t) =>
+        t.setValue(settings.folderStubs).onChange(async (value) => {
+          settings.folderStubs = value;
+          hide?.settingEl.toggleClass("topos-hidden", !value);
+          await this.plugin.saveData(settings);
+          await this.plugin.folderStubs.sync();
+          this.plugin.applyBookFileHiding();
+        }),
+      );
+    hide = new Setting(files)
+      .setClass("topos-subsetting")
+      .setName("Hide the book files")
+      .setDesc("In the file explorer, show only the books' named files.")
+      .addToggle((t) =>
+        t.setValue(settings.hideBookFiles).onChange(async (value) => {
+          settings.hideBookFiles = value;
+          await this.plugin.saveData(settings);
+          this.plugin.applyBookFileHiding();
+        }),
+      );
+    hide.settingEl.toggleClass("topos-hidden", !settings.folderStubs);
+
     const picker = section(el, "Go to a passage", "The *Read the Bible* command and ribbon button, and the Bible toolbar's *Go to a book, chapter, and verse*, pick a passage by tapping (or typing).").items;
     new Setting(picker)
       .setName("Choose the testament first")

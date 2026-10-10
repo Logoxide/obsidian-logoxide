@@ -74,6 +74,10 @@ export interface ToposSettings {
    * vault's root), imports, each Bible book's stub, and each book package's EPUBs
    */
   logoxideBooks: string;
+  /** Name folder Bibles' books by their titles: a stub beside each book file (`John.bible` beside `JHN.usx`), links moved to it */
+  folderStubs: boolean;
+  /** With `folderStubs`, hide those Bibles' USX and USFM files in the file explorer */
+  hideBookFiles: boolean;
   /** Hide the packages folder from the file explorer and from Obsidian's search */
   hideLogoxideBooks: boolean;
   /** While a Bible's recording plays, keep the verse being read in view */
@@ -157,6 +161,8 @@ export const DEFAULT_SETTINGS: ToposSettings = {
   logoxideLibrary: ".logoxide",
   logoxideBooks: "Logoxide",
   hideLogoxideBooks: false,
+  folderStubs: true,
+  hideBookFiles: true,
   followPlayback: true,
   playbackRate: 1,
   bibleAliases: "",

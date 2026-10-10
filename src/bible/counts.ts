@@ -1,5 +1,6 @@
 import { Logoxide, LogoxideBook } from "logoxide";
 import type { TranslationCounts } from "../core/translations.ts";
+import { bookFiles } from "../core/bibles.ts";
 import type ToposPlugin from "../main.ts";
 
 /** A book file's verse counts, and the file's size and time they were read at */
@@ -38,7 +39,7 @@ export class VerseCounts {
     for (const bible of this.plugin.bibles.all()) {
       // A package's counts come from logoxide
       if (bible.package) continue;
-      for (const [bookId, path] of bible.books) {
+      for (const [bookId, path] of bookFiles(bible)) {
         const saved = this.saved[path];
         if (saved && saved.bookId === bookId) counts.push({ translation: bible.name, bookId, counts: saved.counts });
       }
@@ -85,7 +86,7 @@ export class VerseCounts {
     const paths = new Set<string>();
     for (const bible of this.plugin.bibles.all()) {
       if (bible.package) continue;
-      for (const [bookId, path] of bible.books) {
+      for (const [bookId, path] of bookFiles(bible)) {
         paths.add(path);
         const file = vault.getFileByPath(path);
         if (!file) continue;

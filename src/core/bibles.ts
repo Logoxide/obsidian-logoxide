@@ -16,12 +16,19 @@ export interface Bible {
   folder: string;
   /** The folder's name: `BSB` */
   name: string;
-  /** Each book's file, by book id (1 for Genesis) */
+  /** Each book's file, by book id (1 for Genesis): what opens it (a folder Bible's stub, when it has one) */
   books: Map<number, string>;
+  /** Each book's own file (USX or USFM), when `books` are stubs (see core/stubs.ts) */
+  files?: Map<number, string>;
   /** Files whose book isn't known from their name yet (read their `<book code>`) */
   unknown: string[];
   /** From a logoxide package (its verse counts come from logoxide, not `VerseCounts`) */
   package?: boolean;
+}
+
+/** Each book's own file (USX or USFM): the text, where `books` may be stubs */
+export function bookFiles(bible: Bible): Map<number, string> {
+  return bible.files ?? bible.books;
 }
 
 /** Book files' extensions: USX, and USFM (read as USX through logoxide) */

@@ -1,6 +1,7 @@
 import { Notice, SuggestModal, setIcon, type App } from "obsidian";
 import type { DocumentView } from "file-plus-plus/obsidian";
 import { BOOK_EXTENSIONS, type Bible } from "../core/bibles.ts";
+import { STUB_EXTENSION } from "../core/stubs.ts";
 import type ToposPlugin from "../main.ts";
 import type { BibleBook, BibleReader } from "./reader.ts";
 
@@ -39,7 +40,7 @@ class BibleModal extends SuggestModal<Bible> {
 /** The Bible tab in front, if it is one */
 export function activeBibleView(plugin: ToposPlugin): BibleView | null {
   const leaf = plugin.app.workspace.getMostRecentLeaf();
-  return plugin.views().find((v) => v.leaf === leaf && BOOK_EXTENSIONS.includes(v.file?.extension ?? "")) ?? null;
+  return plugin.views().find((v) => v.leaf === leaf && [...BOOK_EXTENSIONS, STUB_EXTENSION].includes(v.file?.extension ?? "")) ?? null;
 }
 
 /**

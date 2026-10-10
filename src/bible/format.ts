@@ -99,7 +99,12 @@ async function loadBook(plugin: ToposPlugin, app: App, file: TFile): Promise<Bib
   let extension = file.extension;
   let stubBible: string | null = null;
   let book: LogoxideBook | null = null;
-  if (file.extension === STUB_EXTENSION) {
+  const source = file.extension === STUB_EXTENSION ? await plugin.folderStubs.resolve(file) : null;
+  if (source) {
+    // A folder Bible's book: the file beside its stub
+    text = await app.vault.cachedRead(source);
+    extension = source.extension;
+  } else if (file.extension === STUB_EXTENSION) {
     // A package's book: read from the library, where its stub says
     const target = await plugin.packages.stubTarget(file);
     if (!target) throw new Error(`${file.path}: its package isn't installed (run lx install, or add it again)`);

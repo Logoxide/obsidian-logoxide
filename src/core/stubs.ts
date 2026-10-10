@@ -91,3 +91,23 @@ export function parseStub(text: string): Stub | null {
 export function staleStubs(existing: string[], wanted: Set<string>): string[] {
   return existing.filter((path) => path.endsWith(`.${STUB_EXTENSION}`) && !wanted.has(path));
 }
+
+/**
+ * A folder Bible's stub: beside a book's own file (USX or USFM) in a folder of them, named by the
+ * book (`Bibles/BSB/John.bible` for `JHN.usx`), naming that file. The Bible's books open through
+ * these, so its tabs, links, and annotation files have the book's name; the file itself is left as
+ * it is (a folder Bible may be a git checkout, or synced from elsewhere)
+ */
+export function folderStubText(file: string): string {
+  return `${JSON.stringify({ file })}\n`;
+}
+
+/** The file a folder Bible's stub names, beside it (null when the text isn't one) */
+export function parseFolderStub(text: string): string | null {
+  try {
+    const value = JSON.parse(text) as { file?: unknown; logoxide?: unknown };
+    return typeof value.file === "string" && value.logoxide === undefined && !value.file.includes("/") ? value.file : null;
+  } catch {
+    return null;
+  }
+}
