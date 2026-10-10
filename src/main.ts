@@ -61,6 +61,11 @@ import { notesShown } from "./core/display.ts";
 import { formatVerseLocator, passageParts, type VersePart } from "./core/verse-locator.ts";
 import { mappedLabel, versesParts } from "./core/mapping.ts";
 import { wholeReference } from "./core/syntax.ts";
+import { COMMENTARY_VIEW, CommentaryView } from "./bible/commentary.ts";
+import type { StrongsPopupOptions } from "./bible/strongs.ts";
+import { strongsHover } from "./editor/strongs.ts";
+import { strongsAt } from "./core/strongs.ts";
+import { locatorReference } from "./core/study.ts";
 
 /** The page preview source of references in notes (Settings → Page preview) */
 export const HOVER_SOURCE = "logoxide-references";
@@ -202,12 +207,16 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
 
     this.registerView(SEARCH_VIEW, (leaf) => new SearchView(leaf, this));
     this.registerView(SEARCH_PANE_VIEW, (leaf) => new SearchPane(leaf, this));
+    this.registerView(COMMENTARY_VIEW, (leaf) => new CommentaryView(leaf, this));
     this.registerHoverLinkSource(HOVER_SOURCE, { display: "Logoxide: Bible references in notes", defaultMod: false });
     this.patchReferenceLinks();
     this.addRibbonIcon("book-open", "Verse search", () => void this.activateSearch());
     this.addRibbonIcon("book-marked", "Read the Bible", () => openPassagePicker(this));
     this.registerEditorSuggest(new ReferenceSuggest(this));
     this.registerEditorExtension(referenceDecorations(this));
+    this.registerEditorExtension(strongsHover(this));
+    // The commentary view follows the Bible tab in front
+    this.registerEvent(this.app.workspace.on("active-leaf-change", (leaf) => this.followLeaf(leaf)));
     this.registerMarkdownPostProcessor(linkReferences(this));
     this.registerEvent(this.app.workspace.on("editor-menu", (menu, editor) => this.editorMenu(menu, editor)));
     // The reference color is a CSS variable on each window's body (pop-out windows too)
@@ -1009,6 +1018,76 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
     else new Notice(`${this.linkSite()} has no link for ${passage.reference}.`);
   }
 
+  // Commentaries and Strong's numbers
+
+  /** Strong's entries over Bible words that carry their numbers (the reader's popups) */
+  readonly strongsPopup: StrongsPopupOptions = {
+    lookup: (key) => this.packages.entries(key, { notes: false, headings: false, classPrefix: "topos-" }),
+    enabled: () => this.settings.strongsHover && this.packages.hasStrongs(),
+  };
+
+  /** The commentary views open */
+  private commentaryViews(): CommentaryView[] {
+    return this.app.workspace.getLeavesOfType(COMMENTARY_VIEW).flatMap((leaf) => (leaf.view instanceof CommentaryView ? [leaf.view] : []));
+  }
+
+  /** Opens the commentary view in the right sidebar (or shows it), on a passage when given */
+  async openCommentary(passage?: Passage | null, entry?: string): Promise<CommentaryView | null> {
+    const { workspace } = this.app;
+    let leaf = workspace.getLeavesOfType(COMMENTARY_VIEW)[0];
+    if (!leaf) {
+      leaf = workspace.getRightLeaf(false) ?? workspace.getLeaf(true);
+      await leaf.setViewState({ type: COMMENTARY_VIEW, active: true });
+    }
+    await workspace.revealLeaf(leaf);
+    const view = leaf.view instanceof CommentaryView ? leaf.view : null;
+    if (view && entry) await view.showEntry(entry);
+    if (view && passage) await view.show(passage);
+    return view;
+  }
+
+  /** Shows a passage in the open commentary views, while they follow */
+  followPassage(passage: Passage | null): void {
+    if (!passage || !this.settings.commentaryFollows) return;
+    for (const view of this.commentaryViews()) void view.show(passage);
+  }
+
+  /** A Bible tab's passage, from its book and a verse locator (its position, `v=3:16`) */
+  private readerPassage(book: string, locator: string | null | undefined): Passage | null {
+    const reference = locatorReference(book, locator);
+    return reference ? this.topos.parse(reference, bookStyle("name")) : null;
+  }
+
+  /** A Bible tab scrolled: the commentary follows its verse */
+  followReader(reader: BibleReader, locator: string): void {
+    if (this.commentaryViews().length === 0) return;
+    this.followPassage(this.readerPassage(reader.bible.name, locator));
+  }
+
+  /** A Bible tab came to the front: the commentary follows where it is */
+  private followLeaf(leaf: WorkspaceLeaf | null): void {
+    if (!leaf || this.commentaryViews().length === 0) return;
+    const view = this.views().find((v) => v.leaf === leaf);
+    const book = view?.reader?.bible.name;
+    if (!view?.file || !book) return;
+    this.followPassage(this.readerPassage(book, this.settings.positions[view.file.path] ?? "v=1"));
+  }
+
+  private followTimer = 0;
+
+  /** The editor's cursor moved: the commentary follows the reference under it (a moment later) */
+  followCursor(view: EditorView): void {
+    // Only the editor in front (not one changed in the background)
+    const active = (this.app.workspace.activeEditor?.editor as { cm?: EditorView } | undefined)?.cm;
+    if (!this.settings.commentaryFollows || active !== view || this.commentaryViews().length === 0) return;
+    window.clearTimeout(this.followTimer);
+    this.followTimer = window.setTimeout(() => {
+      const head = view.state.selection.main.head;
+      const line = view.state.doc.lineAt(head);
+      this.followPassage(referenceAt(this.topos, line.text, head - line.from)?.passage ?? null);
+    }, 250);
+  }
+
   /** The reference under the cursor */
   referenceAtCursor(editor: Editor): Passage | null {
     const cursor = editor.getCursor();
@@ -1048,6 +1127,31 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
           const names = this.packages.names();
           new Notice(problems.length > 0 ? problems.join("\n") : names.length > 0 ? `Bibles from logoxide: ${names.join(", ")}` : "No logoxide packages (logoxide.toml)");
         }),
+    });
+    this.addCommand({
+      id: "open-commentary",
+      name: "Open commentary",
+      callback: () => {
+        const editor = this.app.workspace.activeEditor?.editor;
+        let passage = editor ? this.referenceAtCursor(editor) : null;
+        if (!passage) {
+          const view = this.views().find((v) => v.leaf === this.app.workspace.getMostRecentLeaf());
+          const book = view?.reader?.bible.name;
+          if (view?.file && book) passage = this.readerPassage(book, this.settings.positions[view.file.path] ?? "v=1");
+        }
+        void this.openCommentary(passage);
+      },
+    });
+    this.addCommand({
+      id: "look-up-strongs",
+      name: "Look up the Strong's number under the cursor",
+      editorCheckCallback: (checking, editor) => {
+        const cursor = editor.getCursor();
+        const found = strongsAt(editor.getLine(cursor.line), cursor.ch);
+        if (!found) return false;
+        if (!checking) void this.openCommentary(null, found.key);
+        return true;
+      },
     });
     this.addCommand({
       id: "open-search",
@@ -1165,9 +1269,25 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
   }
 
   private editorMenu(menu: Menu, editor: Editor): void {
+    const cursor = editor.getCursor();
+    const strongs = strongsAt(editor.getLine(cursor.line), cursor.ch);
+    if (strongs && this.packages.hasStrongs()) {
+      menu.addItem((item) =>
+        item
+          .setTitle(`Look up ${strongs.key}`)
+          .setIcon("book-a")
+          .onClick(() => void this.openCommentary(null, strongs.key)),
+      );
+    }
     const passage = this.referenceAtCursor(editor);
     if (!passage) return;
     menu.addSeparator();
+    menu.addItem((item) =>
+      item
+        .setTitle(`Commentary on ${passage.reference}`)
+        .setIcon("message-square-quote")
+        .onClick(() => void this.openCommentary(passage)),
+    );
     const recorded = this.recordedBibles(passage)[0];
     if (recorded) {
       menu.addItem((item) =>

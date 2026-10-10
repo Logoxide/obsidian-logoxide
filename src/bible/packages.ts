@@ -1,9 +1,10 @@
 import { Notice, TFile, TFolder } from "obsidian";
-import { Logoxide, PackageKind, type LogoxidePackage, type LogoxideVersifications, type LockedEntry, type MappedPassage, type MediaFile, type PackageFile, type Passage, type LogoxideBook, type ToposTranslations } from "logoxide";
+import { Logoxide, PackageKind, type BookTextOptions, type CrossReference, type Entry, type LogoxidePackage, type LogoxideVersifications, type LockedEntry, type MappedPassage, type MediaFile, type Note, type PackageFile, type Passage, type LogoxideBook, type ToposTranslations } from "logoxide";
 import { RESERVED, STUB_EXTENSION, parseStub, staleStubs, stubNames, stubPath, stubText } from "../core/stubs.ts";
 import { describeError } from "../core/errors.ts";
 import { numberedApart, partsReference } from "../core/mapping.ts";
 import type { VersePart } from "../core/verse-locator.ts";
+import { strongsKeys } from "../core/strongs.ts";
 import type ToposPlugin from "../main.ts";
 import type { Timing } from "../core/timings.ts";
 import type { BookEdition } from "./reader.ts";
@@ -50,6 +51,44 @@ export interface Recording {
   /** In the recording's order */
   timings: Timing[];
 }
+
+/** A commentary, dictionary, or cross-reference package the vault uses, kept open to look things up in */
+interface StudyPackage {
+  kind: PackageKind;
+  /** What the vault's logoxide.toml calls it */
+  dependency: string;
+  /** Its abbreviation (`MHCC`), for labels */
+  name: string;
+  /** Its full name */
+  title: string;
+  /** A dictionary's keys: `strongs-greek`, `strongs-hebrew`, `headword` */
+  keys: string | null;
+  pkg: LogoxidePackage;
+}
+
+/** A commentary's notes on a passage */
+export interface CommentaryNotes {
+  commentary: string;
+  title: string;
+  notes: Note[];
+}
+
+/** A dictionary's entry */
+export interface DictionaryEntry {
+  dictionary: string;
+  title: string;
+  entry: Entry;
+}
+
+/** A cross-reference package's lines for a passage */
+export interface PackageCrossReferences {
+  name: string;
+  title: string;
+  references: CrossReference[];
+}
+
+/** The kinds of package kept open to look things up in */
+const STUDY_KINDS: PackageKind[] = [PackageKind.Commentary, PackageKind.Lexicon, PackageKind.CrossReferences];
 
 /** A package the vault's lock file names, for the settings */
 export interface InstalledPackage {
@@ -111,6 +150,8 @@ export interface PackageFiles {
 export class LogoxideBibles {
   private bibles: PackageBible[] = [];
   private books: PackageBook[] = [];
+  /** Commentaries, dictionaries, and cross-references, in the lock's order */
+  private study: StudyPackage[] = [];
   /** The EPUB copies in the packages folder, as last written */
   private copies = new Set<string>();
   /** The lock file last installed from on its own (missing packages are installed once per lock) */
@@ -185,6 +226,7 @@ export class LogoxideBibles {
     const problems: string[] = [];
     const bibles: PackageBible[] = [];
     const books: PackageBook[] = [];
+    const study: StudyPackage[] = [];
     const installed: InstalledPackage[] = [];
     const changed: string[] = [];
     let defaultName: string | null = null;
@@ -230,6 +272,8 @@ export class LogoxideBibles {
             if (opened.bible && ours) bibles.push(opened.bible);
             else opened.bible?.pkg.dispose();
             if (opened.book && ours) books.push(opened.book);
+            if (opened.study && ours) study.push(opened.study);
+            else opened.study?.pkg.dispose();
             // Every map the vault has, whoever asked for it: a route may go through several
             if (opened.map) {
               try {
@@ -254,8 +298,10 @@ export class LogoxideBibles {
       }
     }
     for (const old of this.bibles) this.dispose(old);
+    for (const old of this.study) old.pkg.dispose();
     this.bibles = bibles;
     this.books = books;
+    this.study = study;
     this.versifications?.dispose();
     this.versifications = maps;
     this.defaultName = defaultName;
@@ -315,7 +361,7 @@ export class LogoxideBibles {
     base: string,
     problems: string[],
     changed: string[],
-  ): Promise<{ info: NonNullable<InstalledPackage["info"]>; bible: PackageBible | null; book: PackageBook | null; map: LogoxidePackage | null }> {
+  ): Promise<{ info: NonNullable<InstalledPackage["info"]>; bible: PackageBible | null; book: PackageBook | null; map: LogoxidePackage | null; study?: StudyPackage }> {
     const adapter = this.plugin.app.vault.adapter;
     const dir = this.dirOf(entry, base);
     const files = await readTree(this.plugin, dir);
@@ -332,6 +378,11 @@ export class LogoxideBibles {
     const summary = { name: info.name, abbreviation: info.abbreviation, license: info.license ?? info.licenseFile ?? null, kind: info.kind };
     // A versification map is kept open for the maps (the caller disposes it)
     if (info.kind === PackageKind.VersificationMap) return { info: summary, bible: null, book: null, map: pkg };
+    // Commentaries, dictionaries, and cross-references stay open to look things up in
+    if (STUDY_KINDS.includes(info.kind)) {
+      const study = { kind: info.kind, dependency: entry.name, name: entry.abbreviation ?? info.abbreviation, title: info.name, keys: info.keys, pkg };
+      return { info: summary, bible: null, book: null, map: null, study };
+    }
     if (info.kind !== PackageKind.Bible) {
       const titles = pkg.titles();
       const files = pkg.epubFiles().map((path) => ({ path, title: titles.find((t) => t.path === path)?.title ?? null }));
@@ -775,6 +826,66 @@ export class LogoxideBibles {
     return text || null;
   }
 
+  /** Whether the vault has a package of this kind in use (commentaries, dictionaries, cross-references) */
+  hasKind(kind: PackageKind): boolean {
+    return this.study.some((p) => p.kind === kind);
+  }
+
+  /** Whether the vault has a dictionary keyed by Strong's numbers */
+  hasStrongs(): boolean {
+    return this.study.some((p) => p.kind === PackageKind.Lexicon && (p.keys === "strongs-greek" || p.keys === "strongs-hebrew"));
+  }
+
+  /** Each commentary's notes on a passage (those with none left out), in the lock's order */
+  async commentaryNotes(passage: Passage, options: BookTextOptions): Promise<CommentaryNotes[]> {
+    await this.loading;
+    const found: CommentaryNotes[] = [];
+    for (const p of this.study.filter((s) => s.kind === PackageKind.Commentary)) {
+      try {
+        const notes = p.pkg.notes(passage, options);
+        if (notes.length > 0) found.push({ commentary: p.name, title: p.title, notes });
+        await this.saveCache(p.pkg);
+      } catch (error) {
+        console.warn(`Logoxide: ${p.name}'s notes on ${passage.reference}`, error);
+      }
+    }
+    return found;
+  }
+
+  /**
+   * A key's entries in the vault's dictionaries: a Strong's number (`G25`, `H0430`) in those keyed
+   * by Strong's Greek or Hebrew numbers, anything else in those keyed by headword
+   */
+  async entries(key: string, options: BookTextOptions): Promise<DictionaryEntry[]> {
+    await this.loading;
+    const keys = strongsKeys(key) ?? "headword";
+    const found: DictionaryEntry[] = [];
+    for (const p of this.study.filter((s) => s.kind === PackageKind.Lexicon && s.keys === keys)) {
+      try {
+        const entry = p.pkg.entry(key, options);
+        if (entry) found.push({ dictionary: p.name, title: p.title, entry });
+      } catch (error) {
+        console.warn(`Logoxide: ${p.name}'s entry ${key}`, error);
+      }
+    }
+    return found;
+  }
+
+  /** Each cross-reference package's lines for a passage (OSIS, `John.3.16`), those with none left out */
+  async crossReferences(osis: string): Promise<PackageCrossReferences[]> {
+    await this.loading;
+    const found: PackageCrossReferences[] = [];
+    for (const p of this.study.filter((s) => s.kind === PackageKind.CrossReferences)) {
+      try {
+        const references = p.pkg.crossReferences(osis);
+        if (references.length > 0) found.push({ name: p.name, title: p.title, references });
+      } catch (error) {
+        console.warn(`Logoxide: ${p.name}'s cross-references for ${osis}`, error);
+      }
+    }
+    return found;
+  }
+
   private dispose(bible: PackageBible): void {
     for (const book of bible.books.values()) book.dispose();
     bible.pkg.dispose();
@@ -783,6 +894,8 @@ export class LogoxideBibles {
   unload(): void {
     for (const bible of this.bibles) this.dispose(bible);
     this.bibles = [];
+    for (const p of this.study) p.pkg.dispose();
+    this.study = [];
     this.versifications?.dispose();
     this.versifications = null;
   }

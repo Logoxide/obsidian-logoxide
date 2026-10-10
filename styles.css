@@ -2071,3 +2071,72 @@ body.theme-dark {
 .topos-embed-context.is-active {
   color: var(--text-accent);
 }
+
+/* The commentary view (src/bible/commentary.ts) */
+.topos-commentary { padding: 0.5em 0.75em; }
+.topos-commentary-passage { margin: 0.2em 0 0.6em; }
+.topos-commentary-section { margin-bottom: 1em; }
+.topos-commentary-note { margin-bottom: 0.8em; line-height: 1.5; }
+.topos-commentary-label,
+.topos-commentary-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.25em;
+  font-size: var(--font-ui-smaller);
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 0.2em;
+}
+.topos-commentary-heading > :first-child { flex: 1; }
+.topos-commentary-name { color: var(--text-normal); }
+.topos-commentary-link {
+  cursor: pointer;
+  color: var(--text-accent);
+  text-decoration: underline dashed 1px;
+  text-underline-offset: 3px;
+}
+.topos-commentary-link:hover { text-decoration-style: solid; }
+.topos-commentary-xref-list { margin: 0.2em 0; padding-left: 1.2em; }
+.topos-commentary-meta { color: var(--text-faint); font-size: var(--font-ui-smaller); }
+.topos-commentary-empty { color: var(--text-muted); font-style: italic; }
+.topos-commentary-entry {
+  padding: 0.5em 0.6em;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+}
+.topos-commentary .topos-w[data-strong] { text-decoration: underline dotted 1px; text-decoration-color: var(--text-faint); text-underline-offset: 3px; cursor: help; }
+
+/* Strong's entries: popups in the commentary view, the editor's hover (src/bible/strongs.ts) */
+.topos-strongs { text-decoration: underline dotted 1px; text-underline-offset: 3px; cursor: help; }
+.topos-strongs-popup {
+  position: fixed;
+  z-index: var(--layer-popover);
+  box-sizing: border-box;
+  max-width: min(26em, calc(100vw - 16px));
+  max-height: min(24em, calc(100vh - 16px));
+  overflow-y: auto;
+  padding: 0.5em 0.75em;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  box-shadow: var(--shadow-s);
+  font-size: 0.9em;
+  line-height: 1.45;
+}
+/* CodeMirror's tooltip is light whatever the theme: the entry draws its own box */
+.cm-tooltip:has(> .topos-strongs-tooltip) { background: none; border: none; }
+.topos-strongs-tooltip {
+  max-width: 26em;
+  padding: 0.4em 0.6em;
+  font-size: var(--font-ui-small);
+  line-height: 1.45;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  box-shadow: var(--shadow-s);
+}
+.topos-strongs-entry + .topos-strongs-entry { margin-top: 0.5em; }
+.topos-strongs-heading { font-size: var(--font-ui-smaller); font-weight: 600; color: var(--text-muted); margin-bottom: 0.2em; }
+.topos-strongs-none { color: var(--text-muted); font-style: italic; }

@@ -82,7 +82,12 @@ export class BibleView extends DocumentView<BibleBook, BibleReader> {
       void this.playFrom(verse.chapter, verse.verse);
     };
     reader.scroller.addEventListener("click", onClick, true);
+    // The commentary view follows the verse at the top
+    const offRelocated = reader.on("relocated", (loc) => {
+      if (this.leaf === this.app.workspace.getMostRecentLeaf()) this.topos.followReader(reader, loc.locator);
+    });
     this.offReader.push(
+      () => offRelocated?.(),
       () => reader.scroller.removeEventListener("click", onClick, true),
       () => follower.destroy(),
     );

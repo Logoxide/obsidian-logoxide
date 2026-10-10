@@ -1,6 +1,7 @@
 import { DocumentReader, PREFIX, splitTextDirective, textFragmentScheme, withTextDirective, type LocatorScheme, type ParsedLocator, type ReaderOptions, type TocItem } from "file-plus-plus/core";
 import type { BookTextOptions, LogoxideBook } from "logoxide";
 import { markNotes, notePopups, NOTES_CSS, type NoteLinks } from "./notes.ts";
+import { STRONGS_CSS, strongsPopups, type StrongsPopupOptions } from "./strongs.ts";
 import { END, formatVerseLocator, parseVerseLocator, partSegments, splitContext, splitEdition, withContext, withContextVerses, withEdition, type VersePart } from "../core/verse-locator.ts";
 
 /** A Bible book opened from a USX file */
@@ -54,6 +55,8 @@ export interface BibleReaderOptions extends ReaderOptions {
   noteLinks?: (book: BibleBook) => NoteLinks | null;
   /** How many verses a preview shows around its passage, unless its locator says (`&c=2`) */
   context?: number;
+  /** Strong's entries over words whose markup names their numbers */
+  strongs?: StrongsPopupOptions;
 }
 
 /** A verse marker in the rendered text */
@@ -107,6 +110,7 @@ export class BibleReader extends DocumentReader {
         verseOf: (note) => this.verseBefore(note),
       }),
     );
+    if (opts.strongs) this.cleanup.push(strongsPopups(this.scroller, this.content, opts.strongs));
   }
 
   get toc(): TocItem[] {
@@ -158,6 +162,7 @@ export class BibleReader extends DocumentReader {
 .topos-l { display: inline-block; padding-left: 2em; text-indent: -1em; }
 p.topos-p { margin: 0 0 0.6em; }
 ${NOTES_CSS}
+${STRONGS_CSS}
 ${USX_CSS}
 }`;
   }

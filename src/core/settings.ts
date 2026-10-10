@@ -130,6 +130,10 @@ export interface ToposSettings {
   pickerVerse: boolean;
   /** Mark references in other plugins' documents (Transcript++'s transcripts, the Bible tab) */
   markInDocuments: boolean;
+  /** The commentary view follows the Bible tab's verse and the reference under the editor's cursor */
+  commentaryFollows: boolean;
+  /** Show a Strong's number's dictionary entry on hover (Bible words that carry one, `G25` in notes and the editor) */
+  strongsHover: boolean;
   /** Once file-plus-plus's default link label has become `{{reference}}` */
   bibleAliasDefault?: boolean;
   /** The entry this plugin added to Obsidian's excluded files to hide the packages folder (`Logoxide/`), to take out again */
@@ -187,6 +191,8 @@ export const DEFAULT_SETTINGS: ToposSettings = {
   pickerNumbers: "grid",
   pickerVerse: true,
   markInDocuments: true,
+  commentaryFollows: true,
+  strongsHover: true,
 };
 
 export function bookStyle(name: StyleName): BookStyle {
