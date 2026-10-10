@@ -190,7 +190,7 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
     this.registerHoverLinkSource(HOVER_SOURCE, { display: "Logoxide: Bible references in notes", defaultMod: false });
     this.patchReferenceLinks();
     this.addRibbonIcon("book-open", "Verse search", () => void this.activateSearch());
-    this.addRibbonIcon("book-marked", "Go to a book, chapter, and verse", () => openPassagePicker(this));
+    this.addRibbonIcon("book-marked", "Read the Bible", () => openPassagePicker(this));
     this.registerEditorSuggest(new ReferenceSuggest(this));
     this.registerEditorExtension(referenceDecorations(this));
     this.registerMarkdownPostProcessor(linkReferences(this));
@@ -1004,7 +1004,8 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
     });
     this.addCommand({
       id: "go-to-passage",
-      name: "Go to a book, chapter, and verse",
+      // Picks a book, chapter, and verse (the id is from before it had this name)
+      name: "Read the Bible",
       callback: () => openPassagePicker(this),
     });
     this.addCommand({

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { displayCss, notesShown, type DisplaySettings } from "../src/core/display.ts";
 
-const DEFAULTS: DisplaySettings = { footnotes: "none", crossRefs: "none", verseNumbers: "faded", wordsOfJesus: "none" };
+const DEFAULTS: DisplaySettings = { footnotes: "none", crossRefs: "none", verseNumbers: "faded", wordsOfJesus: "none", contextVerses: "faded" };
 
 test("display settings become CSS in the readers' layer", () => {
   // Notes hidden by default (they aren't rendered then either), verse numbers faded
@@ -28,5 +28,9 @@ test("display settings become CSS in the readers' layer", () => {
   // Red letters: the stylesheet's own color, else the theme's red
   assert.match(displayCss({ ...DEFAULTS, wordsOfJesus: "red" }), /\.topos-woj \{ color: var\(--tpb-woj-color, var\(--topos-red-letters, #c0453e\)\); \}/);
   assert.match(displayCss({ ...DEFAULTS, wordsOfJesus: "accent" }), /\.topos-woj \{ color: var\(--tpb-woj-color, var\(--text-accent\)\); \}/);
+  // The verses around a passage: faded, as the passage, or in a color
+  assert.match(displayCss(DEFAULTS), /\.tpb-context \{ opacity: 0\.5; \}/);
+  assert.doesNotMatch(displayCss({ ...DEFAULTS, contextVerses: "none" }), /tpb-context/);
+  assert.match(displayCss({ ...DEFAULTS, contextVerses: "#336699" }), /\.tpb-context \{ color: #336699; \}/);
   assert.match(displayCss({ ...DEFAULTS, wordsOfJesus: "#aa0000" }), /\.topos-woj \{ color: var\(--tpb-woj-color, #aa0000\); \}/);
 });

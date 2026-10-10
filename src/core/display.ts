@@ -1,7 +1,7 @@
 import type { MarkLook, ToposSettings } from "./settings.ts";
 
 /** The settings that change how Bible text looks */
-export type DisplaySettings = Pick<ToposSettings, "footnotes" | "crossRefs" | "verseNumbers" | "wordsOfJesus">;
+export type DisplaySettings = Pick<ToposSettings, "footnotes" | "crossRefs" | "verseNumbers" | "wordsOfJesus" | "contextVerses">;
 
 /**
  * The display settings as CSS for Bible text (its tab, previews, and embeds), in the readers'
@@ -17,6 +17,9 @@ export function displayCss(settings: DisplaySettings): string {
   ];
   // The words of Jesus: the Bible stylesheet's color, else the setting's
   if (settings.wordsOfJesus !== "none") rules.push(`.topos-woj { color: var(--tpb-woj-color, ${cssColor(settings.wordsOfJesus)}); }`);
+  // The verses around a preview's passage (`v=3:16&c=2`): faded, as the passage, or in a color
+  if (settings.contextVerses === "faded") rules.push(".tpb-context { opacity: 0.5; }");
+  else if (settings.contextVerses !== "none") rules.push(`.tpb-context { color: ${cssColor(settings.contextVerses)}; }`);
   return `@layer document {\n${rules.join("\n")}\n}\n`;
 }
 

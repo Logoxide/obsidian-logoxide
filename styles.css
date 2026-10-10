@@ -2067,3 +2067,7 @@ body.theme-light {
 body.theme-dark {
   --topos-red-letters: #e2766e;
 }
+/* An embed's button showing or hiding the verses around its passage */
+.topos-embed-context.is-active {
+  color: var(--text-accent);
+}

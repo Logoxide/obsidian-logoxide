@@ -2,7 +2,7 @@ import { setIcon } from "obsidian";
 import type { ParsedLocator } from "file-plus-plus/core";
 import { DocumentEmbed, MediaPlayer } from "file-plus-plus/obsidian";
 import { clipOf } from "../core/timings.ts";
-import { formatVerseLocator, parseVerseLocator } from "../core/verse-locator.ts";
+import { END, formatVerseLocator, parseVerseLocator, splitContext, withContext } from "../core/verse-locator.ts";
 import { STUB_EXTENSION } from "../core/stubs.ts";
 import type ToposPlugin from "../main.ts";
 import type { BibleBook, BibleReader } from "./reader.ts";
@@ -18,6 +18,10 @@ export class BibleEmbed extends DocumentEmbed<BibleBook, BibleReader> {
   label = "";
   private player: MediaPlayer | null = null;
   private playButton: HTMLElement | null = null;
+  /** Stops the recording playing here and takes its player away */
+  private stopPlayer: (() => void) | null = null;
+  /** The context shown last, to show again when it's turned back on */
+  private lastContext: number | null = null;
 
   protected override onReaderReady(reader: BibleReader, loc: ParsedLocator, range: Range | null): void {
     if (!reader.isPreview) return;
@@ -29,6 +33,7 @@ export class BibleEmbed extends DocumentEmbed<BibleBook, BibleReader> {
     const label = this.label || [book.name, verses].filter(Boolean).join(" ");
     this.title.setText([label, book.bible].filter(Boolean).join(" · "));
     if (!range) return;
+    this.offerContext(reader, loc);
     void this.offerPlaying(reader, loc, label);
     // Fit short passages (the host keeps the preview height as its maximum), also once an editor
     // puts the embed on the page, or the width changes
@@ -43,6 +48,40 @@ export class BibleEmbed extends DocumentEmbed<BibleBook, BibleReader> {
     const observer = new ResizeObserver(fit);
     observer.observe(reader.content);
     this.register(() => observer.disconnect());
+  }
+
+  /**
+   * A button in the header that shows or hides the verses around the passage, in this embed only
+   * (its locator's `&c=` changes, and it renders again; the note keeps what it says)
+   */
+  private offerContext(reader: BibleReader, loc: ParsedLocator): void {
+    const parts = parseVerseLocator(loc.locator ?? "");
+    const header = this.title.parentElement;
+    // Whole chapters have no context
+    if (!parts || !header || parts.some((p) => p.verse === 0 && p.endVerse === END)) return;
+    // Rendered again (the settings changed): one button
+    header.querySelector(".topos-embed-context")?.remove();
+    const plugin = this.plugin as unknown as ToposPlugin;
+    const shown = reader.hasContext;
+    if (shown) this.lastContext = splitContext(this.subpath).context ?? plugin.settings.previewContext;
+    const button = header.createDiv({
+      cls: `clickable-icon topos-embed-context${shown ? " is-active" : ""}`,
+      attr: { "aria-label": shown ? "Hide the verses around it" : "Show the verses around it" },
+    });
+    setIcon(button, shown ? "fold-vertical" : "unfold-vertical");
+    header.insertBefore(button, this.title.nextSibling);
+    button.addEventListener("click", (e) => {
+      // Not the header's click, which opens the book
+      e.preventDefault();
+      e.stopPropagation();
+      const context = shown ? 0 : this.lastContext || plugin.settings.previewContext || 2;
+      const [path, hash] = this.subpath.startsWith("#") ? ["#", this.subpath.slice(1)] : ["", this.subpath];
+      this.subpath = path + withContext(splitContext(hash).locator, context);
+      this.stopPlayer?.();
+      this.stopPlayer = null;
+      this.playButton = null;
+      void this.loadFile();
+    });
   }
 
   /** A play button in the header when the Bible has a recording of the passage: it plays here, then stops */
@@ -83,11 +122,13 @@ export class BibleEmbed extends DocumentEmbed<BibleBook, BibleReader> {
         player.on("play", () => {
           if (player.clipEndsAt === null && (player.time < start - 0.5 || player.time >= end - 0.1)) player.playClip(start, end);
         });
-        this.register(() => {
+        this.stopPlayer = () => {
           off();
           player.destroy();
           el.remove();
-        });
+          this.player = null;
+        };
+        this.register(() => this.stopPlayer?.());
         player.playClip(clip.startMs / 1000, clip.endMs / 1000);
       })();
     });

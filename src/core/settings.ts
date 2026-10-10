@@ -103,6 +103,8 @@ export interface ToposSettings {
   referenceLinks: "bible" | "site";
   /** How many verses embeds and hover previews show around their passage, faded (a link's `&c=2` says otherwise) */
   previewContext: number;
+  /** How the verses around a preview's passage look: faded, as the passage (`none`), or in a color */
+  contextVerses: MarkLook;
   /** Show bare references' text on hover (links and explicit links always preview) */
   previewBare: boolean;
   /**
@@ -167,6 +169,7 @@ export const DEFAULT_SETTINGS: ToposSettings = {
   bibleCss: "",
   referenceLinks: "bible",
   previewContext: 0,
+  contextVerses: "faded",
   previewBare: true,
   embedAlone: false,
   embedAloneBlankLines: 0,

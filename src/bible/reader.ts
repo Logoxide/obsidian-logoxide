@@ -40,7 +40,8 @@ export const verseScheme: LocatorScheme = {
     const base = formatVerseLocator(parts ?? []);
     return parts ? { locator: withTextDirective(withContext(edition ? withEdition(base, edition) : base, context), text), rest: s.slice(m[0].length) } : null;
   },
-  isRange: () => true,
+  // A whole chapter (`v=3`) is a place to go, not a passage to flash
+  isRange: (locator) => !!splitTextDirective(locator).text || (parseVerseLocator(locator)?.some((p) => !(p.verse === 0 && p.endVerse === END)) ?? true),
 };
 
 export const BIBLE_SCHEMES: LocatorScheme[] = [verseScheme, textFragmentScheme];
@@ -151,8 +152,6 @@ export class BibleReader extends DocumentReader {
 .topos-title.topos-d, .topos-title.topos-sp { font-weight: normal; font-style: italic; margin-top: 0.3em; }
 .topos-title.topos-r, .topos-title.topos-mr { font-weight: normal; font-style: italic; font-size: 0.9em; }
 .topos-woj { color: var(--tpb-woj-color, inherit); }
-/* The verses around a preview's passage */
-.tpb-context { opacity: 0.5; }
 .topos-divine-name { font-variant: small-caps; }
 /* Translators' additions (KJV italics) */
 .topos-added { font-style: italic; }

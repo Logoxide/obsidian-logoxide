@@ -211,6 +211,7 @@ export class ToposSettingsPanel {
     const text = section(el, "Text").items;
     toggle(text, "Section headings", "The translation's headings, like *The Word Became Flesh*.", "bibleHeadings");
     this.markLook(text, "Verse numbers", "The small number before each verse.", "verseNumbers", changed);
+    this.markLook(text, "Verses around a passage", "In embeds and previews that show some (*Bibles → Embeds and previews*, or a link's `&c=2`).", "contextVerses", changed, { faded: "Faded text", none: "Normal text", accent: "Accent color" });
     this.markLook(text, "Words of Jesus", "Their color, in Bibles that mark them.", "wordsOfJesus", changed, { none: "Normal text", red: "Red", accent: "Accent color" });
 
     const notes = section(el, "Notes", "A mark in the text: footnotes are lettered, cross references are †. Hover over one, or tap it, to read the note.").items;
@@ -245,7 +246,7 @@ export class ToposSettingsPanel {
     items: HTMLElement,
     name: string,
     desc: string,
-    key: "verseNumbers" | "footnotes" | "crossRefs" | "wordsOfJesus",
+    key: "verseNumbers" | "footnotes" | "crossRefs" | "wordsOfJesus" | "contextVerses",
     changed: (change: () => void) => Promise<void>,
     looks: Record<string, string> = { none: "None", faded: "Faded text", accent: "Accent color" },
   ): void {
@@ -320,7 +321,7 @@ export class ToposSettingsPanel {
           }),
       );
 
-    const picker = section(el, "Go to a passage", "The *Go to a book, chapter, and verse* command, ribbon button, and Bible toolbar button pick a passage by tapping (or typing).").items;
+    const picker = section(el, "Go to a passage", "The *Read the Bible* command and ribbon button, and the Bible toolbar's *Go to a book, chapter, and verse*, pick a passage by tapping (or typing).").items;
     new Setting(picker)
       .setName("Choose the testament first")
       .setDesc("Pick the Old or New Testament before its books, so they have room for their full names. Off, every book shows at once.")
