@@ -365,6 +365,8 @@ p.topos-p[data-style="lit"] { text-align: right; font-weight: 600; }
 .topos-l[data-style="qc"] { display: block; text-align: center; }
 .topos-l[data-style="qa"] { font-style: italic; font-weight: 600; padding-left: 0; text-indent: 0; }
 .topos-l[data-style="qd"] { font-style: italic; padding-left: 0; text-indent: 0; }
+/* A paragraph after poetry (after its last line's br) is set off from it, as paragraphs are from each other */
+br.topos-l + p.topos-p:not([data-style="nb"]) { margin-top: 0.6em; }
 /* Characters */
 [data-style="k"], [data-style="sls"], [data-style="sig"], [data-style="rq"], [data-style="qs"], [data-style="iqt"] { font-style: italic; }
 [data-style="qs"], [data-style="rq"] { float: right; }

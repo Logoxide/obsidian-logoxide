@@ -29,7 +29,7 @@ Counted in the BSB (USX) and the KJV (USFM) from logoxide. Get these right first
 |---|---|---|---|---|
 | `verse` | 31,086 | 31,102 | empty `span.topos-verse[data-n]` | The number is `::before`. A number that starts a poetry line gets `tpb-line-start` (set in `indexMarkers`) and hangs left |
 | `w` (`\w`) | | 627,626 | `span.topos-w` + `data-strong`, `data-lemma` | Unstyled. Strong's numbers are there for hover or interlinear features |
-| `para q1`, `q2` (`qm`, `q3`, `q4`) | 24,112 | 2,461 | `span.topos-l` then `br.topos-l` | Lines are inline-block with a hanging indent: q1 at 1em, each level 2em more. `display: block` would make the `br`s blank lines |
+| `para q1`, `q2` (`qm`, `q3`, `q4`) | 24,112 | 2,461 | `span.topos-l` then `br.topos-l` | Lines are inline-block with a hanging indent: q1 at 1em, each level 2em more. `display: block` would make the `br`s blank lines. A paragraph right after poetry (`br.topos-l + p`, not `nb`) gets the paragraphs' 0.6em above it |
 | `para p` | 12,507 | 4,635 | `p.topos-p` | |
 | `note f` + `char fr`, `ft`, `fqa`, `fq`, `fv` | 4,854 | 6,959 | `span.topos-note.topos-footnote` with `span.topos-char` | Shown inline in `[ ]`. `fr`/`xo` are hidden (the note is beside its verse). Pop-up footnotes would need a reader change, not just CSS |
 | `char add` | | 41,774 | `span.topos-added` | Italic (KJV italics) |
