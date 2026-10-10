@@ -9,7 +9,7 @@ import type ToposPlugin from "./main.ts";
 import { kindName } from "./bible/add.ts";
 import { mkdirs, type InstalledPackage } from "./bible/packages.ts";
 import { formatSize } from "./core/timings.ts";
-import { badge, errorText, filteredList, lead, md, section, setMd, Tabs, type TabSpec } from "./settings/kit.ts";
+import { badge, chips, errorText, filteredList, lead, md, section, setMd, Tabs, type TabSpec } from "./settings/kit.ts";
 import { CatalogBrowser, gitForm } from "./settings/browse.ts";
 
 export { bookStyle, DEFAULT_SETTINGS, type StyleName, type ToposSettings } from "./core/settings.ts";
@@ -75,6 +75,8 @@ function removeButton(el: HTMLElement, tooltip: string, remove: () => Promise<vo
 export class ToposSettingsPanel {
   private readonly app: App;
   private tabs!: Tabs<SettingsTab>;
+  /** Which installed packages the Library tab lists: all, or only those on or off */
+  private packageState: "all" | "on" | "off" = "all";
   /** The tabs drawn so far (the Add Bibles tab is drawn when it's first shown, since it downloads the catalogs) */
   private readonly drawn = new Set<SettingsTab>();
 
@@ -368,9 +370,21 @@ export class ToposSettingsPanel {
     const packages = this.plugin.packages;
     lead(el, "The packages the vault's `biblix.toml` asks for, pinned by `biblix.lock`: Bibles, commentaries, and books. Each device installs what the lock pins.");
 
-    const top = packages.installed.filter((p) => p.dependencyOf === null);
-    const more = packages.installed.length - top.length;
-    const installed = section(el, "Installed", top.length > 0 ? `${top.length} package${top.length === 1 ? "" : "s"}${more > 0 ? `, and ${more} more in collections` : ""}.` : undefined);
+    const all = packages.installed.filter((p) => p.dependencyOf === null);
+    const more = packages.installed.length - all.length;
+    const off = all.filter((p) => !p.enabled).length;
+    const summary = `${all.length} package${all.length === 1 ? "" : "s"}${more > 0 ? `, and ${more} more in collections` : ""}${off > 0 ? `; ${off} turned off` : ""}.`;
+    const installed = section(el, "Installed", all.length > 0 ? summary : undefined);
+    // All, or only those on or off
+    if (off > 0 || this.packageState !== "all") {
+      // Beside the filter field, which the list adds after them
+      const filters = installed.search.createDiv("setting-group-search-control topos-package-filters");
+      chips(filters, [["all", "All"], ["on", "On"], ["off", "Off"]], this.packageState, (state) => {
+        this.packageState = state;
+        this.redraw("library");
+      });
+    }
+    const top = all.filter((p) => this.packageState === "all" || p.enabled === (this.packageState === "on"));
     installed.heading?.addButton((b) =>
       b
         .setButtonText("Add Bibles")
@@ -384,7 +398,7 @@ export class ToposSettingsPanel {
       empty: "Nothing installed yet. Find Bibles, commentaries, and books in *Add Bibles*, or write a `biblix.toml` and run `bx install`.",
       text: (pkg) =>
         [pkg, ...packages.installed.filter((p) => p.dependencyOf === pkg.name)]
-          .map((p) => [p.id, p.name, p.version, p.dir, p.info?.name, p.info?.abbreviation, p.info?.license, p.info ? kindName(p.info.kind) : ""].join(" "))
+          .map((p) => [p.id, p.name, p.version, p.dir, p.info?.name, p.info?.abbreviation, p.info?.license, p.info ? kindName(p.info.kind) : "", p.enabled ? "" : "off"].join(" "))
           .join(" "),
       render: (pkg, items) => this.packageRow(items, pkg, packages.installed.filter((p) => p.dependencyOf === pkg.name)),
     });
@@ -463,7 +477,22 @@ export class ToposSettingsPanel {
       list.createDiv({ cls: "topos-package-members-label", text: `In this collection (${members.length})` });
       for (const member of members) this.packageTitle(list.createDiv("topos-package-member"), member);
     }
+    row.toggleClass("is-disabled", !pkg.enabled);
     const control = row.createDiv("setting-item-control");
+    // Off keeps it installed and locked: its Bible, books, and stubs leave the vault until it's on again
+    const name = pkg.info?.abbreviation ?? pkg.id;
+    const toggle = control.createDiv({ cls: `checkbox-container${pkg.enabled ? " is-enabled" : ""}`, attr: { "aria-label": pkg.enabled ? `Turn ${name} off (it stays installed)` : `Turn ${name} on` } });
+    toggle.createEl("input", { type: "checkbox", attr: { tabindex: "0" } });
+    toggle.addEventListener("click", async () => {
+      toggle.toggleClass("is-enabled", !pkg.enabled);
+      try {
+        await this.plugin.bibleManager.setEnabled(pkg.name, !pkg.enabled);
+        new Notice(pkg.enabled ? `Turned ${name} off (still installed)` : `Turned ${name} on`);
+      } catch (error) {
+        new Notice(`Couldn't turn ${name} ${pkg.enabled ? "off" : "on"}: ${errorText(error)}`);
+      }
+      this.redraw("library", "bibles");
+    });
     const keepsFolder = pkg.path && !pkg.dir.split("/").includes("imports");
     removeButton(control, keepsFolder ? "Remove from biblix.toml (its folder stays)" : `Remove ${pkg.info?.abbreviation ?? pkg.id}`, async () => {
       try {
@@ -485,6 +514,7 @@ export class ToposSettingsPanel {
     badge(title, pkg.version, "is-version");
     if (info && info.kind !== PackageKind.Bible) badge(title, kindName(info.kind), "is-kind");
     if (pkg.path) badge(title, pkg.dir.includes("/imports/") ? "import" : "path");
+    if (!pkg.enabled) badge(title, "off", "is-off");
     const meta = el.createDiv("setting-item-description topos-package-meta");
     if (pkg.problem) {
       meta.addClass("is-problem");

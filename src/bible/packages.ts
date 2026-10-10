@@ -61,6 +61,8 @@ export interface InstalledPackage {
   /** What it is, once read (else why it couldn't be) */
   info: { name: string; abbreviation: string; license: string | null; kind: PackageKind } | null;
   problem: string | null;
+  /** Whether it's in use: `enabled = false` in biblix.toml turns it (and what it brings in) off, keeping it installed */
+  enabled: boolean;
 }
 
 /** A book package's EPUBs, copied into the packages folder (EPUB++ opens only vault files) */
@@ -192,8 +194,21 @@ export class BiblixBibles {
         const kinds = new Map<string, PackageKind>();
         for (const entry of project.packages()) {
           const dir = this.dirOf(entry, base);
-          const listed: InstalledPackage = { id: entry.id, name: entry.name, version: entry.version, dependencyOf: entry.dependencyOf, dir, path: entry.location.tag === "Path", info: null, problem: null };
+          const listed: InstalledPackage = { id: entry.id, name: entry.name, version: entry.version, dependencyOf: entry.dependencyOf, dir, path: entry.location.tag === "Path", info: null, problem: null, enabled: entry.enabled };
           installed.push(listed);
+          // Turned off: named from its biblix.toml alone, and not read (its Bible, books, and stubs leave the vault until it's on)
+          if (!entry.enabled) {
+            if (await adapter.exists(`${dir}/${MANIFEST}`)) {
+              try {
+                const info = biblix.packageInfo(await adapter.read(`${dir}/${MANIFEST}`));
+                listed.info = { name: info.name, abbreviation: info.abbreviation, license: info.license ?? info.licenseFile ?? null, kind: info.kind };
+                if (entry.dependencyOf === null) kinds.set(entry.name, info.kind);
+              } catch {
+                // Named by its id
+              }
+            }
+            continue;
+          }
           // Another package's own dependencies (a commentary's Bible) are its, not the vault's
           const ours = entry.dependencyOf === null || kinds.get(entry.dependencyOf) === PackageKind.Collection;
           try {
@@ -250,6 +265,21 @@ export class BiblixBibles {
         new Notice(`Topos Bible: couldn't install the vault's Bible packages: ${message(error)}`, 10000);
       });
     }
+  }
+
+  /** Whether a package biblix.toml asks for is on (`enabled = false` turns one off without removing it) */
+  isEnabled(name: string): boolean {
+    return this.installed.find((p) => p.name === name && p.dependencyOf === null)?.enabled ?? true;
+  }
+
+  /** The packages in use (with what they bring in) */
+  enabledPackages(): InstalledPackage[] {
+    return this.installed.filter((p) => p.enabled);
+  }
+
+  /** The packages turned off (with what only they bring in): installed, but not read */
+  disabledPackages(): InstalledPackage[] {
+    return this.installed.filter((p) => !p.enabled);
   }
 
   /** A locked package's folder, from the vault's root */

@@ -1483,6 +1483,25 @@ body:not(.is-mobile) .topos-pane.is-narrow .topos-pane-card:is(:hover, :focus-wi
 .topos-package-member .setting-item-name {
   font-size: var(--font-ui-small);
 }
+/* All, on, or off: beside the filter field */
+.topos-settings .topos-package-filters {
+  flex: none;
+  width: auto;
+}
+/* A collection's controls stay at its top, beside its name */
+.topos-package > .setting-item-control {
+  align-self: flex-start;
+}
+/* Turned off (still installed) */
+.topos-package.is-disabled .topos-package-name,
+.topos-package.is-disabled .topos-package-meta {
+  color: var(--text-faint);
+}
+.topos-badge.is-off {
+  color: var(--text-warning);
+  background: transparent;
+  box-shadow: inset 0 0 0 var(--border-width) color-mix(in srgb, var(--text-warning) 45%, transparent);
+}
 .topos-output {
   max-height: 16em;
   margin: var(--size-4-2) 0 0;

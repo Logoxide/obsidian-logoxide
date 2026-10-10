@@ -398,6 +398,20 @@ export class BibleManager {
     return entry ?? null;
   }
 
+  /**
+   * Turns a package on or off by what biblix.toml calls it (`enabled = false`): off, it stays installed and locked, so turning it on
+   * again needs no download, but it isn't read
+   */
+  async setEnabled(name: string, enabled: boolean): Promise<void> {
+    await this.plugin.engine();
+    const { project, base } = await this.project(Biblix.new());
+    const changed = project.setEnabled(name, enabled);
+    project.dispose();
+    await this.adapter.write(join(base, MANIFEST), changed.manifestText());
+    changed.dispose();
+    await this.plugin.packages.load();
+  }
+
   /** Removes a package from the vault's manifest, and its files (unless another entry uses them) */
   async remove(id: string): Promise<void> {
     await this.plugin.engine();
