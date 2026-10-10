@@ -54,6 +54,7 @@ import { addParallelCommands } from "./bible/parallel.ts";
 import { buildTranslations, parseAliases } from "./core/translations.ts";
 import type { BibleBook, BibleReader } from "./bible/reader.ts";
 import type { NoteLinks } from "./bible/notes.ts";
+import { notesShown } from "./core/display.ts";
 import { formatVerseLocator, passageParts } from "./core/verse-locator.ts";
 import { wholeReference } from "./core/syntax.ts";
 
@@ -317,8 +318,15 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
       this.settings.logoxideLibrary = DEFAULT_SETTINGS.logoxideLibrary;
       await this.saveData(this.settings);
     }
-    // Footnotes and cross references were one setting
-    if (saved.bibleCrossRefs === undefined) this.settings.bibleCrossRefs = this.settings.bibleNotes;
+    // Verse numbers, footnotes, and cross references were each shown or not (notes in one setting
+    // at first), and verse numbers had a color: each is one look now. Notes were drawn in the accent color
+    const old = saved as { bibleNotes?: boolean; bibleCrossRefs?: boolean; bibleVerseNumbers?: boolean; verseNumberColor?: string };
+    if (saved.verseNumbers === undefined && (old.bibleVerseNumbers !== undefined || old.verseNumberColor)) {
+      this.settings.verseNumbers = old.bibleVerseNumbers === false ? "none" : old.verseNumberColor || "faded";
+    }
+    if (saved.footnotes === undefined && old.bibleNotes) this.settings.footnotes = "accent";
+    if (saved.crossRefs === undefined && (old.bibleCrossRefs ?? old.bibleNotes)) this.settings.crossRefs = "accent";
+    for (const key of ["bibleNotes", "bibleCrossRefs", "bibleVerseNumbers", "verseNumberColor"]) delete (this.settings as unknown as Record<string, unknown>)[key];
     this.settings.queries = (this.settings.queries ?? []).filter((q) => q && typeof q.name === "string");
     // Saved searches from before 0.4.0 used -o for any overlap
     if ((this.settings.queryFormat ?? 1) < 2) {
@@ -541,7 +549,7 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
   /** How passages are written in the Bible tab, previews, and embeds */
   bookTextOptions(): BookTextOptions {
     // Both kinds of notes are rendered when either shows; the display settings' CSS hides the other
-    return { notes: this.settings.bibleNotes || this.settings.bibleCrossRefs, headings: this.settings.bibleHeadings, classPrefix: "topos-" };
+    return { notes: notesShown(this.settings), headings: this.settings.bibleHeadings, classPrefix: "topos-" };
   }
 
   /** Renders open Bible tabs again, after a setting changed what's rendered (headings, notes) */

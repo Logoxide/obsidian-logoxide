@@ -7,6 +7,9 @@ import type { SortOrder } from "./sort.ts";
 
 export type StyleName = "name" | "abbreviation" | "osis";
 
+/** How a mark in Bible text (verse numbers, notes) shows: not at all, in the text's color faded, the accent color, or a color like `#7c3aed` */
+export type MarkLook = "none" | "faded" | "accent" | (string & {});
+
 export interface ToposSettings {
   /** How references are written by autocomplete, normalizing, and the sidebar */
   style: StyleName;
@@ -77,18 +80,16 @@ export interface ToposSettings {
   bibleAliases: string;
   /** Bibles embeds also show, by name, separated by commas: `KJV, NET` */
   compareBibles: string;
-  /** Show footnotes in Bible text (and study notes: every note but cross references) */
-  bibleNotes: boolean;
-  /** Show cross references in Bible text (unset: as `bibleNotes`, which covered both before) */
-  bibleCrossRefs: boolean;
+  /** Footnotes' marks in Bible text (and study notes: every note but cross references) */
+  footnotes: MarkLook;
+  /** Cross references' marks in Bible text */
+  crossRefs: MarkLook;
   /** Show section headings in Bible text */
   bibleHeadings: boolean;
-  /** Show verse numbers in Bible text */
-  bibleVerseNumbers: boolean;
+  /** The number before each verse */
+  verseNumbers: MarkLook;
   /** Show the words of Jesus in red */
   bibleRedLetters: boolean;
-  /** Verse numbers' color: a color like `#7c3aed`, `accent` for the theme's accent color, or "" for the text's color, faded */
-  verseNumberColor: string;
   /**
    * A CSS file in the vault for Bible text (its tab, previews, and embeds), which render where
    * Obsidian's CSS snippets don't reach; "" for none
@@ -146,12 +147,11 @@ export const DEFAULT_SETTINGS: ToposSettings = {
   playbackRate: 1,
   bibleAliases: "",
   compareBibles: "",
-  bibleNotes: false,
-  bibleCrossRefs: false,
+  footnotes: "none",
+  crossRefs: "none",
   bibleHeadings: true,
-  bibleVerseNumbers: true,
+  verseNumbers: "faded",
   bibleRedLetters: false,
-  verseNumberColor: "",
   bibleCss: "",
   referenceLinks: "bible",
   previewBare: true,

@@ -5,6 +5,7 @@ import { parseQuery } from "./core/query.ts";
 import type { BookCompletion } from "./core/completions.ts";
 import { FILTERS, linkUrl, PLACEHOLDERS, SITES, templateError } from "./core/links.ts";
 import { bookStyle, type StyleName } from "./core/settings.ts";
+import { notesShown } from "./core/display.ts";
 import type ToposPlugin from "./main.ts";
 import { kindName } from "./bible/add.ts";
 import { mkdirs, type InstalledPackage } from "./bible/packages.ts";
@@ -193,30 +194,28 @@ export class ToposSettingsPanel {
     const settings = this.plugin.settings;
     lead(el, "How Bible text looks in its tab, hover previews, and embeds.");
     /** A toggle; `rendered` settings change the HTML (open Bible tabs render again), the rest only its look */
-    const toggle = (items: HTMLElement, name: string, desc: string, key: "bibleHeadings" | "bibleVerseNumbers" | "bibleRedLetters" | "bibleNotes" | "bibleCrossRefs", rendered: () => boolean) =>
+    /** A setting changed: restyle readers, and render open Bible tabs again when it changed what's rendered (headings, notes) */
+    const changed = async (change: () => void) => {
+      const before = [settings.bibleHeadings, notesShown(settings)].join();
+      change();
+      this.plugin.bibleStyles.apply();
+      await this.plugin.saveToposSettings();
+      if ([settings.bibleHeadings, notesShown(settings)].join() !== before) this.plugin.rerenderBibles();
+    };
+    const toggle = (items: HTMLElement, name: string, desc: string, key: "bibleHeadings" | "bibleRedLetters") =>
       new Setting(items)
         .setName(name)
         .setDesc(md(desc))
-        .addToggle((t) =>
-          t.setValue(settings[key]).onChange(async (value) => {
-            const before = rendered();
-            settings[key] = value;
-            this.plugin.bibleStyles.apply();
-            await this.plugin.saveToposSettings();
-            if (rendered() !== before) this.plugin.rerenderBibles();
-          }),
-        );
-    const notesRendered = () => settings.bibleNotes || settings.bibleCrossRefs;
+        .addToggle((t) => t.setValue(settings[key]).onChange((value) => changed(() => (settings[key] = value))));
 
     const text = section(el, "Text").items;
-    toggle(text, "Section headings", "The translation's headings, like *The Word Became Flesh*.", "bibleHeadings", () => settings.bibleHeadings);
-    toggle(text, "Verse numbers", "The small number before each verse.", "bibleVerseNumbers", () => true);
-    this.verseNumberColor(text);
-    toggle(text, "Red letters", "The words of Jesus in red, in Bibles that mark them.", "bibleRedLetters", () => true);
+    toggle(text, "Section headings", "The translation's headings, like *The Word Became Flesh*.", "bibleHeadings");
+    this.markLook(text, "Verse numbers", "The small number before each verse.", "verseNumbers", changed);
+    toggle(text, "Red letters", "The words of Jesus in red, in Bibles that mark them.", "bibleRedLetters");
 
     const notes = section(el, "Notes", "A mark in the text: footnotes are lettered, cross references are †. Hover over one, or tap it, to read the note.").items;
-    toggle(notes, "Footnotes", "The translation's footnotes: other readings, literal meanings, and study notes.", "bibleNotes", notesRendered);
-    toggle(notes, "Cross references", "Other passages the translation points to.", "bibleCrossRefs", notesRendered);
+    this.markLook(notes, "Footnotes", "The translation's footnotes: other readings, literal meanings, and study notes.", "footnotes", changed);
+    this.markLook(notes, "Cross references", "Other passages the translation points to.", "crossRefs", changed);
 
     const css = section(el, "Stylesheet").items;
     new Setting(css)
@@ -238,36 +237,30 @@ export class ToposSettingsPanel {
       });
   }
 
-  /** Verse numbers' color: the text's (faded), the accent color, or one picked */
-  private verseNumberColor(items: HTMLElement): void {
+  /** How a mark shows (verse numbers, footnotes, cross references): not at all, faded, in the accent color, or a color picked */
+  private markLook(items: HTMLElement, name: string, desc: string, key: "verseNumbers" | "footnotes" | "crossRefs", changed: (change: () => void) => Promise<void>): void {
     const settings = this.plugin.settings;
-    const choice = () => (!settings.verseNumberColor ? "text" : settings.verseNumberColor === "accent" ? "accent" : "custom");
-    const setting = new Setting(items).setName("Verse number color").setDesc("The color of verse numbers.");
+    const choice = () => (["none", "faded", "accent"].includes(settings[key]) ? settings[key] : "custom");
+    const setting = new Setting(items).setName(name).setDesc(md(desc));
     let picker: ColorComponent | null = null;
-    const save = () => {
-      showPicker();
-      this.plugin.bibleStyles.apply();
-      void this.plugin.saveToposSettings();
-    };
+    // The picker shows for a color of your own (ColorComponent's input isn't in the API's types)
+    const showPicker = () => setting.controlEl.querySelector<HTMLElement>('input[type="color"]')?.toggle(choice() === "custom");
     setting
       .addDropdown((d) =>
         d
-          .addOptions({ text: "Faded text", accent: "Accent color", custom: "Custom" })
+          .addOptions({ none: "None", faded: "Faded text", accent: "Accent color", custom: "Custom" })
           .setValue(choice())
-          .onChange((value) => {
-            settings.verseNumberColor = value === "text" ? "" : value === "accent" ? "accent" : (picker?.getValue() ?? themeColor(items, "--text-accent"));
-            save();
-          }),
+          .onChange((value) =>
+            changed(() => {
+              settings[key] = value === "custom" ? (picker?.getValue() ?? themeColor(items, "--text-accent")) : value;
+              showPicker();
+            }),
+          ),
       )
       .addColorPicker((c) => {
         picker = c;
-        c.setValue(choice() === "custom" ? settings.verseNumberColor : themeColor(items, "--text-accent")).onChange((value) => {
-          settings.verseNumberColor = value;
-          save();
-        });
+        c.setValue(choice() === "custom" ? settings[key] : themeColor(items, "--text-accent")).onChange((value) => changed(() => (settings[key] = value)));
       });
-    // The picker shows for a color of your own (ColorComponent's input isn't in the API's types)
-    const showPicker = () => setting.controlEl.querySelector<HTMLElement>('input[type="color"]')?.toggle(choice() === "custom");
     showPicker();
   }
 

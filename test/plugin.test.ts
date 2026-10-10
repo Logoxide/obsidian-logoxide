@@ -518,15 +518,16 @@ test("the built plugin loads, indexes, and runs its commands", async (t) => {
   );
   // Settings still shown (a part of a tab is drawn again when what it shows changes)
   const setting = (name: string): any => FakeSetting.all.find((s: any) => s.name === name && tab.containerEl.contains(s.settingEl));
-  // Display: footnotes and cross references are separate; notes render when either shows
-  assert.equal(plugin.settings.bibleCrossRefs, false);
-  setting("Cross references").controls[0].change(true);
+  // Display: each mark is one choice; notes render when either kind shows
+  assert.equal(plugin.settings.crossRefs, "none");
+  setting("Cross references").controls[0].change("accent");
+  assert.equal(plugin.settings.crossRefs, "accent");
   assert.equal(plugin.bookTextOptions().notes, true);
-  setting("Cross references").controls[0].change(false);
+  setting("Cross references").controls[0].change("none");
   assert.equal(plugin.bookTextOptions().notes, false);
-  setting("Verse numbers").controls[0].change(false);
-  assert.equal(plugin.settings.bibleVerseNumbers, false);
-  setting("Verse numbers").controls[0].change(true);
+  setting("Verse numbers").controls[0].change("none");
+  assert.equal(plugin.settings.verseNumbers, "none");
+  setting("Verse numbers").controls[0].change("faded");
   assert.equal(setting("Format preview").desc, "John 3:16,17,18; 4:1-5:3   Jude 1:5");
   setting("Join adjacent verses").controls[0].change(true);
   setting("Chapter in single-chapter books").controls[0].change(false);
