@@ -842,7 +842,7 @@ export class LogoxideBibles {
     const found: CommentaryNotes[] = [];
     for (const p of this.study.filter((s) => s.kind === PackageKind.Commentary)) {
       try {
-        const notes = p.pkg.notes(passage, options);
+        const notes = p.pkg.notes(passage, options, this.plugin.settings.stretchNotes);
         if (notes.length > 0) found.push({ commentary: p.name, title: p.title, notes });
         await this.saveCache(p.pkg);
       } catch (error) {

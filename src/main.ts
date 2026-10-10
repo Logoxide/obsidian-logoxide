@@ -1031,6 +1031,11 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
     return this.app.workspace.getLeavesOfType(COMMENTARY_VIEW).flatMap((leaf) => (leaf.view instanceof CommentaryView ? [leaf.view] : []));
   }
 
+  /** Shows the open commentary views again (a setting changed what they show) */
+  refreshCommentaries(): void {
+    for (const view of this.commentaryViews()) void view.render();
+  }
+
   /** Opens the commentary view in the right sidebar (or shows it), on a passage when given */
   async openCommentary(passage?: Passage | null, entry?: string): Promise<CommentaryView | null> {
     const { workspace } = this.app;

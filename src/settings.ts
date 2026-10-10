@@ -513,6 +513,16 @@ export class ToposSettingsPanel {
         }),
       );
     new Setting(study)
+      .setName("Stretch notes over the verses after them")
+      .setDesc("A commentary's note also covers the verses after it up to its next note in the chapter, so a verse the commentary skips shows the note before it. Off by default: a commentary may skip verses on purpose.")
+      .addToggle((t) =>
+        t.setValue(settings.stretchNotes).onChange((value) => {
+          settings.stretchNotes = value;
+          void this.plugin.saveData(settings);
+          this.plugin.refreshCommentaries();
+        }),
+      );
+    new Setting(study)
       .setName("Strong's entries on hover")
       .setDesc("Hovering over a Strong's number (`G25`, `H430`) in a note or a commentary, or a Bible word that carries one, shows its entry from the vault's Strong's dictionaries.")
       .addToggle((t) =>

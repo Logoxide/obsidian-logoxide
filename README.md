@@ -248,7 +248,9 @@ Commentary, dictionary, and cross-reference packages (logoxide's `commentary`, `
   links (with their weights, when the package gives them; hover to preview, Ctrl/Cmd-click for a
   new tab), and the references in the notes as links too. While *Follow the Bible and the
   cursor* is on (*Display → Commentaries and dictionaries*), it follows the verse at the top of
-  the Bible tab in front and the reference under the cursor in a note
+  the Bible tab in front and the reference under the cursor in a note. *Stretch notes over the
+  verses after them* (off by default) shows, for a verse a commentary skips, its note before it
+  in the chapter
 - **Strong's numbers**: hovering over one in a note (`G25`, `H430`, `G0025`), in a commentary's
   note, or over a word in a Bible whose text carries them (the KJV's `\w loved|strong="G25"\w*`)
   shows its entries from the vault's dictionaries keyed by Strong's Greek or Hebrew numbers

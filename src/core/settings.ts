@@ -132,6 +132,8 @@ export interface ToposSettings {
   markInDocuments: boolean;
   /** The commentary view follows the Bible tab's verse and the reference under the editor's cursor */
   commentaryFollows: boolean;
+  /** A commentary's note also covers the verses after it up to its next note in the chapter (a verse it skips shows the note before it) */
+  stretchNotes: boolean;
   /** Show a Strong's number's dictionary entry on hover (Bible words that carry one, `G25` in notes and the editor) */
   strongsHover: boolean;
   /** Once file-plus-plus's default link label has become `{{reference}}` */
@@ -192,6 +194,7 @@ export const DEFAULT_SETTINGS: ToposSettings = {
   pickerVerse: true,
   markInDocuments: true,
   commentaryFollows: true,
+  stretchNotes: false,
   strongsHover: true,
 };
 
