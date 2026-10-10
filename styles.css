@@ -1909,8 +1909,18 @@ body:not(.is-mobile) .topos-pane.is-narrow .topos-pane-card:is(:hover, :focus-wi
 .topos-picker-books.is-roomy {
   grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
 }
+/* Numbers: square tiles in a square block (at least five a row), centered */
+.topos-picker-body {
+  --topos-picker-tile: 2.75rem;
+}
 .topos-picker-numbers {
-  grid-template-columns: repeat(auto-fill, minmax(2.75rem, 1fr));
+  grid-template-columns: repeat(var(--topos-picker-columns, 5), var(--topos-picker-tile));
+  justify-content: center;
+}
+.topos-picker .topos-picker-numbers .topos-picker-tile {
+  aspect-ratio: 1;
+  min-height: 0;
+  padding: 0;
 }
 .topos-picker .topos-picker-tile {
   --topos-genre: var(--text-faint);
@@ -2037,9 +2047,6 @@ body:not(.is-mobile) .topos-pane.is-narrow .topos-pane-card:is(:hover, :focus-wi
 .is-phone .topos-picker-books.is-roomy {
   grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
 }
-.is-phone .topos-picker .topos-picker-numbers .topos-picker-tile {
-  min-height: 2.75rem;
-}
 .is-phone .topos-picker-testaments {
   grid-template-columns: 1fr;
 }
@@ -2050,4 +2057,13 @@ body:not(.is-mobile) .topos-pane.is-narrow .topos-pane-card:is(:hover, :focus-wi
   background: var(--background-modifier-hover);
   color: var(--text-muted);
   font-size: var(--font-ui-smaller);
+}
+
+/* The words of Jesus' red (the Display tab's "Red"): soft rather than the theme's alarm red, a
+   shade for each theme. Bible text is in shadow roots, which inherit it */
+body.theme-light {
+  --topos-red-letters: #b23a33;
+}
+body.theme-dark {
+  --topos-red-letters: #e2766e;
 }

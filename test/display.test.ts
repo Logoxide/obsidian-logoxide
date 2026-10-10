@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { displayCss, notesShown, type DisplaySettings } from "../src/core/display.ts";
 
-const DEFAULTS: DisplaySettings = { footnotes: "none", crossRefs: "none", verseNumbers: "faded", bibleRedLetters: false };
+const DEFAULTS: DisplaySettings = { footnotes: "none", crossRefs: "none", verseNumbers: "faded", wordsOfJesus: "none" };
 
 test("display settings become CSS in the readers' layer", () => {
   // Notes hidden by default (they aren't rendered then either), verse numbers faded
@@ -26,5 +26,7 @@ test("display settings become CSS in the readers' layer", () => {
   assert.match(displayCss({ ...DEFAULTS, verseNumbers: "red; } body { x: y" }), /color: currentColor;/);
   assert.match(displayCss({ ...DEFAULTS, verseNumbers: "none" }), /\.topos-verse::before \{ content: none; \}/);
   // Red letters: the stylesheet's own color, else the theme's red
-  assert.match(displayCss({ ...DEFAULTS, bibleRedLetters: true }), /\.topos-woj \{ color: var\(--tpb-woj-color, var\(--color-red/);
+  assert.match(displayCss({ ...DEFAULTS, wordsOfJesus: "red" }), /\.topos-woj \{ color: var\(--tpb-woj-color, var\(--topos-red-letters, #c0453e\)\); \}/);
+  assert.match(displayCss({ ...DEFAULTS, wordsOfJesus: "accent" }), /\.topos-woj \{ color: var\(--tpb-woj-color, var\(--text-accent\)\); \}/);
+  assert.match(displayCss({ ...DEFAULTS, wordsOfJesus: "#aa0000" }), /\.topos-woj \{ color: var\(--tpb-woj-color, #aa0000\); \}/);
 });

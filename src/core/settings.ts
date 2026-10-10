@@ -7,8 +7,12 @@ import type { SortOrder } from "./sort.ts";
 
 export type StyleName = "name" | "abbreviation" | "osis";
 
-/** How a mark in Bible text (verse numbers, notes) shows: not at all, in the text's color faded, the accent color, or a color like `#7c3aed` */
-export type MarkLook = "none" | "faded" | "accent" | (string & {});
+/**
+ * How a mark in Bible text (verse numbers, notes, the words of Jesus) shows: not at all (the words
+ * of Jesus: as the rest of the text), in the text's color faded, the accent color, a soft red (`red`,
+ * lighter on a dark theme), or a color like `#7c3aed`
+ */
+export type MarkLook = "none" | "faded" | "accent" | "red" | (string & {});
 
 export interface ToposSettings {
   /** How references are written by autocomplete, normalizing, and the sidebar */
@@ -88,8 +92,8 @@ export interface ToposSettings {
   bibleHeadings: boolean;
   /** The number before each verse */
   verseNumbers: MarkLook;
-  /** Show the words of Jesus in red */
-  bibleRedLetters: boolean;
+  /** The words of Jesus' color, in Bibles that mark them (`none`: the text's) */
+  wordsOfJesus: MarkLook;
   /**
    * A CSS file in the vault for Bible text (its tab, previews, and embeds), which render where
    * Obsidian's CSS snippets don't reach; "" for none
@@ -97,6 +101,8 @@ export interface ToposSettings {
   bibleCss: string;
   /** Where links to references (`[John 1:1]`, `[text](John 1:1)`) open: the Bible tab or the link site */
   referenceLinks: "bible" | "site";
+  /** How many verses embeds and hover previews show around their passage, faded (a link's `&c=2` says otherwise) */
+  previewContext: number;
   /** Show bare references' text on hover (links and explicit links always preview) */
   previewBare: boolean;
   /**
@@ -157,9 +163,10 @@ export const DEFAULT_SETTINGS: ToposSettings = {
   crossRefs: "none",
   bibleHeadings: true,
   verseNumbers: "faded",
-  bibleRedLetters: false,
+  wordsOfJesus: "red",
   bibleCss: "",
   referenceLinks: "bible",
+  previewContext: 0,
   previewBare: true,
   embedAlone: false,
   embedAloneBlankLines: 0,

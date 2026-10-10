@@ -37,6 +37,7 @@ import { indexBook, type BookRequest, type BookResult, type IndexRequest } from 
 import { EpubSupport } from "./epub/support.ts";
 import { DocumentSupport } from "./documents/support.ts";
 import workerSource from "topos-worker-source";
+import type { Bible } from "./core/bibles.ts";
 import { openPassagePicker, pickPassage } from "./bible/picker.ts";
 import { GoToReferenceModal, InsertReferenceModal, SavedQueryModal } from "./modals.ts";
 import { linkReferences, relinkEditor } from "./reading.ts";
@@ -328,7 +329,8 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
     }
     if (saved.footnotes === undefined && old.bibleNotes) this.settings.footnotes = "accent";
     if (saved.crossRefs === undefined && (old.bibleCrossRefs ?? old.bibleNotes)) this.settings.crossRefs = "accent";
-    for (const key of ["bibleNotes", "bibleCrossRefs", "bibleVerseNumbers", "verseNumberColor"]) delete (this.settings as unknown as Record<string, unknown>)[key];
+    // Red letters were on or off (off by default): the words of Jesus have a look now, red by default
+    for (const key of ["bibleNotes", "bibleCrossRefs", "bibleVerseNumbers", "verseNumberColor", "bibleRedLetters"]) delete (this.settings as unknown as Record<string, unknown>)[key];
     this.settings.queries = (this.settings.queries ?? []).filter((q) => q && typeof q.name === "string");
     // Saved searches from before 0.4.0 used -o for any overlap
     if ((this.settings.queryFormat ?? 1) < 2) {
@@ -368,6 +370,17 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
       .all()
       .filter((b) => b.package && recorded.has(b.name.toLowerCase()))
       .sort((a, b) => Number(b === first) - Number(a === first));
+  }
+
+  /**
+   * A book's verse counts in a Bible, one per chapter in order: a folder Bible's as read in the
+   * background (`VerseCounts`), a package's from logoxide; null when they aren't known
+   */
+  chapterVerses(bible: Bible | null, bookId: number): number[] | null {
+    if (!bible) return null;
+    if (bible.package) return this.packages.chapterVerses(bible.name, bookId);
+    const path = bible.books.get(bookId);
+    return path ? this.verseCounts.of(path, bookId) : null;
   }
 
   /** Plays a passage from a Bible's recording (the first of `recordedBibles`), in its book's tab */

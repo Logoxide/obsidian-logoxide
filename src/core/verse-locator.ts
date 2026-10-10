@@ -45,10 +45,71 @@ export function withEdition(locator: string, edition: Edition): string {
   return at === -1 ? locator + params : locator.slice(0, at) + params + locator.slice(at);
 }
 
+const CONTEXT = /&c=(\d+)/i;
+
+/**
+ * A locator without the context it asks for, and that context: how many verses around its passage
+ * an embed or hover preview shows (`v=3:16&c=2`: 3:14-18, 3:16 standing out); null when it doesn't say
+ */
+export function splitContext(locator: string): { locator: string; context: number | null } {
+  const m = CONTEXT.exec(locator);
+  if (!m) return { locator, context: null };
+  return { locator: locator.replace(m[0], ""), context: Number(m[1]) };
+}
+
+/** A locator asking for context around its passage, before its exact words (`v=3:16&c=2:~:text=…`) */
+export function withContext(locator: string, context: number | null): string {
+  if (context === null) return locator;
+  const at = locator.search(/(:~:|%3A~%3A)/i);
+  return at === -1 ? `${locator}&c=${context}` : `${locator.slice(0, at)}&c=${context}${locator.slice(at)}`;
+}
+
+/**
+ * Parts with `context` verses before and after each (whole chapters as they are), by each chapter's
+ * verse count (`counts.get(3)`: chapter 3's), crossing into the chapters around them: `shown` is
+ * what to render (overlapping parts joined), `context` the verses added, to set apart
+ */
+export function withContextVerses(parts: VersePart[], context: number, counts: ReadonlyMap<number, number>): { shown: VersePart[]; context: VersePart[] } {
+  if (context <= 0 || parts.some((p) => p.verse === 0)) return { shown: parts, context: [] };
+  // Every verse of the book in order, and where each is in that order
+  const verses: [number, number][] = [];
+  for (const chapter of [...counts.keys()].sort((a, b) => a - b)) for (let v = 1; v <= counts.get(chapter)!; v++) verses.push([chapter, v]);
+  const index = new Map(verses.map(([c, v], i) => [c * 1000 + v, i]));
+  const at = (c: number, v: number, last: boolean) => {
+    const exact = index.get(c * 1000 + v);
+    if (exact !== undefined) return exact;
+    // Past the chapter's end (`END`, or a count this Bible doesn't have): its last verse
+    const inChapter = verses.flatMap(([vc], i) => (vc === c ? [i] : []));
+    return inChapter.length === 0 ? -1 : last ? inChapter.at(-1)! : inChapter[0]!;
+  };
+  const own = new Set<number>();
+  const all = new Set<number>();
+  for (const p of parts) {
+    const start = at(p.chapter, p.verse, false);
+    const end = at(p.endChapter, p.endVerse, true);
+    if (start === -1 || end === -1) return { shown: parts, context: [] };
+    for (let i = start; i <= end; i++) own.add(i);
+    for (let i = Math.max(0, start - context); i <= Math.min(verses.length - 1, end + context); i++) all.add(i);
+  }
+  const runs = (set: Set<number>): VersePart[] => {
+    const sorted = [...set].sort((a, b) => a - b);
+    const out: VersePart[] = [];
+    for (let i = 0; i < sorted.length; i++) {
+      const first = sorted[i]!;
+      while (i + 1 < sorted.length && sorted[i + 1] === sorted[i]! + 1) i++;
+      const [chapter, verse] = verses[first]!;
+      const [endChapter, endVerse] = verses[sorted[i]!]!;
+      out.push({ chapter, verse, endChapter, endVerse });
+    }
+    return out;
+  };
+  return { shown: runs(all), context: runs(new Set([...all].filter((i) => !own.has(i)))) };
+}
+
 export function parseVerseLocator(locator: string): VersePart[] | null {
   // Without the exact words a locator may end with (`v=3:16:~:text=…`, see file-plus-plus's
-  // units), and without the edition it was made with
-  const m = /^v=(.+)$/.exec(decode(splitEdition(locator.trim()).locator.replace(/(:~:|%3A~%3A).*$/i, "")));
+  // units), and without the edition it was made with or the context it asks for
+  const m = /^v=(.+)$/.exec(decode(splitContext(splitEdition(locator.trim()).locator).locator.replace(/(:~:|%3A~%3A).*$/i, "")));
   if (!m) return null;
   const parts: VersePart[] = [];
   for (const text of m[1].split(";")) {

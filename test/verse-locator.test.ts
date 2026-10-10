@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { BookStyle, Topos } from "logoxide";
-import { END, formatVerseLocator, parseVerseLocator, partSegments, passageParts, splitEdition, withEdition } from "../src/core/verse-locator.ts";
+import { END, formatVerseLocator, parseVerseLocator, partSegments, passageParts, splitContext, splitEdition, withContext, withContextVerses, withEdition } from "../src/core/verse-locator.ts";
 
 test("verse locators round-trip", () => {
   for (const s of ["v=3:16", "v=3:16-18", "v=3:16-4:2", "v=3", "v=3-4", "v=3:16;4:1-5;5"]) {
@@ -37,4 +37,23 @@ test("a link to a package's Bible keeps the edition it was made with", () => {
   assert.deepEqual(splitEdition("v=3:16"), { locator: "v=3:16", edition: null });
   // The verses read the same with or without it
   assert.deepEqual(parseVerseLocator("v=3:16-18&ver=1.0.2&vh=9f86d081:~:text=so"), parseVerseLocator("v=3:16-18"));
+});
+
+test("a locator's context: verses around its passage, across chapters", () => {
+  assert.deepEqual(splitContext("v=3:16&c=2"), { locator: "v=3:16", context: 2 });
+  assert.deepEqual(splitContext("v=3:16"), { locator: "v=3:16", context: null });
+  assert.equal(withContext("v=3:16:~:text=so", 2), "v=3:16&c=2:~:text=so");
+  // The verses themselves ignore it, and the edition too
+  assert.deepEqual(parseVerseLocator("v=3:16&ver=1.0.2&vh=9f86d081&c=2"), parseVerseLocator("v=3:16"));
+  const counts = new Map([[2, 25], [3, 36], [4, 54]]);
+  const v = (chapter: number, verse: number, endChapter: number, endVerse: number) => ({ chapter, verse, endChapter, endVerse });
+  assert.deepEqual(withContextVerses([v(3, 16, 3, 16)], 2, counts), { shown: [v(3, 14, 3, 18)], context: [v(3, 14, 3, 15), v(3, 17, 3, 18)] });
+  // Into the chapter before, and stopping at the book's last verse
+  assert.deepEqual(withContextVerses([v(3, 1, 3, 2)], 2, counts).shown, [v(2, 24, 3, 4)]);
+  assert.deepEqual(withContextVerses([v(4, 53, 4, 54)], 3, counts).shown, [v(4, 50, 4, 54)]);
+  // Parts whose context overlaps are shown as one
+  assert.deepEqual(withContextVerses([v(3, 16, 3, 16), v(3, 19, 3, 19)], 1, counts), { shown: [v(3, 15, 3, 20)], context: [v(3, 15, 3, 15), v(3, 17, 3, 18), v(3, 20, 3, 20)] });
+  // Whole chapters, and no context, are as they were
+  assert.deepEqual(withContextVerses([v(3, 0, 3, END)], 2, counts).context, []);
+  assert.deepEqual(withContextVerses([v(3, 16, 3, 16)], 0, counts).shown, [v(3, 16, 3, 16)]);
 });

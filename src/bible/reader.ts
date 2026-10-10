@@ -1,7 +1,7 @@
 import { DocumentReader, PREFIX, splitTextDirective, textFragmentScheme, withTextDirective, type LocatorScheme, type ParsedLocator, type ReaderOptions, type TocItem } from "file-plus-plus/core";
 import type { BookTextOptions, LogoxideBook } from "logoxide";
 import { markNotes, notePopups, NOTES_CSS, type NoteLinks } from "./notes.ts";
-import { END, formatVerseLocator, parseVerseLocator, partSegments, splitEdition, withEdition, type VersePart } from "../core/verse-locator.ts";
+import { END, formatVerseLocator, parseVerseLocator, partSegments, splitContext, splitEdition, withContext, withContextVerses, withEdition, type VersePart } from "../core/verse-locator.ts";
 
 /** A Bible book opened from a USX file */
 export interface BibleBook {
@@ -26,18 +26,19 @@ export interface BookEdition {
   said(message: string): void;
 }
 
-/** `v=3:16-18`: verses, chapters, and parts joined by `;` (see verse-locator.ts) */
+/** `v=3:16-18`: verses, chapters, and parts joined by `;` (see verse-locator.ts), maybe with context (`&c=2`) */
 export const verseScheme: LocatorScheme = {
   id: "verse",
   match(s) {
-    // The verses, then the edition the link was made with (`&ver=…&vh=…`), then the exact words
-    const m = /^v=[^&]*(?:&(?:ver|vh)=[^&]*)*/.exec(s);
+    // The verses, then the edition the link was made with (`&ver=…&vh=…`) and the context it asks for (`&c=2`), then the exact words
+    const m = /^v=[^&]*(?:&(?:ver|vh|c)=[^&]*)*/.exec(s);
     if (!m) return null;
     const parts = parseVerseLocator(m[0]);
     const { text } = splitTextDirective(m[0]);
     const { edition } = splitEdition(m[0]);
+    const { context } = splitContext(m[0]);
     const base = formatVerseLocator(parts ?? []);
-    return parts ? { locator: withTextDirective(edition ? withEdition(base, edition) : base, text), rest: s.slice(m[0].length) } : null;
+    return parts ? { locator: withTextDirective(withContext(edition ? withEdition(base, edition) : base, context), text), rest: s.slice(m[0].length) } : null;
   },
   isRange: () => true,
 };
@@ -50,6 +51,8 @@ export interface BibleReaderOptions extends ReaderOptions {
   stylesheet?: (doc: Document) => CSSStyleSheet | null;
   /** References in the book's notes: links in their popups */
   noteLinks?: (book: BibleBook) => NoteLinks | null;
+  /** How many verses a preview shows around its passage, unless its locator says (`&c=2`) */
+  context?: number;
 }
 
 /** A verse marker in the rendered text */
@@ -71,6 +74,9 @@ export class BibleReader extends DocumentReader {
   private markerEls: HTMLElement[] = [];
   private _toc: TocItem[] = [];
   private readonly preview: VersePart[] | null;
+  /** A preview's passage with the verses around it, and those verses (set apart) */
+  private readonly shown: VersePart[] | null = null;
+  private readonly contextParts: VersePart[] = [];
 
   constructor(
     host: HTMLElement,
@@ -84,6 +90,15 @@ export class BibleReader extends DocumentReader {
       this.shadow.adoptedStyleSheets = [...this.shadow.adoptedStyleSheets, sheet];
     }
     this.preview = preview?.scheme === verseScheme.id && preview.locator ? parseVerseLocator(preview.locator) : null;
+    const context = (preview?.locator ? splitContext(preview.locator).context : null) ?? opts.context ?? 0;
+    if (this.preview && context > 0) {
+      const chapters = bible.book.chapters();
+      const counts = bible.book.chapterVerses();
+      const byChapter = new Map(Array.from(chapters, (c, i) => [c, counts[i] ?? 0]));
+      const wider = withContextVerses(this.preview, context, byChapter);
+      this.shown = wider.shown;
+      this.contextParts = wider.context;
+    }
     this.cleanup.push(
       notePopups(this.scroller, this.content, {
         links: opts.noteLinks?.(bible) ?? null,
@@ -95,6 +110,11 @@ export class BibleReader extends DocumentReader {
 
   get toc(): TocItem[] {
     return this._toc;
+  }
+
+  /** Whether a preview shows verses around its passage */
+  get hasContext(): boolean {
+    return this.contextParts.length > 0;
   }
 
   /** Whether only a passage is shown (a hover preview or an embed) */
@@ -131,6 +151,8 @@ export class BibleReader extends DocumentReader {
 .topos-title.topos-d, .topos-title.topos-sp { font-weight: normal; font-style: italic; margin-top: 0.3em; }
 .topos-title.topos-r, .topos-title.topos-mr { font-weight: normal; font-style: italic; font-size: 0.9em; }
 .topos-woj { color: var(--tpb-woj-color, inherit); }
+/* The verses around a preview's passage */
+.tpb-context { opacity: 0.5; }
 .topos-divine-name { font-variant: small-caps; }
 /* Translators' additions (KJV italics) */
 .topos-added { font-style: italic; }
@@ -150,7 +172,7 @@ ${USX_CSS}
         bookId: this.bible.bookId,
         book: this.bible.name,
         reference: "",
-        segments: partSegments(this.preview),
+        segments: partSegments(this.shown ?? this.preview),
         osis: "",
         usfm: "",
       };
@@ -196,6 +218,10 @@ ${USX_CSS}
     this.content.append(frag);
     markNotes(this.content);
     this.indexMarkers();
+    for (const part of this.contextParts) {
+      const range = this.partRange(part);
+      if (range) setApart(range, this.markerEls);
+    }
   }
 
   private indexMarkers(): void {
@@ -223,8 +249,13 @@ ${USX_CSS}
       return range && (this.resolveTextFragment(text, range) ?? range);
     }
     // A preview shows only its parts, so it highlights all of them; the book, the first
-    const first = this.partRange(parts[0]!);
-    if (!first || !this.preview || parts.length === 1) return first;
+    return this.preview ? this.spanning(parts) : this.partRange(parts[0]!);
+  }
+
+  /** From the first part's start to the last one's end */
+  private spanning(parts: VersePart[]): Range | null {
+    const first = parts[0] && this.partRange(parts[0]);
+    if (!first || parts.length === 1) return first ?? null;
     const last = this.partRange(parts[parts.length - 1]!) ?? first;
     const range = this.doc.createRange();
     range.setStart(first.startContainer, first.startOffset);
@@ -256,6 +287,17 @@ ${USX_CSS}
       moved.endVerse = first.endVerse === END ? END : first.endVerse - first.verse + found.verse;
     }
     return [moved, ...parts.slice(1)];
+  }
+
+  /**
+   * A preview with verses around its passage: all of them from the top when they fit, else the
+   * passage in the middle
+   */
+  override scrollToRange(range: Range, opts: Parameters<DocumentReader["scrollToRange"]>[1] = {}): void {
+    const whole = this.shown && this.hasContext ? this.spanning(this.shown) : null;
+    if (!whole || !this.preview) return super.scrollToRange(range, opts);
+    if (whole.getBoundingClientRect().height <= this.scroller.clientHeight) return super.scrollToRange(whole, { ...opts, position: "top" });
+    super.scrollToRange(this.spanning(this.preview) ?? range, { ...opts, position: "center" });
   }
 
   /** The text of verses (a bridge's whole verses), as a range */
@@ -396,6 +438,33 @@ br.topos-l + p.topos-p:not([data-style="nb"]) { margin-top: 0.6em; }
 [data-style="jmp"] { text-decoration: underline; }
 [data-style="dc"] { opacity: 0.85; }
 `;
+
+/** Sets a range's words apart (the context around a passage): its text in faded spans, and its verse numbers */
+function setApart(range: Range, markers: readonly HTMLElement[]): void {
+  const root = range.commonAncestorContainer;
+  const doc = range.startContainer.ownerDocument ?? (root as Document);
+  const texts: Text[] = [];
+  if (root.nodeType === Node.TEXT_NODE) texts.push(root as Text);
+  else {
+    const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) if (range.intersectsNode(node)) texts.push(node as Text);
+  }
+  for (const marker of markers) if (range.intersectsNode(marker) && marker !== range.endContainer) marker.classList.add("tpb-context");
+  // A heading goes with the verse after it: one ending the context (before the passage) isn't set apart
+  const title = (text: Text) => text.parentElement?.closest(".topos-title") ?? null;
+  const lastWords = texts.findLastIndex((t) => !title(t) && t.data.trim() !== "");
+  texts.splice(lastWords + 1);
+  const [startNode, startOffset, endNode, endOffset] = [range.startContainer, range.startOffset, range.endContainer, range.endOffset];
+  for (let text of texts) {
+    if (text === endNode) text.splitText(endOffset);
+    if (text === startNode && startOffset > 0) text = text.splitText(startOffset);
+    if (!text.data.trim()) continue;
+    const span = doc.createElement("span");
+    span.className = "tpb-context";
+    text.replaceWith(span);
+    span.append(text);
+  }
+}
 
 function gap(doc: Document): HTMLElement {
   const el = doc.createElement("div");

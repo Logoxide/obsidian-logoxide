@@ -2,7 +2,7 @@ import { setIcon } from "obsidian";
 import type { ParsedLocator } from "file-plus-plus/core";
 import { DocumentEmbed, MediaPlayer } from "file-plus-plus/obsidian";
 import { clipOf } from "../core/timings.ts";
-import { parseVerseLocator } from "../core/verse-locator.ts";
+import { formatVerseLocator, parseVerseLocator } from "../core/verse-locator.ts";
 import { STUB_EXTENSION } from "../core/stubs.ts";
 import type ToposPlugin from "../main.ts";
 import type { BibleBook, BibleReader } from "./reader.ts";
@@ -24,7 +24,8 @@ export class BibleEmbed extends DocumentEmbed<BibleBook, BibleReader> {
     reader.setHighlights([]);
     const book = reader.bible;
     // A hover preview from Obsidian has no label: the book and the locator's verses
-    const verses = loc.locator?.replace(/^v=/, "").replaceAll(";", "; ") ?? "";
+    const parts = parseVerseLocator(loc.locator ?? "");
+    const verses = parts ? formatVerseLocator(parts).slice(2).replaceAll(";", "; ") : "";
     const label = this.label || [book.name, verses].filter(Boolean).join(" ");
     this.title.setText([label, book.bible].filter(Boolean).join(" · "));
     if (!range) return;

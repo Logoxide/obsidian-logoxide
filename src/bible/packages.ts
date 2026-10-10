@@ -344,6 +344,18 @@ export class LogoxideBibles {
     return translations;
   }
 
+  /** A package Bible's verse counts for a book, one per chapter in order (null without the Bible or the book) */
+  chapterVerses(name: string, bookId: number): number[] | null {
+    const bible = this.named(name);
+    if (!bible || bible.name.toLowerCase() !== name.toLowerCase()) return null;
+    try {
+      const counts = Array.from(bible.pkg.chapterVerses(bookId));
+      return counts.length > 0 ? counts : null;
+    } catch {
+      return null;
+    }
+  }
+
   /** A package Bible by its name or an alias (ignoring case); without one, the manifest's default */
   private named(name?: string | null): PackageBible | null {
     if (name) {

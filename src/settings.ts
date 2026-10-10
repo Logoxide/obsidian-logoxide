@@ -202,7 +202,7 @@ export class ToposSettingsPanel {
       await this.plugin.saveToposSettings();
       if ([settings.bibleHeadings, notesShown(settings)].join() !== before) this.plugin.rerenderBibles();
     };
-    const toggle = (items: HTMLElement, name: string, desc: string, key: "bibleHeadings" | "bibleRedLetters") =>
+    const toggle = (items: HTMLElement, name: string, desc: string, key: "bibleHeadings") =>
       new Setting(items)
         .setName(name)
         .setDesc(md(desc))
@@ -211,7 +211,7 @@ export class ToposSettingsPanel {
     const text = section(el, "Text").items;
     toggle(text, "Section headings", "The translation's headings, like *The Word Became Flesh*.", "bibleHeadings");
     this.markLook(text, "Verse numbers", "The small number before each verse.", "verseNumbers", changed);
-    toggle(text, "Red letters", "The words of Jesus in red, in Bibles that mark them.", "bibleRedLetters");
+    this.markLook(text, "Words of Jesus", "Their color, in Bibles that mark them.", "wordsOfJesus", changed, { none: "Normal text", red: "Red", accent: "Accent color" });
 
     const notes = section(el, "Notes", "A mark in the text: footnotes are lettered, cross references are †. Hover over one, or tap it, to read the note.").items;
     this.markLook(notes, "Footnotes", "The translation's footnotes: other readings, literal meanings, and study notes.", "footnotes", changed);
@@ -237,10 +237,20 @@ export class ToposSettingsPanel {
       });
   }
 
-  /** How a mark shows (verse numbers, footnotes, cross references): not at all, faded, in the accent color, or a color picked */
-  private markLook(items: HTMLElement, name: string, desc: string, key: "verseNumbers" | "footnotes" | "crossRefs", changed: (change: () => void) => Promise<void>): void {
+  /**
+   * How a mark shows (verse numbers, footnotes, cross references, the words of Jesus): not at all,
+   * faded, in the accent color, or a color picked (`looks`: the named ones, besides Custom)
+   */
+  private markLook(
+    items: HTMLElement,
+    name: string,
+    desc: string,
+    key: "verseNumbers" | "footnotes" | "crossRefs" | "wordsOfJesus",
+    changed: (change: () => void) => Promise<void>,
+    looks: Record<string, string> = { none: "None", faded: "Faded text", accent: "Accent color" },
+  ): void {
     const settings = this.plugin.settings;
-    const choice = () => (["none", "faded", "accent"].includes(settings[key]) ? settings[key] : "custom");
+    const choice = () => (settings[key] in looks ? settings[key] : "custom");
     const setting = new Setting(items).setName(name).setDesc(md(desc));
     let picker: ColorComponent | null = null;
     // The picker shows for a color of your own (ColorComponent's input isn't in the API's types)
@@ -248,7 +258,7 @@ export class ToposSettingsPanel {
     setting
       .addDropdown((d) =>
         d
-          .addOptions({ none: "None", faded: "Faded text", accent: "Accent color", custom: "Custom" })
+          .addOptions({ ...looks, custom: "Custom" })
           .setValue(choice())
           .onChange((value) =>
             changed(() => {
@@ -379,6 +389,18 @@ export class ToposSettingsPanel {
           settings.previewBare = value;
           void save();
         }),
+      );
+    new Setting(embeds)
+      .setName("Verses around the passage")
+      .setDesc(md("How many verses before and after its passage an embed or preview shows, faded. A link can say its own: `JHN.usx#v=3:16&c=2`."))
+      .addDropdown((d) =>
+        d
+          .addOptions({ 0: "None", 1: "1 verse", 2: "2 verses", 3: "3 verses", 5: "5 verses", 10: "10 verses" })
+          .setValue(String(settings.previewContext))
+          .onChange((value) => {
+            settings.previewContext = Number(value);
+            void save();
+          }),
       );
     const counts = (none: string) => {
       const options: Record<string, string> = { 0: none };

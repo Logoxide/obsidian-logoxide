@@ -46,6 +46,12 @@ export class VerseCounts {
     return counts;
   }
 
+  /** A book file's verse counts, one per chapter in order, once read */
+  of(path: string, bookId: number): number[] | null {
+    const saved = this.saved[path];
+    return saved && saved.bookId === bookId ? saved.counts : null;
+  }
+
   /** Reads the saved counts, then any books that are new or changed */
   async start(): Promise<void> {
     const file = this.file;

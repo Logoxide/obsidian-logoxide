@@ -8,6 +8,9 @@ import { activeBibleView } from "./parallel.ts";
 /** The genres that color the book tiles, in order: topos's, one per book */
 const GENRES = ["Pentateuch", "History", "Wisdom And Poetry", "Major Prophets", "Minor Prophets", "Gospels And Acts", "Pauline Epistles", "General Epistles"];
 
+/** The fewest number tiles in a row (unless there are fewer numbers) */
+const MIN_COLUMNS = 5;
+
 type Step = "testament" | "book" | "chapter" | "verse";
 
 export interface PickerOptions {
@@ -78,8 +81,18 @@ export class PassagePickerModal extends Modal {
     return this.plugin.settings.pickerNumbers;
   }
 
-  /** How many verses a chapter of the chosen book has (topos's counts: the KJV's) */
+  /** The chosen book's verse counts in the Bible, one per chapter, when known */
+  private counts: number[] | null = null;
+
+  /** How many chapters the chosen book has: in the Bible, else topos's count */
+  private get chapters(): number {
+    return this.counts?.length || this.book?.chapters || 0;
+  }
+
+  /** How many verses a chapter of the chosen book has: in the Bible, else topos's count (the KJV's) */
   private verses(chapter: number): number {
+    const own = this.counts?.[chapter - 1];
+    if (own) return own;
     const passage = this.book ? this.plugin.topos.parse(`${this.book.name} ${chapter}`, BookStyle.Name) : null;
     return passage ? this.plugin.topos.verses(passage).length : 0;
   }
@@ -94,7 +107,7 @@ export class PassagePickerModal extends Modal {
     const steps: Step[] = ["testament", "book", "chapter", "verse"];
     let i = steps.indexOf(this.step) - 1;
     // A one-chapter book has no chapter step, and without the testament step the books come first
-    if (steps[i] === "chapter" && this.book?.chapters === 1) i--;
+    if (steps[i] === "chapter" && this.chapters === 1) i--;
     if (steps[i] === "testament" && !this.plugin.settings.pickerTestament) i--;
     if (i < 0) return;
     this.go(steps[i]!);
@@ -111,7 +124,7 @@ export class PassagePickerModal extends Modal {
     this.bodyEl.dataset.step = this.step;
     if (this.step === "testament") this.renderTestaments();
     else if (this.step === "book") this.renderBooks();
-    else if (this.step === "chapter") this.renderNumbers(this.book!.chapters, "Chapter");
+    else if (this.step === "chapter") this.renderNumbers(this.chapters, "Chapter");
     else this.renderNumbers(this.verses(this.chapter!), "Verse");
   }
 
@@ -129,8 +142,8 @@ export class PassagePickerModal extends Modal {
     };
     if (this.step === "testament" || (this.step === "book" && !this.testament)) crumb(this.options.action, null);
     if (this.testament) crumb(TESTAMENT_NAMES[this.testament], "book");
-    if (this.book && this.step !== "book") crumb(this.book.name, this.book.chapters > 1 ? "chapter" : null);
-    if (this.chapter !== null && this.step === "verse" && this.book!.chapters > 1) crumb(`Chapter ${this.chapter}`, null);
+    if (this.book && this.step !== "book") crumb(this.book.name, this.chapters > 1 ? "chapter" : null);
+    if (this.chapter !== null && this.step === "verse" && this.chapters > 1) crumb(`Chapter ${this.chapter}`, null);
     if (this.typed && this.step === "book") el.createSpan({ cls: "topos-picker-typed", text: this.typed });
   }
 
@@ -186,8 +199,9 @@ export class PassagePickerModal extends Modal {
 
   private pickBook(book: BookInfo, e?: MouseEvent | KeyboardEvent): void {
     this.book = book;
+    this.counts = this.plugin.chapterVerses(this.options.bible, book.id);
     this.chapter = null;
-    if (book.chapters > 1) return this.go("chapter");
+    if (this.chapters > 1) return this.go("chapter");
     this.chapter = 1;
     if (this.plugin.settings.pickerVerse) this.go("verse");
     else this.finish(null, e);
@@ -205,6 +219,7 @@ export class PassagePickerModal extends Modal {
     };
     if (this.numbers === "keypad") return this.renderKeypad(count, what, pick);
     const grid = this.bodyEl.createDiv("topos-picker-grid topos-picker-numbers");
+    grid.style.setProperty("--topos-picker-columns", String(this.columns(count)));
     for (let n = 1; n <= count; n++) {
       const tile = grid.createEl("button", { cls: "topos-picker-tile", text: String(n), attr: { "data-n": String(n) } });
       if (n === here) tile.addClass("is-current");
@@ -216,6 +231,18 @@ export class PassagePickerModal extends Modal {
     }
     this.markTyped();
     this.focusBody();
+  }
+
+  /**
+   * How many number tiles a row has: about as many as rows, so the grid is square, but at least
+   * `MIN_COLUMNS` (a few verses make one row), and no more than fit
+   */
+  private columns(count: number): number {
+    const style = getComputedStyle(this.bodyEl);
+    const tile = parseFloat(style.getPropertyValue("--topos-picker-tile")) * parseFloat(getComputedStyle(this.bodyEl.doc.documentElement).fontSize) || 44;
+    const gap = 4;
+    const fit = Math.max(1, Math.floor((this.bodyEl.clientWidth + gap) / (tile + gap)));
+    return Math.min(fit, Math.max(MIN_COLUMNS, Math.ceil(Math.sqrt(count))));
   }
 
   /**

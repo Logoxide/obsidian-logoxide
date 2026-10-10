@@ -1,7 +1,7 @@
 import type { MarkLook, ToposSettings } from "./settings.ts";
 
 /** The settings that change how Bible text looks */
-export type DisplaySettings = Pick<ToposSettings, "footnotes" | "crossRefs" | "verseNumbers" | "bibleRedLetters">;
+export type DisplaySettings = Pick<ToposSettings, "footnotes" | "crossRefs" | "verseNumbers" | "wordsOfJesus">;
 
 /**
  * The display settings as CSS for Bible text (its tab, previews, and embeds), in the readers'
@@ -15,7 +15,8 @@ export function displayCss(settings: DisplaySettings): string {
     mark(".topos-note:not(.topos-crossref)", settings.footnotes, ".topos-note:not(.topos-crossref) { display: none; }"),
     mark(".topos-note.topos-crossref", settings.crossRefs, ".topos-note.topos-crossref { display: none; }"),
   ];
-  if (settings.bibleRedLetters) rules.push(".topos-woj { color: var(--tpb-woj-color, var(--color-red, #e93147)); }");
+  // The words of Jesus: the Bible stylesheet's color, else the setting's
+  if (settings.wordsOfJesus !== "none") rules.push(`.topos-woj { color: var(--tpb-woj-color, ${cssColor(settings.wordsOfJesus)}); }`);
   return `@layer document {\n${rules.join("\n")}\n}\n`;
 }
 
@@ -25,11 +26,18 @@ function mark(selector: string, look: MarkLook, hidden: string): string {
   return `${selector}::before { color: ${cssColor(look)}; opacity: ${look === "faded" ? 0.6 : 1}; }`;
 }
 
-/** A look's color (`faded`: the text's; `accent`: the theme's), or the text's color if it isn't one (it goes into CSS as is) */
+/**
+ * A look's color (`faded`: the text's; `accent`: the theme's; `red`: a soft red, styles.css's for
+ * the light or dark theme), or the text's color if it isn't one (it goes into CSS as is)
+ */
 function cssColor(look: MarkLook): string {
   if (look === "accent") return "var(--text-accent)";
+  if (look === "red") return `var(--topos-red-letters, ${RED_LETTERS})`;
   return /^#[0-9a-f]{3,8}$/i.test(look.trim()) ? look.trim() : "currentColor";
 }
+
+/** The words of Jesus' red when the theme doesn't say (styles.css gives one for each theme) */
+export const RED_LETTERS = "#c0453e";
 
 /** Whether notes are rendered (either kind shows) */
 export function notesShown(settings: Pick<ToposSettings, "footnotes" | "crossRefs">): boolean {
