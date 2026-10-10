@@ -501,6 +501,26 @@ export class ToposSettingsPanel {
           void this.plugin.saveData(settings);
         }),
       );
+
+    const study = section(el, "Commentaries and dictionaries", "Commentary, dictionary, and cross-reference packages: *Open commentary* shows their notes on a passage in the sidebar, with its cross references.").items;
+    new Setting(study)
+      .setName("Follow the Bible and the cursor")
+      .setDesc("The commentary shows the verse at the top of the Bible tab in front, and the reference under the cursor in a note.")
+      .addToggle((t) =>
+        t.setValue(settings.commentaryFollows).onChange((value) => {
+          settings.commentaryFollows = value;
+          void this.plugin.saveData(settings);
+        }),
+      );
+    new Setting(study)
+      .setName("Strong's entries on hover")
+      .setDesc("Hovering over a Strong's number (`G25`, `H430`) in a note or a commentary, or a Bible word that carries one, shows its entry from the vault's Strong's dictionaries.")
+      .addToggle((t) =>
+        t.setValue(settings.strongsHover).onChange((value) => {
+          settings.strongsHover = value;
+          void this.plugin.saveData(settings);
+        }),
+      );
   }
 
   // ─── Library ─────────────────────────────────────────────────────────────

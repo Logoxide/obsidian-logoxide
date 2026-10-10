@@ -252,7 +252,7 @@ function linkReferences(el: HTMLElement, links: NoteLinks, passages: WeakMap<Ele
  * `position: fixed`, whose box an ancestor's containment or transform can move, so it's measured
  * where it lands and moved by the difference
  */
-function place(popup: HTMLElement, note: HTMLElement): void {
+export function place(popup: HTMLElement, note: HTMLElement): void {
   const win = note.ownerDocument.defaultView ?? window;
   const mark = note.getBoundingClientRect();
   const gap = 6;

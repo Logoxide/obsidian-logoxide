@@ -100,6 +100,8 @@ the sidebar, which takes the sidebar's search along) has room to read results:
 | Open the reference under the cursor in the browser | Its link (see [Links](#links)) |
 | Copy the reference under the cursor as OSIS | `John.3.16-John.3.18` |
 | Normalize references in the selection or note | `jn 3:16` → `John 3:16`, in the chosen style |
+| Open commentary | The commentary view in the sidebar, on the reference under the cursor or the Bible tab's verse (see [Commentaries](#commentaries-cross-references-and-strongs-numbers)) |
+| Look up the Strong's number under the cursor | `G25`'s entries from the vault's Strong's dictionaries, in the commentary view |
 
 **Settings**: reference style (`John 3:16`, `Jn 3:16`, or `John.3.16`), where references open
 (see [Links](#links)), the references' color, editor and reading-view links, whether editor clicks
@@ -233,6 +235,29 @@ as soon as you save it:
 [data-style="pn"] { text-decoration: underline dotted; }
 .topos-note [data-style="fr"] { display: inline; font-weight: bold; }
 ```
+
+#### Commentaries, cross-references, and Strong's numbers
+
+Commentary, dictionary, and cross-reference packages (logoxide's `commentary`, `lexicon`, and
+`cross-references` kinds: a SWORD commentary or Strong's dictionary imported with
+`lx import sword:crosswire/MHCC`, or added under *Add*) are read like the vault's Bibles:
+
+- **Open commentary** (or *Commentary on John 3:16* in the editor's menu) opens the commentary
+  view in the sidebar: each commentary's notes on the passage, labeled with the commentary and
+  the verses each covers (click them to open the Bible there), the passage's cross-references as
+  links (with their weights, when the package gives them; hover to preview, Ctrl/Cmd-click for a
+  new tab), and the references in the notes as links too. While *Follow the Bible and the
+  cursor* is on (*Display → Commentaries and dictionaries*), it follows the verse at the top of
+  the Bible tab in front and the reference under the cursor in a note
+- **Strong's numbers**: hovering over one in a note (`G25`, `H430`, `G0025`), in a commentary's
+  note, or over a word in a Bible whose text carries them (the KJV's `\w loved|strong="G25"\w*`)
+  shows its entries from the vault's dictionaries keyed by Strong's Greek or Hebrew numbers
+  (*Strong's entries on hover*); in the commentary view a tap shows them too.
+  *Look up the Strong's number under the cursor* (or *Look up G25* in the editor's menu) keeps
+  them at the top of the commentary view
+
+Notes are found by the passage's own numbers: a commentary numbered differently from the Bible
+isn't mapped yet.
 
 ### EPUBs
 

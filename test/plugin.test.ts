@@ -388,13 +388,13 @@ test("the built plugin loads, indexes, and runs its commands", async (t) => {
   assert.equal(existsSync(oldPack), false);
 
   // The Bible tab (and the plain text of USX files, from file-plus-plus), and the sidebar
-  assert.deepEqual(plugin.viewTypes, ["logoxide", "logoxide-source", "logoxide-search", "logoxide-search-pane"]);
+  assert.deepEqual(plugin.viewTypes, ["logoxide", "logoxide-source", "logoxide-search", "logoxide-search-pane", "logoxide-commentary"]);
   assert.deepEqual(
     plugin.refs.all().map((h: any) => `${h.path} ${h.passage.reference}`),
     ["Archive/old.md Genesis 1:1", "Sermons/a.md John 3:16", "Sermons/a.md Romans 8:28", "Sermons/b.md Psalm 23"],
   );
   const ids = plugin.commands.map((c: any) => c.id);
-  for (const id of ["open-search", "open-search-tab", "open-search-new-tab", "insert-reference", "go-to-reference", "open-literal-word", "normalize-references"]) {
+  for (const id of ["open-search", "open-search-tab", "open-search-new-tab", "insert-reference", "go-to-reference", "open-literal-word", "normalize-references", "open-commentary", "look-up-strongs"]) {
     assert.ok(ids.includes(id), id);
   }
 
