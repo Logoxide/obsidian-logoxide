@@ -87,7 +87,7 @@ export interface ToposSettings {
   bibleVerseNumbers: boolean;
   /** Show the words of Jesus in red */
   bibleRedLetters: boolean;
-  /** Verse numbers' color, like `#7c3aed` ("" for the text's color, faded) */
+  /** Verse numbers' color: a color like `#7c3aed`, `accent` for the theme's accent color, or "" for the text's color, faded */
   verseNumberColor: string;
   /**
    * A CSS file in the vault for Bible text (its tab, previews, and embeds), which render where

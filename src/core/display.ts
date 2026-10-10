@@ -18,7 +18,8 @@ export function displayCss(settings: DisplaySettings): string {
   return rules.length ? `@layer document {\n${rules.join("\n")}\n}\n` : "";
 }
 
-/** A color from the settings, or the text's color if it isn't one (it goes into CSS as is) */
+/** A color from the settings (`accent`: the theme's), or the text's color if it isn't one (it goes into CSS as is) */
 function cssColor(color: string): string {
+  if (color === "accent") return "var(--text-accent)";
   return /^#[0-9a-f]{3,8}$/i.test(color.trim()) ? color.trim() : "currentColor";
 }

@@ -20,6 +20,7 @@ test("display settings become CSS in the readers' layer", () => {
   // Verse numbers: a color, or hidden (then the color doesn't matter)
   assert.match(displayCss({ ...DEFAULTS, verseNumberColor: "#7c3aed" }), /\.topos-verse::before \{ color: #7c3aed; opacity: 1; \}/);
   assert.match(displayCss({ ...DEFAULTS, verseNumberColor: "red; } body { x: y" }), /color: currentColor;/);
+  assert.match(displayCss({ ...DEFAULTS, verseNumberColor: "accent" }), /\.topos-verse::before \{ color: var\(--text-accent\); opacity: 1; \}/);
   const hidden = displayCss({ ...DEFAULTS, bibleVerseNumbers: false, verseNumberColor: "#7c3aed" });
   assert.match(hidden, /\.topos-verse::before \{ content: none; \}/);
   assert.doesNotMatch(hidden, /#7c3aed/);

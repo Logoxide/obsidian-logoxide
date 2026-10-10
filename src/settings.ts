@@ -214,7 +214,7 @@ export class ToposSettingsPanel {
     this.verseNumberColor(text);
     toggle(text, "Red letters", "The words of Jesus in red, in Bibles that mark them.", "bibleRedLetters", () => true);
 
-    const notes = section(el, "Notes", "Shown in brackets beside their verse.").items;
+    const notes = section(el, "Notes", "A mark in the text: footnotes are lettered, cross references are †. Hover over one, or tap it, to read the note.").items;
     toggle(notes, "Footnotes", "The translation's footnotes: other readings, literal meanings, and study notes.", "bibleNotes", notesRendered);
     toggle(notes, "Cross references", "Other passages the translation points to.", "bibleCrossRefs", notesRendered);
 
@@ -238,40 +238,37 @@ export class ToposSettingsPanel {
       });
   }
 
-  /** Verse numbers' color: the text's, faded, until one is picked */
+  /** Verse numbers' color: the text's (faded), the accent color, or one picked */
   private verseNumberColor(items: HTMLElement): void {
     const settings = this.plugin.settings;
-    const setting = new Setting(items).setName("Verse number color");
-    let reset: HTMLElement | null = null;
+    const choice = () => (!settings.verseNumberColor ? "text" : settings.verseNumberColor === "accent" ? "accent" : "custom");
+    const setting = new Setting(items).setName("Verse number color").setDesc("The color of verse numbers.");
     let picker: ColorComponent | null = null;
-    const show = () => {
-      setting.setDesc(settings.verseNumberColor ? "The color of verse numbers." : "The color of verse numbers. The text's color, faded, until you pick one.");
-      reset?.toggle(!!settings.verseNumberColor);
-    };
     const save = () => {
-      show();
+      showPicker();
       this.plugin.bibleStyles.apply();
       void this.plugin.saveToposSettings();
     };
     setting
-      .addExtraButton((b) => {
-        reset = b.extraSettingsEl;
-        b.setIcon("rotate-ccw")
-          .setTooltip("Use the text's color")
-          .onClick(() => {
-            picker?.setValue(themeColor(items, "--text-muted"));
-            settings.verseNumberColor = "";
+      .addDropdown((d) =>
+        d
+          .addOptions({ text: "Faded text", accent: "Accent color", custom: "Custom" })
+          .setValue(choice())
+          .onChange((value) => {
+            settings.verseNumberColor = value === "text" ? "" : value === "accent" ? "accent" : (picker?.getValue() ?? themeColor(items, "--text-accent"));
             save();
-          });
-      })
+          }),
+      )
       .addColorPicker((c) => {
         picker = c;
-        c.setValue(settings.verseNumberColor || themeColor(items, "--text-muted")).onChange((value) => {
+        c.setValue(choice() === "custom" ? settings.verseNumberColor : themeColor(items, "--text-accent")).onChange((value) => {
           settings.verseNumberColor = value;
           save();
         });
       });
-    show();
+    // The picker shows for a color of your own (ColorComponent's input isn't in the API's types)
+    const showPicker = () => setting.controlEl.querySelector<HTMLElement>('input[type="color"]')?.toggle(choice() === "custom");
+    showPicker();
   }
 
   // ─── Bibles ──────────────────────────────────────────────────────────────

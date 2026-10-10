@@ -1,5 +1,6 @@
 import { DocumentReader, PREFIX, splitTextDirective, textFragmentScheme, withTextDirective, type LocatorScheme, type ParsedLocator, type ReaderOptions, type TocItem } from "file-plus-plus/core";
 import type { BookTextOptions, ToposBook } from "logoxide";
+import { markNotes, notePopups, NOTES_CSS } from "./notes.ts";
 import { END, formatVerseLocator, parseVerseLocator, partSegments, splitEdition, withEdition, type VersePart } from "../core/verse-locator.ts";
 
 /** A Bible book opened from a USX file */
@@ -81,6 +82,7 @@ export class BibleReader extends DocumentReader {
       this.shadow.adoptedStyleSheets = [...this.shadow.adoptedStyleSheets, sheet];
     }
     this.preview = preview?.scheme === verseScheme.id && preview.locator ? parseVerseLocator(preview.locator) : null;
+    this.cleanup.push(notePopups(this.scroller, this.content));
   }
 
   get toc(): TocItem[] {
@@ -126,9 +128,7 @@ export class BibleReader extends DocumentReader {
 .topos-added { font-style: italic; }
 .topos-l { display: inline-block; padding-left: 2em; text-indent: -1em; }
 p.topos-p { margin: 0 0 0.6em; }
-.topos-note { font-size: 0.85em; opacity: 0.75; }
-.topos-note::before { content: " ["; }
-.topos-note::after { content: "]"; }
+${NOTES_CSS}
 ${USX_CSS}
 }`;
   }
@@ -186,6 +186,7 @@ ${USX_CSS}
       }
     }
     this.content.append(frag);
+    markNotes(this.content);
     this.indexMarkers();
   }
 
@@ -376,8 +377,6 @@ br.topos-l + p.topos-p:not([data-style="nb"]) { margin-top: 0.6em; }
 [data-style="fq"], [data-style="fqa"], [data-style="xq"] { font-style: italic; }
 [data-style="jmp"] { text-decoration: underline; }
 [data-style="dc"] { opacity: 0.85; }
-/* A note sits beside its verse: its origin (\`fr\`, \`xo\`: "3:16") says nothing there */
-.topos-note [data-style="fr"], .topos-note [data-style="xo"] { display: none; }
 `;
 
 function gap(doc: Document): HTMLElement {
