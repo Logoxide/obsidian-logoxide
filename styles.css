@@ -1839,3 +1839,215 @@ body:not(.is-mobile) .topos-pane.is-narrow .topos-pane-card:is(:hover, :focus-wi
 .is-phone .topos-entry-actions .topos-entry-add {
   width: 100%;
 }
+
+/* The passage picker: testaments, then every book at once in a grid (colored by genre), then a
+   grid of chapters and verses or a field for the number pad */
+.modal.topos-picker {
+  width: min(680px, 94vw);
+}
+.topos-picker .modal-header {
+  padding-bottom: var(--size-4-2);
+}
+.topos-picker-header {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-1);
+  min-height: var(--input-height);
+  /* Clear of the close button */
+  padding-right: var(--size-4-8);
+}
+.topos-picker-back.topos-hidden {
+  display: none;
+}
+.topos-picker-crumbs {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--size-4-1) var(--size-4-2);
+  font-size: var(--font-ui-medium);
+}
+.topos-picker-crumb.is-link {
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.topos-picker-crumb.is-link:hover {
+  color: var(--text-accent);
+}
+.topos-picker-sep {
+  color: var(--text-faint);
+}
+.topos-picker-typed {
+  padding: 0 var(--size-4-1);
+  border-radius: var(--radius-s);
+  background: var(--background-modifier-hover);
+  color: var(--text-accent);
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-small);
+}
+.topos-picker-body:focus {
+  outline: none;
+}
+.topos-picker-group + .topos-picker-group {
+  margin-top: var(--size-4-3);
+}
+.topos-picker-group-name {
+  margin-bottom: var(--size-4-1);
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.topos-picker-grid {
+  display: grid;
+  gap: var(--size-2-2);
+}
+.topos-picker-books.is-compact {
+  grid-template-columns: repeat(auto-fill, minmax(3.5rem, 1fr));
+}
+.topos-picker-books.is-roomy {
+  grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
+}
+.topos-picker-numbers {
+  grid-template-columns: repeat(auto-fill, minmax(2.75rem, 1fr));
+}
+.topos-picker .topos-picker-tile {
+  --topos-genre: var(--text-faint);
+  height: auto;
+  min-height: 2.25rem;
+  padding: var(--size-2-2) var(--size-2-3);
+  justify-content: center;
+  white-space: normal;
+  line-height: 1.15;
+  font-size: var(--font-ui-small);
+  font-variant-numeric: tabular-nums;
+  border-radius: var(--radius-s);
+  box-shadow: inset 0 -3px 0 color-mix(in srgb, var(--topos-genre) 70%, transparent);
+  background: color-mix(in srgb, var(--topos-genre) 8%, var(--interactive-normal));
+}
+.topos-picker .topos-picker-numbers .topos-picker-tile {
+  box-shadow: none;
+  background: var(--interactive-normal);
+}
+.topos-picker .topos-picker-tile:hover {
+  background: color-mix(in srgb, var(--topos-genre) 18%, var(--interactive-hover));
+}
+.topos-picker-tile[data-genre="0"] { --topos-genre: var(--color-red); }
+.topos-picker-tile[data-genre="1"] { --topos-genre: var(--color-orange); }
+.topos-picker-tile[data-genre="2"] { --topos-genre: var(--color-yellow); }
+.topos-picker-tile[data-genre="3"] { --topos-genre: var(--color-green); }
+.topos-picker-tile[data-genre="4"] { --topos-genre: var(--color-cyan); }
+.topos-picker-tile[data-genre="5"] { --topos-genre: var(--color-blue); }
+.topos-picker-tile[data-genre="6"] { --topos-genre: var(--color-purple); }
+.topos-picker-tile[data-genre="7"] { --topos-genre: var(--color-pink); }
+.topos-picker .topos-picker-tile.is-current {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: -2px;
+  font-weight: var(--font-semibold);
+}
+.topos-picker .topos-picker-tile.is-missing {
+  opacity: 0.4;
+}
+.topos-picker-body.is-typing .topos-picker-tile:not(.is-match) {
+  opacity: 0.25;
+}
+.topos-picker .topos-picker-tile.is-match {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: -2px;
+}
+.topos-picker-whole {
+  width: 100%;
+  margin-top: var(--size-4-3);
+}
+.topos-picker-testaments {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--size-4-3);
+}
+.topos-picker .topos-picker-testament {
+  border-radius: var(--radius-m);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--size-4-1);
+  height: auto;
+  padding: var(--size-4-4);
+  white-space: normal;
+  text-align: left;
+}
+.topos-picker-testament.is-current {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: -2px;
+}
+.topos-picker-testament-name {
+  font-size: var(--font-ui-large);
+  font-weight: var(--font-semibold);
+}
+.topos-picker-testament-books {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+.topos-picker-keypad {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-2);
+}
+.topos-picker-keypad-label {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+.topos-picker-keypad-row {
+  display: flex;
+  gap: var(--size-4-2);
+}
+.topos-picker .topos-picker-keypad-input {
+  flex: 1;
+  height: auto;
+  padding: var(--size-4-2) var(--size-4-3);
+  font-size: 1.6em;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.topos-picker-keypad-row button {
+  height: auto;
+  padding: 0 var(--size-4-5);
+}
+.topos-picker-keypad-hint {
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+}
+.topos-picker-keypad-error {
+  color: var(--text-error);
+  font-size: var(--font-ui-small);
+}
+.topos-picker-keypad-error:empty {
+  display: none;
+}
+/* Phones: room for every book at once, and number tiles big enough to tap */
+.is-phone .topos-picker-books.is-compact {
+  grid-template-columns: repeat(6, 1fr);
+  gap: var(--size-2-1);
+}
+.is-phone .topos-picker .topos-picker-books.is-compact .topos-picker-tile {
+  min-height: 2.1rem;
+  padding: var(--size-2-1);
+  font-size: var(--font-ui-smaller);
+}
+.is-phone .topos-picker-books.is-roomy {
+  grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+}
+.is-phone .topos-picker .topos-picker-numbers .topos-picker-tile {
+  min-height: 2.75rem;
+}
+.is-phone .topos-picker-testaments {
+  grid-template-columns: 1fr;
+}
+.topos-picker-bible {
+  flex: none;
+  padding: 0 var(--size-4-2);
+  border-radius: var(--radius-s);
+  background: var(--background-modifier-hover);
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}

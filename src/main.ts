@@ -20,7 +20,7 @@ import { DocumentView, FilePlusPlusPlugin, type DocumentEmbed, type EmbedContext
 import type { FppSettings } from "file-plus-plus/obsidian";
 import { OffsetUnit, ToposOptions, type BookTextOptions, type Passage, type Topos, type ToposTranslations } from "logoxide";
 import type { EditorView } from "@codemirror/view";
-import { DEFAULT_FORMAT } from "./core/format.ts";
+import { DEFAULT_FORMAT, written } from "./core/format.ts";
 import { migrateQuery, parseQuery, type SavedQuery } from "./core/query.ts";
 import { NO_FILTERS } from "./core/filters.ts";
 import { linkUrl, siteName, templateFromTranslation, type LinkBook } from "./core/links.ts";
@@ -37,6 +37,7 @@ import { indexBook, type BookRequest, type BookResult, type IndexRequest } from 
 import { EpubSupport } from "./epub/support.ts";
 import { DocumentSupport } from "./documents/support.ts";
 import workerSource from "topos-worker-source";
+import { openPassagePicker, pickPassage } from "./bible/picker.ts";
 import { GoToReferenceModal, InsertReferenceModal, SavedQueryModal } from "./modals.ts";
 import { linkReferences, relinkEditor } from "./reading.ts";
 import { bookStyle, DEFAULT_SETTINGS, openSettings, ToposSettingsPanel, type ToposSettings } from "./settings.ts";
@@ -188,6 +189,7 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
     this.registerHoverLinkSource(HOVER_SOURCE, { display: "Logoxide: Bible references in notes", defaultMod: false });
     this.patchReferenceLinks();
     this.addRibbonIcon("book-open", "Verse search", () => void this.activateSearch());
+    this.addRibbonIcon("book-marked", "Go to a book, chapter, and verse", () => openPassagePicker(this));
     this.registerEditorSuggest(new ReferenceSuggest(this));
     this.registerEditorExtension(referenceDecorations(this));
     this.registerMarkdownPostProcessor(linkReferences(this));
@@ -986,6 +988,20 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
       id: "go-to-reference",
       name: "Go to a reference in the vault",
       callback: () => new GoToReferenceModal(this.app, this).open(),
+    });
+    this.addCommand({
+      id: "go-to-passage",
+      name: "Go to a book, chapter, and verse",
+      callback: () => openPassagePicker(this),
+    });
+    this.addCommand({
+      id: "insert-picked-reference",
+      name: "Insert a reference by picking its book, chapter, and verse",
+      editorCallback: (editor) =>
+        pickPassage(this, "Insert a reference", (passage) => {
+          const style = bookStyle(this.settings.style);
+          editor.replaceSelection(written(this.topos, passage, style, this.settings.format));
+        }),
     });
     this.addCommand({
       id: "insert-reference",

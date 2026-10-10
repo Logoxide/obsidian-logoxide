@@ -108,6 +108,12 @@ export interface ToposSettings {
   embedAloneBlankLines: number;
   /** In the editor, how many lines away the cursor shows the reference again (null: `embedAloneBlankLines`) */
   embedAloneCursorLines: number | null;
+  /** The passage picker first asks for the Old or New Testament, so its books have more room */
+  pickerTestament: boolean;
+  /** The passage picker's chapters and verses: a grid of numbers, or a field that brings up the number pad */
+  pickerNumbers: "grid" | "keypad";
+  /** The passage picker asks for a verse after the chapter (else it opens the chapter's start) */
+  pickerVerse: boolean;
   /** Mark references in other plugins' documents (Transcript++'s transcripts, the Bible tab) */
   markInDocuments: boolean;
   /** Once file-plus-plus's default link label has become `{{reference}}` */
@@ -158,6 +164,9 @@ export const DEFAULT_SETTINGS: ToposSettings = {
   embedAlone: false,
   embedAloneBlankLines: 0,
   embedAloneCursorLines: null,
+  pickerTestament: false,
+  pickerNumbers: "grid",
+  pickerVerse: true,
   markInDocuments: true,
 };
 

@@ -1,10 +1,11 @@
 import { Notice, setIcon, type Menu } from "obsidian";
 import { DocumentView, MediaPlayer, PlaybackFollower } from "file-plus-plus/obsidian";
-import type { SelectionInfo, TocItem } from "file-plus-plus/core";
+import { PREFIX, type SelectionInfo, type TocItem } from "file-plus-plus/core";
 import { clipOf, timingAt, timingOf, type Timing } from "../core/timings.ts";
 import { parseVerseLocator, type VersePart } from "../core/verse-locator.ts";
 import { STUB_EXTENSION } from "../core/stubs.ts";
 import type ToposPlugin from "../main.ts";
+import { openPassagePicker } from "./picker.ts";
 import type { Recording } from "./packages.ts";
 import type { BibleBook, BibleReader } from "./reader.ts";
 
@@ -59,6 +60,9 @@ export class BibleView extends DocumentView<BibleBook, BibleReader> {
     this.listenEl = this.contentEl.createDiv("topos-listen");
     this.contentEl.insertBefore(this.listenEl, this.mainEl);
     const search = this.toolbarEl.querySelector('[aria-label="Search"]');
+    const goTo = this.toolbarButton(this.toolbarEl, "book-marked", "Go to a book, chapter, and verse", () => openPassagePicker(this.topos));
+    // After the contents button
+    this.toolbarEl.insertBefore(goTo, this.toolbarEl.querySelector(`.${PREFIX}-toolbar-center`));
     this.listenButton = this.toolbarButton(this.toolbarEl, "headphones", "Listen", () => void this.listen());
     if (search) this.toolbarEl.insertBefore(this.listenButton, search);
     this.listenButton.hide();

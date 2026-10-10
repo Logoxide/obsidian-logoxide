@@ -310,6 +310,38 @@ export class ToposSettingsPanel {
           }),
       );
 
+    const picker = section(el, "Go to a passage", "The *Go to a book, chapter, and verse* command, ribbon button, and Bible toolbar button pick a passage by tapping (or typing).").items;
+    new Setting(picker)
+      .setName("Choose the testament first")
+      .setDesc("Pick the Old or New Testament before its books, so they have room for their full names. Off, every book shows at once.")
+      .addToggle((t) =>
+        t.setValue(settings.pickerTestament).onChange((value) => {
+          settings.pickerTestament = value;
+          void this.plugin.saveData(settings);
+        }),
+      );
+    new Setting(picker)
+      .setName("Chapters and verses")
+      .setDesc(md("A grid of numbers to tap, or a field that brings up the number pad (a chapter and verse at once: `3:16` or `3.16`)."))
+      .addDropdown((d) =>
+        d
+          .addOptions({ grid: "Grid", keypad: "Number pad" })
+          .setValue(settings.pickerNumbers)
+          .onChange((value) => {
+            settings.pickerNumbers = value as "grid" | "keypad";
+            void this.plugin.saveData(settings);
+          }),
+      );
+    new Setting(picker)
+      .setName("Ask for a verse")
+      .setDesc("After the chapter, pick a verse. Off, it opens at the chapter's start.")
+      .addToggle((t) =>
+        t.setValue(settings.pickerVerse).onChange((value) => {
+          settings.pickerVerse = value;
+          void this.plugin.saveData(settings);
+        }),
+      );
+
     const translations = section(el, "Translations", "A reference can name its translation: `John 3:16 KJV`, `[John 3:16 (KJV)]`, `![John 3:16 KJV]`. Each Bible's folder name is one.").items;
     new Setting(translations)
       .setName("Names and aliases")
