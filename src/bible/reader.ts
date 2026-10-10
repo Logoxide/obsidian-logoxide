@@ -1,6 +1,6 @@
 import { DocumentReader, PREFIX, splitTextDirective, textFragmentScheme, withTextDirective, type LocatorScheme, type ParsedLocator, type ReaderOptions, type TocItem } from "file-plus-plus/core";
 import type { BookTextOptions, ToposBook } from "logoxide";
-import { markNotes, notePopups, NOTES_CSS } from "./notes.ts";
+import { markNotes, notePopups, NOTES_CSS, type NoteLinks } from "./notes.ts";
 import { END, formatVerseLocator, parseVerseLocator, partSegments, splitEdition, withEdition, type VersePart } from "../core/verse-locator.ts";
 
 /** A Bible book opened from a USX file */
@@ -48,6 +48,8 @@ export interface BibleReaderOptions extends ReaderOptions {
   text: BookTextOptions;
   /** The vault's Bible stylesheet for this document (see styles.ts), after the reader's own */
   stylesheet?: (doc: Document) => CSSStyleSheet | null;
+  /** References in the book's notes: links in their popups */
+  noteLinks?: (book: BibleBook) => NoteLinks | null;
 }
 
 /** A verse marker in the rendered text */
@@ -82,7 +84,13 @@ export class BibleReader extends DocumentReader {
       this.shadow.adoptedStyleSheets = [...this.shadow.adoptedStyleSheets, sheet];
     }
     this.preview = preview?.scheme === verseScheme.id && preview.locator ? parseVerseLocator(preview.locator) : null;
-    this.cleanup.push(notePopups(this.scroller, this.content));
+    this.cleanup.push(
+      notePopups(this.scroller, this.content, {
+        links: opts.noteLinks?.(bible) ?? null,
+        bookId: bible.bookId,
+        verseOf: (note) => this.verseBefore(note),
+      }),
+    );
   }
 
   get toc(): TocItem[] {
@@ -283,6 +291,16 @@ ${USX_CSS}
       }
       const r = m.el.getBoundingClientRect();
       if (r.top > y || (r.bottom >= y && r.left > x)) break;
+      found = m;
+    }
+    return found ? { chapter: found.chapter, verse: found.verse } : null;
+  }
+
+  /** The verse an element is in: the last verse number before it */
+  private verseBefore(el: Element): { chapter: number; verse: number } | null {
+    let found: Marker | null = null;
+    for (const m of this.markers) {
+      if (!(m.el.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING)) break;
       found = m;
     }
     return found ? { chapter: found.chapter, verse: found.verse } : null;

@@ -18,7 +18,7 @@ import {
 import { around, hoverLink } from "file-plus-plus/obsidian";
 import { DocumentView, FilePlusPlusPlugin, type DocumentEmbed, type EmbedContext } from "file-plus-plus/obsidian";
 import type { FppSettings } from "file-plus-plus/obsidian";
-import { OffsetUnit, type BookTextOptions, type Passage, type Topos, type ToposTranslations } from "logoxide";
+import { OffsetUnit, ToposOptions, type BookTextOptions, type Passage, type Topos, type ToposTranslations } from "logoxide";
 import type { EditorView } from "@codemirror/view";
 import { DEFAULT_FORMAT } from "./core/format.ts";
 import { migrateQuery, parseQuery, type SavedQuery } from "./core/query.ts";
@@ -27,7 +27,7 @@ import { linkUrl, siteName, templateFromTranslation, type LinkBook } from "./cor
 import { applyReplacements, normalizeReferences, referenceAt } from "./core/references.ts";
 import { ReferenceIndex } from "./core/index.ts";
 import { searchText, type Hit } from "./core/search.ts";
-import { interceptLinkClicks, referenceDecorations, refreshReferences } from "./editor/decorations.ts";
+import { hoverParent, interceptLinkClicks, referenceDecorations, refreshReferences } from "./editor/decorations.ts";
 import { ReferenceSuggest } from "./editor/suggest.ts";
 import { engineWasm, loadTopos } from "./engine.ts";
 import { BackgroundSearcher } from "./indexers/background.ts";
@@ -53,6 +53,7 @@ import { BibleStyles } from "./bible/styles.ts";
 import { addParallelCommands } from "./bible/parallel.ts";
 import { buildTranslations, parseAliases } from "./core/translations.ts";
 import type { BibleBook, BibleReader } from "./bible/reader.ts";
+import type { NoteLinks } from "./bible/notes.ts";
 import { formatVerseLocator, passageParts } from "./core/verse-locator.ts";
 import { wholeReference } from "./core/syntax.ts";
 
@@ -383,7 +384,14 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
    * the Bible it names or the current one; none if the pointer left the reference while finding it,
    * and it hides as the pointer heads away (`hoverLink`)
    */
-  async previewPassage(event: MouseEvent, targetEl: HTMLElement, passage: Passage, hoverParent: HoverParent, translation?: string | null): Promise<void> {
+  async previewPassage(
+    event: MouseEvent,
+    targetEl: HTMLElement,
+    passage: Passage,
+    hoverParent: HoverParent,
+    translation?: string | null,
+    over?: (x: number, y: number) => boolean,
+  ): Promise<void> {
     const file = await this.bibles.bookFile(passage, this.bibles.forText(translation));
     if (!file) return;
     hoverLink(this.app, {
@@ -393,8 +401,43 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
       targetEl,
       linktext: `${file.path}#${this.passageLocator(passage)}`,
       sourcePath: "",
+      over,
     });
   }
+
+  /** Topos with a book as context (`3:16` is in it), for references in the book's notes, by book name */
+  private readonly bookTopos = new Map<string, Topos>();
+
+  /**
+   * References in a Bible book's notes (the popups of its footnote and cross reference marks):
+   * found with the book as context, opened in the same Bible, previewed on hover
+   */
+  noteLinks = (book: BibleBook): NoteLinks | null => {
+    if (!this.topos || !book.name) return null;
+    let topos = this.bookTopos.get(book.name);
+    if (!topos) {
+      try {
+        topos = ToposOptions.create().contextBook(book.name).build();
+      } catch {
+        return null;
+      }
+      this.bookTopos.set(book.name, topos);
+    }
+    const found = topos;
+    return {
+      find: (text) => found.search(text, OffsetUnit.Utf16),
+      open: (passage, event) => void this.openPassage(passage, event.button === 1 || event.ctrlKey || event.metaKey ? "tab" : false, book.bible),
+      preview: (passage, el, event) => {
+        // Obsidian previews only an element in the page (it doesn't look in shadow roots): the
+        // reader's host is the target, and the pointer is on the reference while it's over its rectangles
+        const host = (el.getRootNode() as ShadowRoot).host as HTMLElement | undefined;
+        if (!host) return;
+        const over = (x: number, y: number) =>
+          el.isConnected && Array.from(el.getClientRects()).some((r) => x >= r.left - 2 && x <= r.right + 2 && y >= r.top - 2 && y <= r.bottom + 2);
+        void this.previewPassage(event, host, passage, hoverParent(this, host), book.bible, over);
+      },
+    };
+  };
 
   /**
    * Shows a passage's text in an element (`![John 1:1]`), from the Bible it names (or the current

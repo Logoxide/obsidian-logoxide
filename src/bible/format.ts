@@ -81,7 +81,7 @@ export function createBibleFormat(plugin: ToposPlugin): FileFormat<BibleBook, Bi
     unload: (doc) => doc.book.dispose(),
     info: (doc, file) => ({ title: doc.bible ? `${doc.name} (${doc.bible})` : doc.name || file.basename, author: "" }),
     createReader: (host, doc, opts, preview) =>
-      new BibleReader(host, doc, { ...opts, text: plugin.bookTextOptions(), stylesheet: plugin.bibleStyles.sheet }, preview),
+      new BibleReader(host, doc, { ...opts, text: plugin.bookTextOptions(), stylesheet: plugin.bibleStyles.sheet, noteLinks: plugin.noteLinks }, preview),
     // Besides the shared ones ({{book}} is the title, "John (BSB)"; {{chapter}} the chapter, "John 3")
     templateVars: (info, doc) => {
       const parts = parseVerseLocator(info.locator) ?? [];
