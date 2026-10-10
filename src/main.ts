@@ -18,7 +18,7 @@ import {
 import { around, hoverLink } from "file-plus-plus/obsidian";
 import { DocumentView, FilePlusPlusPlugin, type DocumentEmbed, type EmbedContext } from "file-plus-plus/obsidian";
 import type { FppSettings } from "file-plus-plus/obsidian";
-import { OffsetUnit, ToposOptions, type BookTextOptions, type Passage, type Topos, type ToposTranslations } from "logoxide";
+import { OffsetUnit, ToposOptions, type BookTextOptions, type MappedPassage, type Passage, type Topos, type ToposTranslations } from "logoxide";
 import type { EditorView } from "@codemirror/view";
 import { DEFAULT_FORMAT, written } from "./core/format.ts";
 import { migrateQuery, parseQuery, type SavedQuery } from "./core/query.ts";
@@ -58,7 +58,8 @@ import { buildTranslations, parseAliases } from "./core/translations.ts";
 import type { BibleBook, BibleReader } from "./bible/reader.ts";
 import type { NoteLinks } from "./bible/notes.ts";
 import { notesShown } from "./core/display.ts";
-import { formatVerseLocator, passageParts } from "./core/verse-locator.ts";
+import { formatVerseLocator, passageParts, type VersePart } from "./core/verse-locator.ts";
+import { mappedLabel, versesParts } from "./core/mapping.ts";
 import { wholeReference } from "./core/syntax.ts";
 
 /** The page preview source of references in notes (Settings → Page preview) */
@@ -69,6 +70,16 @@ import { scopeOf, SearchStore, type SearchState } from "./view/store.ts";
 
 /** The plugin's settings and file-plus-plus's (the Bible tab, previews, highlights) */
 export type PluginSettings = FppSettings & ToposSettings;
+
+/**
+ * Where a passage is in a Bible: its parts there, and the mapping that put them there when the
+ * Bible is numbered differently from the one the passage was written for (no parts with one:
+ * it has none of the passage)
+ */
+export interface Placement {
+  parts: VersePart[];
+  mapped: MappedPassage | null;
+}
 
 export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleReader> {
   readonly format = createBibleFormat(this);
@@ -415,14 +426,39 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
     return path ? this.verseCounts.of(path, bookId) : null;
   }
 
-  /** Plays a passage from a Bible's recording (the first of `recordedBibles`), in its book's tab */
+  /**
+   * Where a passage, numbered as the Bible it names (else the current one) numbers it, is in
+   * `bible`: its parts there, and the mapping when the two are numbered differently and the
+   * vault's versification maps lead from one to the other (`Psalm 51:1` in an English Bible is
+   * `51:3` in a Hebrew one). No parts with a mapping: `bible` has none of it
+   */
+  placeIn(passage: Passage, bible: Bible, translation?: string | null): Placement {
+    return this.placePartsIn(passage.bookId, passageParts(passage), this.bibles.forText(translation), bible);
+  }
+
+  /**
+   * Where parts of a book, numbered as `from` numbers them, are in `to`: as written in the same
+   * Bible, a folder Bible (which has no numbering of its own, even named as a package is), or
+   * when neither numbering maps to the other's
+   */
+  placePartsIn(bookId: number, parts: VersePart[], from: Bible | null, to: Bible): Placement {
+    if (!from || from.folder === to.folder || !from.package || !to.package) return { parts, mapped: null };
+    const mapped = this.packages.mapped(bookId, parts, from.name, to.name);
+    if (!mapped) return { parts, mapped: null };
+    const verses = mapped.verses.filter((v) => v.book === bookId);
+    return { parts: versesParts(verses, this.chapterVerses(to, bookId)), mapped };
+  }
+
+  /** Plays a passage from a Bible's recording (the first of `recordedBibles` that has it), in its book's tab */
   async playPassage(passage: Passage, translation?: string | null): Promise<void> {
     for (const bible of this.recordedBibles(passage, translation)) {
+      const { parts } = this.placeIn(passage, bible, translation);
+      if (parts.length === 0) continue;
       const file = await this.bibles.bookFile(passage, bible);
       if (!file || !(await this.packages.recording(file.path, passage.bookId))) continue;
-      await this.openDocument(file, this.passageLocator(passage), false);
+      await this.openDocument(file, formatVerseLocator(parts), false);
       const view = this.views().find((v): v is BibleView => v instanceof BibleView && v.file?.path === file.path && v.leaf === this.app.workspace.getMostRecentLeaf());
-      if (view && (await view.whenRecording())) await view.playPassage(passageParts(passage));
+      if (view && (await view.whenRecording())) await view.playPassage(parts);
       return;
     }
     new Notice(`No Bible here has a recording of ${passage.reference}.`);
@@ -501,21 +537,30 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
    */
   async embedPassage(containerEl: HTMLElement, passage: Passage, label: string, owner: Component, translation?: string | null): Promise<void> {
     containerEl.addClass("topos-embed");
-    const bibles = [this.bibles.forText(translation), ...this.compareBibles()].filter((b, i, all) => b && all.findIndex((o) => o?.folder === b.folder) === i);
-    const files: TFile[] = [];
+    const bibles = [this.bibles.forText(translation), ...this.compareBibles()].filter((b, i, all): b is Bible => !!b && all.findIndex((o) => o?.folder === b.folder) === i);
+    // Each Bible's file and where the passage is in it (a compare Bible numbered differently: its own numbers)
+    const shown: { file: TFile | null; bible: Bible; placed: Placement }[] = [];
     for (const bible of bibles) {
-      const file = await this.bibles.bookFile(passage, bible);
-      if (file) files.push(file);
+      const placed = this.placeIn(passage, bible, translation);
+      const file = placed.parts.length > 0 ? await this.bibles.bookFile(passage, bible) : null;
+      if (file || placed.mapped) shown.push({ file, bible, placed });
     }
-    if (files.length === 0) {
+    if (!shown.some((s) => s.file)) {
       containerEl.setText(`${label}: ${this.bibles.all().length === 0 ? "add a Bible (a folder of USX files) to show its text" : "not in this Bible"}`);
       containerEl.addClass("topos-embed-missing");
       return;
     }
-    for (const file of files) {
-      const el = files.length > 1 ? containerEl.createDiv({ cls: "topos-embed-part" }) : containerEl;
-      const embed = this.createEmbed({ app: this.app, containerEl: el }, file, this.passageLocator(passage)) as BibleEmbed;
+    for (const { file, bible, placed } of shown) {
+      const el = shown.length > 1 ? containerEl.createDiv({ cls: "topos-embed-part" }) : containerEl;
+      if (!file) {
+        // Mapped to nothing: the other numbering has none of it
+        el.setText(`${passage.reference} · ${mappedLabel(bible.name, placed.mapped!)}`);
+        el.addClass("topos-embed-missing");
+        continue;
+      }
+      const embed = this.createEmbed({ app: this.app, containerEl: el }, file, formatVerseLocator(placed.parts)) as BibleEmbed;
       embed.label = passage.reference;
+      if (placed.mapped) embed.bibleLabel = mappedLabel(bible.name, placed.mapped);
       owner.addChild(embed);
       await embed.loadFile();
     }

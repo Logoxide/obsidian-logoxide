@@ -2,6 +2,7 @@ import { Notice, SuggestModal, setIcon, type App } from "obsidian";
 import type { DocumentView } from "file-plus-plus/obsidian";
 import { BOOK_EXTENSIONS, type Bible } from "../core/bibles.ts";
 import { STUB_EXTENSION } from "../core/stubs.ts";
+import { formatVerseLocator, parseVerseLocator } from "../core/verse-locator.ts";
 import type ToposPlugin from "../main.ts";
 import type { BibleBook, BibleReader } from "./reader.ts";
 
@@ -44,9 +45,26 @@ export function activeBibleView(plugin: ToposPlugin): BibleView | null {
 }
 
 /**
+ * A verse locator in one Bible tab (`v=3:16`) where the other Bible has it: the same, unless the two
+ * are numbered differently and a versification map leads from one to the other (then the first
+ * verse it maps to); null when the other has none of it
+ */
+function placeLocator(plugin: ToposPlugin, locator: string, from: BibleView, to: Bible | null): string | null {
+  const parts = parseVerseLocator(locator);
+  const fromBible = from.file ? plugin.bibles.ofFile(from.file.path) : null;
+  const bookId = from.reader?.bible.bookId;
+  if (!parts || !to || !bookId) return locator;
+  const placed = plugin.placePartsIn(bookId, parts, fromBible, to);
+  if (!placed.mapped) return locator;
+  const first = placed.parts[0];
+  if (!first) return null;
+  return formatVerseLocator([{ chapter: first.chapter, verse: first.verse, endChapter: first.chapter, endVerse: first.verse }]);
+}
+
+/**
  * Keeps two Bible tabs on the same verse: when one scrolls, the verse at its top goes to the top of
- * the other (a verse locator, `v=3:16`, is the same in any translation). Stops when either tab
- * closes
+ * the other (a verse locator, `v=3:16`, is the same in any translation, unless the two are
+ * numbered differently: then it's mapped). Stops when either tab closes
  */
 function link(plugin: ToposPlugin, a: BibleView, b: BibleView): void {
   // Moving one tab scrolls the other, which then reports where it is: that echo is ignored
@@ -54,7 +72,10 @@ function link(plugin: ToposPlugin, a: BibleView, b: BibleView): void {
   const follow = (from: BibleView, to: BibleView) =>
     from.reader?.on("relocated", (loc) => {
       if (Date.now() < (quietUntil.get(from) ?? 0) || !loc.locator || !to.reader?.isRendered) return;
-      const range = to.reader.resolve(loc.locator.split("&")[0]);
+      const toBible = to.file ? plugin.bibles.ofFile(to.file.path) : null;
+      const placed = placeLocator(plugin, loc.locator.split("&")[0]!, from, toBible);
+      if (!placed) return;
+      const range = to.reader.resolve(placed);
       if (!range) return;
       quietUntil.set(to, Date.now() + 800);
       to.reader.scrollToRange(range, { flash: false, position: "top" });
@@ -79,7 +100,12 @@ async function openIn(plugin: ToposPlugin, view: BibleView, bible: Bible, beside
     new Notice(`${bible.name} doesn't have this book.`);
     return;
   }
-  const locator = (view.file ? plugin.settings.positions[view.file.path] : undefined)?.split("&")[0] ?? "";
+  const written = (view.file ? plugin.settings.positions[view.file.path] : undefined)?.split("&")[0] ?? "";
+  // Numbered differently: where the other Bible has that verse, else its chapter
+  const placed = written ? placeLocator(plugin, written, view, bible) : written;
+  const parts = parseVerseLocator(written);
+  const locator = placed ?? (parts?.[0] ? `v=${parts[0].chapter}` : "");
+  if (placed === null && parts) new Notice(`${bible.name} has nothing for ${view.reader?.bible.name ?? ""} ${formatVerseLocator(parts).slice(2)}; it opens at the chapter.`);
   await plugin.openDocument(file, locator, beside ? "split" : false);
   if (!beside) return;
   const other = plugin.views().find((v) => v.file?.path === file.path && v !== view);

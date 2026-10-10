@@ -182,6 +182,14 @@ that Bible, its hover and embed show that Bible's text, and completion offers th
 - In a Bible tab, the commands *Open this book in another Bible* and *Open this book in another
   Bible beside it, on the same verse* open the same verse in another translation; beside it, the
   two tabs keep the verse at the top of either one at the top of the other as you scroll
+- Bibles numbered differently (Psalm 51:1 in an English Bible is 51:3 in a Hebrew one) are read
+  in their own numbers when the vault has a versification map leading from one to the other (a
+  logoxide package of kind `versification-map`, added like any other, and Bible packages that
+  say their `versification`). A compare Bible's embed then says where the passage is in it
+  (`Psalm 51:1 · KJV (Psalm 51:3)`), and what it doesn't have (`(not in it: Psalm 51:0)`); the
+  commands above open, and keep beside it, the verse it maps to; playing a passage plays the
+  verses a recording's Bible numbers it as. Folder Bibles have no numbering of their own and are
+  always read as written
 
 #### Recordings
 
