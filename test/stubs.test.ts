@@ -17,6 +17,10 @@ test("a stub's text names its package and book", () => {
   assert.deepEqual(parseStub(stubText(stub)), stub);
   assert.equal(parseStub("# My notes"), null);
   assert.equal(parseStub('{"biblix": 1}'), null);
+  // One book of a file that holds several (a whole Bible in ThML)
+  const john = { package: "kjv", path: "thml/kjv.xml", book: "JHN" };
+  assert.equal(stubText(john), '{"biblix":"kjv","path":"thml/kjv.xml","book":"JHN"}\n');
+  assert.deepEqual(parseStub(stubText(john)), john);
 });
 
 test("only stubs no package has are removed", () => {

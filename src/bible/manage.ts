@@ -1,5 +1,5 @@
 import { requestUrl } from "obsidian";
-import { Biblix, type BiblixCatalog, type BiblixInstaller, type BiblixProject, type CatalogEntry, type FetchRequest, type InstallStep, type PackageLocation, type UpdateMode } from "biblix";
+import { Biblix, ChangeKind, type BiblixCatalog, type BiblixInstaller, type BiblixProject, type CatalogEntry, type FetchRequest, type InstallStep, type PackageFile, type PackageLocation, type UpdateMode } from "biblix";
 import type ToposPlugin from "../main.ts";
 import { LOCK, MANIFEST, buffer, join, message, mkdirs, readTree } from "./packages.ts";
 
@@ -34,7 +34,7 @@ export class BibleManager {
     return { project: biblix.parseProject(manifest, lock), base };
   }
 
-  /** Every catalog the vault searches (its own, then eBible.org's and fetch.bible's), downloaded at most once a day */
+  /** Every catalog the vault searches (its own, then the defaults: eBible.org's, fetch.bible's, CCEL's, CrossWire's), downloaded at most once a day */
   async catalogs(): Promise<BiblixCatalog> {
     if (this.catalog) return this.catalog;
     this.catalogLoading ??= this.loadCatalogs().finally(() => (this.catalogLoading = null));
@@ -51,8 +51,7 @@ export class BibleManager {
     const registries = project.registries().map((r) => r.location);
     for (const location of [...registries, ...project.catalogs()]) {
       try {
-        const text = await this.catalogText(location, base);
-        const catalog = biblix.parseCatalog(location, text);
+        const catalog = biblix.parseCatalogBytes(location, await this.catalogBytes(location, base));
         if (merged) {
           const next: BiblixCatalog = merged.merge(catalog);
           merged.dispose();
@@ -70,21 +69,21 @@ export class BibleManager {
     return merged;
   }
 
-  /** A catalog's text: downloaded (kept a day in the plugin's folder), or a file in the vault */
-  private async catalogText(location: string, base: string): Promise<string> {
-    if (!/^https?:\/\//.test(location)) return this.adapter.read(join(base, location));
+  /** A catalog's bytes (a SWORD repository's is a `.tar.gz`): downloaded (kept a day in the plugin's folder), or a file in the vault */
+  private async catalogBytes(location: string, base: string): Promise<Uint8Array> {
+    if (!/^https?:\/\//.test(location)) return new Uint8Array(await this.adapter.readBinary(join(base, location)));
     const dir = this.plugin.manifest?.dir;
     const saved = dir ? `${dir}/catalogs/${location.replace(/[^A-Za-z0-9.]+/g, "_")}` : null;
     if (saved && (await this.adapter.exists(saved))) {
       const stat = await this.adapter.stat(saved);
-      if (stat && Date.now() - stat.mtime < CATALOG_KEPT_MS) return this.adapter.read(saved);
+      if (stat && Date.now() - stat.mtime < CATALOG_KEPT_MS) return new Uint8Array(await this.adapter.readBinary(saved));
     }
-    const text = (await requestUrl({ url: location })).text;
+    const bytes = await download(location);
     if (saved) {
       await mkdirs(this.plugin, `${dir}/catalogs`);
-      await this.adapter.write(saved, text);
+      await this.adapter.writeBinary(saved, bytes);
     }
-    return text;
+    return new Uint8Array(bytes);
   }
 
   /** Downloads every catalog again when next searched (new releases show without waiting a day) */
@@ -95,7 +94,7 @@ export class BibleManager {
     this.catalog = null;
   }
 
-  /** The catalogs searched, in order, and whether each is one of the defaults (eBible.org's, fetch.bible's) */
+  /** The catalogs searched, in order, and whether each is one of the defaults (eBible.org's, fetch.bible's, CCEL's, CrossWire's) */
   async catalogList(): Promise<{ location: string; isDefault: boolean }[]> {
     await this.plugin.engine();
     const { project } = await this.project(Biblix.new());
@@ -109,7 +108,7 @@ export class BibleManager {
     await this.plugin.engine();
     const biblix = Biblix.new();
     const { project, base } = await this.project(biblix);
-    const catalog = biblix.parseCatalog(location, await this.catalogText(location, base));
+    const catalog = biblix.parseCatalogBytes(location, await this.catalogBytes(location, base));
     const count = catalog.count();
     catalog.dispose();
     const added = project.addCatalog(location);
@@ -132,7 +131,7 @@ export class BibleManager {
     await this.plugin.engine();
     const biblix = Biblix.new();
     const { project, base } = await this.project(biblix);
-    const catalog = biblix.parseCatalog(location, await this.catalogText(location, base));
+    const catalog = biblix.parseCatalogBytes(location, await this.catalogBytes(location, base));
     const count = catalog.count();
     catalog.dispose();
     const added = project.addRegistry(name, location);
@@ -261,7 +260,7 @@ export class BibleManager {
     return entry.abbreviation;
   }
 
-  /** Installs a catalog entry: adds its repository or its registry's newest release, or imports eBible.org's or fetch.bible's download */
+  /** Installs a catalog entry: adds its repository or its registry's newest release, or imports eBible.org's, fetch.bible's, CCEL's, or a SWORD repository's download */
   async addEntry(entry: CatalogEntry): Promise<string> {
     if (entry.source.tag === "Git") return this.addGit(entry.source.url);
     if (entry.source.tag === "Registry") return this.addRelease(entry, entry.source.catalog);
@@ -271,10 +270,7 @@ export class BibleManager {
     const relative = `imports/${entry.id}`;
     const dir = join(base, relative);
     if (await this.adapter.exists(dir)) throw new Error(`${dir} already exists`);
-    const files =
-      entry.source.tag === "Ebible"
-        ? biblix.importEbible(entry, new Uint8Array(await download(entry.source.zipUrl)))
-        : biblix.importFetchBible(entry, await downloadBooks(entry.source.books));
+    const files = await importFiles(biblix, entry);
     for (const file of files) {
       const path = `${dir}/${file.path}`;
       await mkdirs(this.plugin, path.slice(0, path.lastIndexOf("/")));
@@ -330,6 +326,78 @@ export class BibleManager {
     return changed;
   }
 
+  /**
+   * Makes each import (`imports/<id>/`) again from its publisher's download, like
+   * `bx import --update`, and replaces those that changed (unless only checking), then locks them
+   * again; a line for each. eBible.org's and SWORD imports are downloaded only when their catalog
+   * lists a newer version; fetch.bible's and CCEL's each time (their texts change without one)
+   */
+  async updateImports(checkOnly = false): Promise<string[]> {
+    await this.plugin.engine();
+    const biblix = Biblix.new();
+    const { project, base } = await this.project(biblix);
+    const catalog = await this.catalogs();
+    const lines: string[] = [];
+    const changed: string[] = [];
+    const imports = project.packages().filter((p) => p.dependencyOf === null && p.location.tag === "Path" && p.location.dir.startsWith("imports/"));
+    for (const entry of imports) {
+      const dir = this.locationDir(entry.location, base);
+      try {
+        const current = await readTree(this.plugin, dir);
+        const pkg = biblix.openPackage(current, entry.features, []);
+        const upstream = pkg.info().upstream;
+        pkg.dispose();
+        if (!upstream) continue;
+        const from = await this.importEntry(biblix, catalog, upstream, base);
+        if (!from) {
+          lines.push(`${entry.name}: in none of the catalogs searched`);
+          continue;
+        }
+        if (biblix.importIsCurrent(from, entry.version)) {
+          lines.push(`${entry.name} ${entry.version}: up to date`);
+          continue;
+        }
+        const update = biblix.updateImport(current, await importFiles(biblix, from));
+        if (!update) {
+          lines.push(`${entry.name} ${entry.version}: up to date`);
+          continue;
+        }
+        const raised = update.bumped ? ", the version raised for it" : "";
+        lines.push(`${entry.name} ${update.from} → ${update.to}: ${update.description} (${changeName(update.change)} change${raised})`);
+        if (checkOnly) continue;
+        for (const path of update.removed) {
+          if (await this.adapter.exists(`${dir}/${path}`)) await this.adapter.remove(`${dir}/${path}`);
+        }
+        for (const file of update.files) {
+          const path = `${dir}/${file.path}`;
+          await mkdirs(this.plugin, path.slice(0, path.lastIndexOf("/")));
+          await this.adapter.writeBinary(path, buffer(file.bytes));
+        }
+        changed.push(entry.id);
+      } catch (error) {
+        lines.push(`${entry.name}: ${message(error)}`);
+      }
+    }
+    if (changed.length > 0) {
+      await this.install(biblix, project, base, biblix.installer(), { tag: "Only", ids: changed });
+      await this.plugin.packages.load();
+    }
+    project.dispose();
+    return lines;
+  }
+
+  /** The catalog entry an import was made from, by its upstream: in the catalogs searched, else (a SWORD module) its repository's */
+  private async importEntry(biblix: Biblix, catalog: BiblixCatalog, upstream: string, base: string): Promise<CatalogEntry | null> {
+    const found = catalog.findUpstream(upstream);
+    const root = upstream.split("/packages/")[0];
+    if (found || root === upstream || !root) return found ?? null;
+    const location = `${root}/mods.d.tar.gz`;
+    const repository = biblix.parseCatalogBytes(location, await this.catalogBytes(location, base));
+    const entry = repository.findUpstream(upstream);
+    repository.dispose();
+    return entry ?? null;
+  }
+
   /** Removes a package from the vault's manifest, and its files (unless another entry uses them) */
   async remove(id: string): Promise<void> {
     await this.plugin.engine();
@@ -367,8 +435,36 @@ async function downloadBooks(books: { code: string; url: string }[]): Promise<{ 
   return files;
 }
 
+/** A change's kind in words (`minor`) */
+function changeName(change: ChangeKind): string {
+  return (Object.entries(ChangeKind).find(([, value]) => value === change)?.[0] ?? "").toLowerCase();
+}
+
+/** A catalog entry's import: its publisher's download made into a package's files */
+async function importFiles(biblix: Biblix, entry: CatalogEntry): Promise<PackageFile[]> {
+  const source = entry.source;
+  if (source.tag === "Ebible") return biblix.importEbible(entry, new Uint8Array(await download(source.zipUrl)));
+  if (source.tag === "Ccel") return biblix.importCcel(entry, new Uint8Array(await download(source.url)));
+  if (source.tag === "Sword") return biblix.importSword(entry, new Uint8Array(await downloadFirst(source.zipUrls)));
+  if (source.tag === "FetchBible") return biblix.importFetchBible(entry, await downloadBooks(source.books));
+  throw new Error(`${entry.id} isn't imported: add it`);
+}
+
+/** The bytes of the first of these URLs that answers (a SWORD module's zip, under its name or in lowercase) */
+async function downloadFirst(urls: string[]): Promise<ArrayBuffer> {
+  let failed: unknown = new Error("nothing to download");
+  for (const url of urls) {
+    try {
+      return await download(url);
+    } catch (error) {
+      failed = error;
+    }
+  }
+  throw failed;
+}
+
 /** A URL's bytes through Obsidian (redirects followed, no CORS) */
-async function download(url: string): Promise<ArrayBuffer> {
+export async function download(url: string): Promise<ArrayBuffer> {
   const response = await requestUrl({ url, throw: false });
   if (response.status >= 400) throw new Error(`${url}: ${response.status}`);
   return response.arrayBuffer;

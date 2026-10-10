@@ -1,97 +1,52 @@
-import { Modal, Notice, Setting, SuggestModal, type App } from "obsidian";
-import type { CatalogEntry } from "biblix";
-import type ToposPlugin from "../main.ts";
-import { message } from "./packages.ts";
+import { PackageKind, type CatalogEntry } from "biblix";
+
+/** What a package kind is called (`book`, `collection`, `commentary`) */
+export function kindName(kind: PackageKind): string {
+  const name = Object.entries(PackageKind).find(([, value]) => value === kind)?.[0] ?? "";
+  return name.replace(/(?<!^)([A-Z])/g, " $1").toLowerCase();
+}
 
 /** A license in words: public domain, else the copyright statement or SPDX expression */
-function license(entry: CatalogEntry): string {
+export function license(entry: CatalogEntry, max = 60): string {
   if (entry.license === "LicenseRef-PublicDomain") return "public domain";
+  // CCEL's list doesn't say: each file's head does, read when it's imported
+  if (!entry.license && entry.source.tag === "Ccel") return "rights in its file";
   const copyright = entry.copyright?.trim();
-  if (copyright) return copyright.length > 60 ? `${copyright.slice(0, 59)}…` : copyright;
+  if (copyright) return copyright.length > max ? `${copyright.slice(0, max - 1)}…` : copyright;
   return entry.license ?? "no license given";
 }
 
-/** Installs a catalog entry or a repository, saying how it went */
-async function installing(what: string, run: () => Promise<string>, done: () => void): Promise<void> {
-  const notice = new Notice(`Installing ${what}…`, 0);
-  try {
-    const name = await run();
-    notice.hide();
-    new Notice(`Installed ${name}`);
-  } catch (error) {
-    notice.hide();
-    new Notice(`Couldn't install ${what}: ${message(error)}`, 10000);
-  }
-  done();
+/** An entry's language in words; CCEL's list doesn't give languages (`und`): its files do, when imported */
+export function language(entry: CatalogEntry): string | null {
+  return entry.languageName ?? (entry.language === "und" ? null : entry.language);
 }
 
-/** Searches the vault's catalogs (else eBible.org's list) and installs the Bible chosen */
-export class AddBibleModal extends SuggestModal<CatalogEntry> {
-  constructor(
-    app: App,
-    private readonly plugin: ToposPlugin,
-    /** Called once it's installed (or failed) */
-    private readonly done: () => void,
-  ) {
-    super(app);
-    this.setPlaceholder("Search Bibles by name, abbreviation, or language: world english, KJV, español…");
-    this.emptyStateText = "No Bible found in the catalogs";
-  }
-
-  async getSuggestions(query: string): Promise<CatalogEntry[]> {
-    try {
-      return await this.plugin.bibleManager.search(query, 100);
-    } catch (error) {
-      this.emptyStateText = `The catalogs couldn't be read: ${message(error)}`;
-      return [];
-    }
-  }
-
-  renderSuggestion(entry: CatalogEntry, el: HTMLElement): void {
-    const installed = this.plugin.packages.installed.some((p) => p.id === entry.id);
-    el.createDiv({ text: `${entry.name} (${entry.abbreviation})${installed ? " — installed" : ""}` });
-    const language = entry.languageName ?? entry.language;
-    const source = entry.source;
-    const from = source.tag === "Ebible" ? "eBible.org" : source.tag === "FetchBible" ? "fetch.bible" : source.tag === "Registry" ? `${source.catalog} ${entry.releases.at(-1)?.version ?? ""}` : source.url;
-    el.createEl("small", { text: [language, license(entry), from].join(" · "), cls: "topos-muted" });
-  }
-
-  onChooseSuggestion(entry: CatalogEntry): void {
-    void installing(entry.name, () => this.plugin.bibleManager.addEntry(entry), this.done);
-  }
+/** Where an entry comes from, as the browser's source filter names it (`ebible`, `registry:name`) */
+export function sourceKey(entry: CatalogEntry): string {
+  const source = entry.source;
+  return source.tag === "Registry" ? `registry:${source.catalog}` : source.tag.toLowerCase();
 }
 
-/** Adds a biblix package from its git repository's URL (its newest release) */
-export class GitUrlModal extends Modal {
-  private url = "";
+/** The names of the sources that aren't registries, by `sourceKey` */
+export const SOURCE_NAMES: Record<string, string> = {
+  ebible: "eBible.org",
+  fetchbible: "fetch.bible",
+  ccel: "CCEL",
+  sword: "SWORD",
+  git: "Git",
+};
 
-  constructor(
-    app: App,
-    private readonly plugin: ToposPlugin,
-    private readonly done: () => void,
-  ) {
-    super(app);
-  }
-
-  override onOpen(): void {
-    this.titleEl.setText("Add a Bible from its repository");
-    new Setting(this.contentEl)
-      .setName("Git URL")
-      .setDesc("A biblix package's repository (https://github.com/…): its newest release is installed.")
-      .addText((t) => t.setPlaceholder("https://").onChange((value) => (this.url = value.trim())));
-    new Setting(this.contentEl).addButton((b) =>
-      b
-        .setButtonText("Add")
-        .setCta()
-        .onClick(() => {
-          if (!this.url) return;
-          this.close();
-          void installing(this.url, () => this.plugin.bibleManager.addGit(this.url), this.done);
-        }),
-    );
-  }
-
-  override onClose(): void {
-    this.contentEl.empty();
+/** Where an entry comes from, in words: `eBible.org`, `SWORD (CrossWire)`, a registry's name and newest release */
+export function sourceName(entry: CatalogEntry): string {
+  const source = entry.source;
+  switch (source.tag) {
+    case "Sword":
+      return `SWORD (${source.id.split("/")[0]})`;
+    case "Registry":
+      return `${source.catalog} ${entry.releases.at(-1)?.version ?? ""}`.trim();
+    case "Git":
+      return source.url.replace(/^https?:\/\//, "");
+    default:
+      return SOURCE_NAMES[sourceKey(entry)] ?? source.tag;
   }
 }

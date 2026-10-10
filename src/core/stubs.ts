@@ -8,7 +8,9 @@
  * Stubs are named by their book's title, in their package's folder: `Biblix/bsb/John.bible` for
  * `usx/JHN.usx` in the package `bsb` (a title changes only in a package's major release; when it
  * does, the stub is renamed and links to it follow). A package's EPUBs are copied the same way:
- * `Biblix/the-dorean-principle/The Dorean Principle.epub`.
+ * `Biblix/the-dorean-principle/The Dorean Principle.epub`. A file of several books (a whole Bible
+ * in OSIS or ThML, as CCEL's) has a stub for each book, named by the book and naming it by its
+ * USFM code: `Biblix/kjv/John.bible`.
  */
 
 /** A stub's extension: the Bible format opens these */
@@ -20,6 +22,8 @@ export interface Stub {
   package: string;
   /** The book's path in the package (`usx/JHN.usx`) */
   path: string;
+  /** Its USFM code (`JHN`), when the file holds several books (a whole Bible in OSIS or ThML) */
+  book?: string;
 }
 
 /** Folder names in the library a package's stubs can't use (the library's own) */
@@ -69,15 +73,15 @@ export function stubNames(files: { path: string; title: string | null }[]): Map<
 
 /** A stub's text */
 export function stubText(stub: Stub): string {
-  return `${JSON.stringify({ biblix: stub.package, path: stub.path })}\n`;
+  return `${JSON.stringify({ biblix: stub.package, path: stub.path, ...(stub.book ? { book: stub.book } : {}) })}\n`;
 }
 
 /** What a stub's text names (null when it isn't a stub) */
 export function parseStub(text: string): Stub | null {
   try {
-    const value = JSON.parse(text) as { biblix?: unknown; path?: unknown };
+    const value = JSON.parse(text) as { biblix?: unknown; path?: unknown; book?: unknown };
     if (typeof value.biblix !== "string" || typeof value.path !== "string") return null;
-    return { package: value.biblix, path: value.path };
+    return { package: value.biblix, path: value.path, ...(typeof value.book === "string" ? { book: value.book } : {}) };
   } catch {
     return null;
   }

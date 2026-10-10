@@ -1,4 +1,4 @@
-import { App, Notice, type DropdownComponent, Platform, Setting } from "obsidian";
+import { App, Notice, type DropdownComponent, Platform, Setting, setIcon } from "obsidian";
 import { BookStyle, PackageKind } from "biblix";
 import { DEFAULT_FORMAT, written, type FormatSettings } from "./core/format.ts";
 import { parseQuery } from "./core/query.ts";
@@ -6,245 +6,556 @@ import type { BookCompletion } from "./core/completions.ts";
 import { FILTERS, linkUrl, PLACEHOLDERS, SITES, templateError } from "./core/links.ts";
 import { bookStyle, type StyleName } from "./core/settings.ts";
 import type ToposPlugin from "./main.ts";
-import { AddBibleModal, GitUrlModal } from "./bible/add.ts";
-import { mkdirs } from "./bible/packages.ts";
+import { kindName } from "./bible/add.ts";
+import { mkdirs, type InstalledPackage } from "./bible/packages.ts";
+import { formatSize } from "./core/timings.ts";
+import { badge, errorText, filteredList, lead, md, section, setMd, Tabs, type TabSpec } from "./settings/kit.ts";
+import { CatalogBrowser, gitForm } from "./settings/browse.ts";
 
 export { bookStyle, DEFAULT_SETTINGS, type StyleName, type ToposSettings } from "./core/settings.ts";
 
+export type SettingsTab = "bibles" | "library" | "add" | "references" | "search" | "reader" | "highlights";
+
+const TABS: TabSpec<SettingsTab>[] = [
+  { id: "bibles", name: "Bibles", icon: "book-open" },
+  { id: "library", name: "Library", icon: "library" },
+  { id: "add", name: "Add Bibles", icon: "package-plus" },
+  { id: "references", name: "References", icon: "link-2" },
+  { id: "search", name: "Search", icon: "search" },
+  { id: "reader", name: "Reader", icon: "book-open-text" },
+  { id: "highlights", name: "Highlights", icon: "highlighter" },
+];
+
+/** file-plus-plus's sections of the settings, by heading, and the tab each goes in (the rest: Highlights) */
+const FPP_SECTIONS: Record<string, SettingsTab> = {
+  Reading: "reader",
+  "Jumping to a passage": "reader",
+  Previews: "reader",
+  Mobile: "reader",
+};
+
+/** The tab showing, kept while the settings are redrawn and between visits */
+let activeTab: SettingsTab = "bibles";
+
+/** Opens the plugin's settings at a tab */
+export function openSettings(plugin: ToposPlugin, tab: SettingsTab): void {
+  activeTab = tab;
+  const setting = (plugin.app as App & { setting?: { open(): void; openTabById(id: string): void } }).setting;
+  setting?.open();
+  setting?.openTabById(plugin.manifest.id);
+}
+
+/** A button that asks again before it removes something: the first click arms it for a few seconds */
+function removeButton(el: HTMLElement, tooltip: string, remove: () => Promise<void>): void {
+  const button = el.createDiv({ cls: "clickable-icon topos-remove", attr: { "aria-label": tooltip } });
+  setIcon(button, "trash-2");
+  let armed: number | null = null;
+  button.addEventListener("click", async (event) => {
+    event.stopPropagation();
+    if (armed === null) {
+      button.addClass("is-armed");
+      button.setAttr("aria-label", "Click again to remove");
+      armed = window.setTimeout(() => {
+        armed = null;
+        button.removeClass("is-armed");
+        button.setAttr("aria-label", tooltip);
+      }, 3000);
+      return;
+    }
+    window.clearTimeout(armed);
+    button.addClass("is-busy");
+    await remove();
+  });
+}
+
 /**
- * topos's settings, shown first in the plugin's settings tab (file-plus-plus's tab, which adds
- * the Bible tab's reading, highlight, and link settings after them)
+ * topos's settings, in tabs: what file-plus-plus's settings tab shows first. Its own settings
+ * (reading, highlights, links to passages) are moved into the last two tabs once it has drawn them
  */
 export class ToposSettingsPanel {
   private readonly app: App;
+  private tabs!: Tabs<SettingsTab>;
+  /** The tabs drawn so far (the Add Bibles tab is drawn when it's first shown, since it downloads the catalogs) */
+  private readonly drawn = new Set<SettingsTab>();
 
   constructor(
     private readonly plugin: ToposPlugin,
     private readonly containerEl: HTMLElement,
-    private readonly refresh: () => void,
+    /** Draws the whole settings tab again (unused: tabs draw their parts again themselves) */
+    _refresh: () => void,
   ) {
     this.app = plugin.app;
   }
 
-  /** Draws the whole settings tab again */
-  private display(): void {
-    this.refresh();
-  }
-
   render(): void {
     const { containerEl } = this;
-    const settings = this.plugin.settings;
-    const save = () => this.plugin.saveToposSettings();
-    this.bibleSettings(containerEl);
-    new Setting(containerEl).setName("References").setHeading();
+    containerEl.addClass("topos-settings");
+    this.tabs = new Tabs(containerEl, TABS, activeTab, (id) => {
+      activeTab = id;
+      this.draw(id);
+    });
+    lead(this.panel("reader"), "How Bible books read in their own tab: the look of the text (for each device), jumping to a passage, and previews.");
+    lead(this.panel("highlights"), "Highlighting Bible text, links to passages, copying, menus, and the annotation files beside each book.");
+    for (const tab of ["bibles", "library", "references", "search"] as const) this.draw(tab);
+    this.draw(this.tabs.current);
+    queueMicrotask(() => this.adoptFilePlusPlus());
+  }
 
-    new Setting(containerEl)
-      .setName("Reference style")
-      .setDesc("How completions, normalized references, and search results are written.")
-      .addDropdown((d) =>
-        d
-          .addOptions({
-            name: "Full name (John 3:16)",
-            abbreviation: "Abbreviation (Jn 3:16)",
-            osis: "OSIS (John.3.16)",
-          })
-          .setValue(settings.style)
-          .onChange((value) => {
-            settings.style = value as StyleName;
-            void save();
-          }),
-      );
+  private panel(tab: SettingsTab): HTMLElement {
+    return this.tabs.panels.get(tab)!;
+  }
 
-    this.links(containerEl);
-    new Setting(containerEl)
-      .setName("Link references in the editor")
-      .setDesc("Highlight references while editing, and open their links when clicked.")
-      .addToggle((t) =>
-        t.setValue(settings.linkInEditor).onChange((value) => {
-          settings.linkInEditor = value;
-          void save();
-        }),
-      );
-    new Setting(containerEl)
-      .setName("Require Ctrl/Cmd to open references")
-      .setDesc(
-        "On desktop, plain clicks place the cursor (or do nothing in reading view); Ctrl/Cmd-click opens the reference.",
-      )
-      .addToggle((t) =>
-        t.setValue(settings.clickNeedsModifier).onChange((value) => {
-          settings.clickNeedsModifier = value;
-          void save();
-        }),
-      );
-    new Setting(containerEl)
-      .setName("Tap to open references in the editor")
-      .setDesc(
-        "On mobile, the tap that would place the cursor and open the keyboard opens the reference's link instead. Once you're typing, taps move the cursor as usual. Taps outside the editor always open references.",
-      )
-      .addToggle((t) =>
-        t.setValue(settings.tapOpensInEditor).onChange((value) => {
-          settings.tapOpensInEditor = value;
-          void save();
-        }),
-      );
-    new Setting(containerEl)
-      .setName("Link references in reading view")
-      .addToggle((t) =>
-        t.setValue(settings.linkInReading).onChange((value) => {
-          settings.linkInReading = value;
-          void save();
-        }),
-      );
-    this.referenceColor(containerEl);
-
-    new Setting(containerEl).setName("Autocomplete").setHeading();
-    new Setting(containerEl)
-      .setName("Suggest references while typing")
-      .setDesc("After a book name, suggest chapters, then verses, then range ends.")
-      .addToggle((t) =>
-        t.setValue(settings.autocomplete).onChange((value) => {
-          settings.autocomplete = value;
-          void save();
-        }),
-      );
-    new Setting(containerEl)
-      .setName("Complete book names")
-      .setDesc("In prose, completing every word would be noisy, so by default only words that start with a capital letter or number complete to book names.")
-      .addDropdown((d) =>
-        d
-          .addOptions({ off: "Never", capitalized: "When capitalized", always: "Always" })
-          .setValue(settings.bookCompletion)
-          .onChange((value) => {
-            settings.bookCompletion = value as BookCompletion;
-            void save();
-          }),
-      );
-    new Setting(containerEl)
-      .setName("Number of suggestions")
-      .addSlider((s) =>
-        s
-          .setLimits(5, 100, 5)
-          .setValue(settings.suggestionLimit)
-          .setDynamicTooltip()
-          .onChange((value) => {
-            settings.suggestionLimit = value;
-            void save();
-          }),
-      );
-
-    this.formatSettings(containerEl);
-
-    new Setting(containerEl).setName("Search").setHeading();
-    new Setting(containerEl)
-      .setName("File extensions")
-      .setDesc("Files to search, separated by commas.")
-      .addText((t) =>
-        t.setValue(settings.extensions).onChange((value) => {
-          settings.extensions = value;
-          void save().then(() => this.plugin.reindexSoon());
-        }),
-      );
-    new Setting(containerEl)
-      .setName("Search EPUB files")
-      .setDesc(
-        `Find references in EPUBs too. With the EPUB++ plugin, which opens EPUBs in Obsidian, their references show in the book, with a sidebar tab to step through them and save one as a highlight, and results open in the book.${this.plugin.epubs.api ? "" : " (EPUB++ isn't enabled.)"}`,
-      )
-      .addToggle((t) =>
-        t.setValue(settings.searchEpubs).onChange((value) => {
-          settings.searchEpubs = value;
-          void save().then(() => this.plugin.epubs.toggled());
-        }),
-      );
-    if (!Platform.isDesktopApp && settings.searchEpubs) {
-      new Setting(containerEl)
-        .setName("Search new EPUBs on this device")
-        .setDesc(
-          "Books a computer has indexed are never searched here: their references sync with the vault. Turn this on to also search books no other device has indexed yet (slow for a big library).",
-        )
-        .addToggle((t) =>
-          t.setValue(settings.searchEpubsOnMobile).onChange((value) => {
-            settings.searchEpubsOnMobile = value;
-            void save().then(() => this.plugin.reindex());
-          }),
-        );
+  /** Draws a tab's settings (once; `redraw` draws them again) */
+  private draw(tab: SettingsTab): void {
+    if (this.drawn.has(tab)) return;
+    const el = this.panel(tab);
+    switch (tab) {
+      case "bibles":
+        this.biblesTab(el);
+        break;
+      case "library":
+        this.libraryTab(el);
+        break;
+      case "add":
+        this.addTab(el);
+        break;
+      case "references":
+        this.referencesTab(el);
+        break;
+      case "search":
+        this.searchTab(el);
+        break;
+      default:
+        return;
     }
-    if (Platform.isDesktopApp) {
-      new Setting(containerEl)
-        .setName("Search engine")
-        .setDesc(
-          "Built in: searches in a background thread, everywhere. topos CLI: runs the native command-line tool, which is much faster for many files and EPUBs (install it with cargo install topos-bible-cli). Either way, only new and changed files are searched; edits are always searched by the built-in engine.",
-        )
-        .addDropdown((d) =>
-          d
-            .addOptions({ builtin: "Built in", cli: "topos CLI" })
-            .setValue(settings.engine)
-            .onChange((value) => {
-              settings.engine = value as "builtin" | "cli";
-              void save().then(() => {
-                this.display();
-                this.plugin.indexer.resetCli();
-              });
-            }),
-        );
-      if (settings.engine === "cli") {
-        new Setting(containerEl)
-          .setName("topos command")
-          .setDesc("Leave empty to use ~/.cargo/bin/topos, or topos from PATH.")
-          .addText((t) =>
-            t
-              .setPlaceholder(this.plugin.cliPath())
-              .setValue(settings.cliPath)
-              .onChange((value) => {
-                settings.cliPath = value.trim();
-                void save();
-              }),
-          )
-          .addButton((b) =>
-            b.setButtonText("Test").onClick(() => {
-              void this.plugin.testCli().then((message) => new Notice(message));
-            }),
-          );
-        new Setting(containerEl)
-          .setName("Cache CLI results")
-          .setDesc("Reuse results for files that have not changed since the last run (topos --cache).")
-          .addToggle((t) =>
-            t.setValue(settings.cliCache).onChange((value) => {
-              settings.cliCache = value;
-              void save();
-            }),
-          );
-      }
+    this.drawn.add(tab);
+  }
+
+  /** Draws tabs again (after what they show changed), keeping the rest as it is */
+  private redraw(...tabs: SettingsTab[]): void {
+    for (const tab of tabs) {
+      if (tab === "reader" || tab === "highlights") continue;
+      const wasDrawn = this.drawn.delete(tab);
+      this.panel(tab).empty();
+      if (wasDrawn || tab === this.tabs.current) this.draw(tab);
     }
-
-    new Setting(containerEl)
-      .setName("Excluded folders")
-      .setDesc("One folder per line.")
-      .addTextArea((t) =>
-        t.setValue(settings.excludeFolders).onChange((value) => {
-          settings.excludeFolders = value;
-          void save().then(() => this.plugin.reindexSoon());
-        }),
-      );
-
-    new Setting(containerEl)
-      .setName("Reference index")
-      .setDesc(
-        `${this.plugin.refs.referenceCount.toLocaleString()} references in ${this.plugin.refs.fileCount.toLocaleString()} files. The index is kept in the plugin's folder and syncs with your settings, so each file is searched once (on any device). Rebuilding searches every file again.`,
-      )
-      .addButton((b) =>
-        b.setButtonText("Rebuild").onClick(() => {
-          void this.plugin.reindex(true).then(() => this.display());
-        }),
-      );
-
-    this.savedSearches(containerEl);
   }
 
   /**
-   * How references are written (the CLI's --psg-fmt fields), with a preview: completions, the
-   * sidebar, the dialogs, and "Normalize references" all use it
+   * file-plus-plus draws its settings after these, under a heading of their own: they're moved
+   * into the Reader and Highlights tabs by their headings, each heading's settings in a card like
+   * these (it draws them right after this, in the same task, so nothing shows before they move)
    */
-  /** The references' color: the accent color until one is picked */
+  private adoptFilePlusPlus(): void {
+    if (!this.containerEl.parentElement) return;
+    const before = this.containerEl.previousElementSibling;
+    if (before instanceof HTMLElement && before.hasClass("setting-item-heading")) before.remove();
+    let group: HTMLElement | null = null;
+    let items: HTMLElement | null = null;
+    const newGroup = (tab: SettingsTab) => {
+      group = this.panel(tab).createDiv("setting-group");
+      items = null;
+      return group;
+    };
+    for (let node = this.containerEl.nextSibling; node; ) {
+      const next = node.nextSibling;
+      if (node instanceof HTMLElement && node.hasClass("setting-item-heading")) {
+        const name = node.querySelector(".setting-item-name")?.textContent?.trim() ?? "";
+        newGroup(FPP_SECTIONS[name] ?? "highlights").append(node);
+      } else if (node instanceof HTMLElement && node.hasClass("setting-item")) {
+        const into: HTMLElement = group ?? newGroup("reader");
+        if (!items || into.lastElementChild !== items) items = into.createDiv("setting-items");
+        items.append(node);
+      } else if (node instanceof HTMLElement) {
+        const into: HTMLElement = group ?? newGroup("reader");
+        // A block of settings of its own (the appearance controls, a menu's items): a card of its own
+        if (node.tagName === "DIV" && node.querySelector(":scope > .setting-item")) node.addClass("setting-items");
+        else node.addClass("topos-group-text");
+        into.append(node);
+        items = null;
+      } else node.remove();
+      node = next;
+    }
+    for (const tab of ["reader", "highlights"] as const) {
+      for (const el of this.panel(tab).querySelectorAll<HTMLElement>(".setting-item-description, .topos-group-text")) codeLiterals(el);
+    }
+  }
+
+  // ─── Bibles ──────────────────────────────────────────────────────────────
+
+  private biblesTab(el: HTMLElement): void {
+    const settings = this.plugin.settings;
+    const save = () => this.plugin.saveToposSettings();
+    const bibles = this.plugin.bibles.all();
+    lead(el, "Which Bible references open in, the translations they can name, and how Bible text shows in its tab, previews, and embeds.");
+
+    const main = section(el, "Default Bible").items;
+    if (bibles.length === 0) {
+      const empty = main.createDiv("setting-item mod-empty-state topos-empty-state");
+      setIcon(empty.createDiv("topos-empty-state-icon"), "book-open");
+      empty.createDiv({ cls: "topos-empty-state-title", text: "No Bible in this vault yet" });
+      empty
+        .createDiv("topos-empty-state-text")
+        .append(md("Install one from the catalogs, or add a folder of USX or USFM files (one per book, like `JHN.usx`). References then open in it, and show its text on hover and in embeds (`![John 1:1]`)."));
+      empty.createEl("button", { cls: "mod-cta", text: "Browse Bibles" }).addEventListener("click", () => this.tabs.select("add"));
+    } else {
+      new Setting(main)
+        .setName("Bible")
+        .setDesc(
+          md(
+            "References open in this translation and show its text on hover and in embeds, unless they name another (`John 3:16 KJV`). A Bible is a folder of USX or USFM files (one per book, like `JHN.usx`), named after its folder, or a package in the library.",
+          ),
+        )
+        .addDropdown((d) => {
+          for (const bible of bibles) d.addOption(bible.folder, `${bible.name} (${bible.books.size + bible.unknown.length} books)`);
+          d.setValue(this.plugin.bibles.current()?.folder ?? "").onChange((value) => {
+            settings.bible = value;
+            void save();
+          });
+        });
+    }
+    new Setting(main)
+      .setName("Open reference links in")
+      .setDesc(md("Where `[John 1:1]` and `[text](John 1:1)` open. Bare references open in the link site (*References → Links*)."))
+      .addDropdown((d) =>
+        d
+          .addOptions({ bible: "The Bible", site: "The link site" })
+          .setValue(settings.referenceLinks)
+          .onChange((value) => {
+            settings.referenceLinks = value as "bible" | "site";
+            void save();
+          }),
+      );
+
+    const translations = section(el, "Translations", "A reference can name its translation: `John 3:16 KJV`, `[John 3:16 (KJV)]`, `![John 3:16 KJV]`. Each Bible's folder name is one.").items;
+    new Setting(translations)
+      .setName("Names and aliases")
+      .setDesc(md("One per line, like `KJV: AV, King James`. A name the vault has no Bible for still opens its link, with `{translation}` in the link template."))
+      .setClass("topos-tall-setting")
+      .addTextArea((t) => {
+        t.inputEl.rows = 4;
+        t.inputEl.addClass("topos-code-input");
+        t.setPlaceholder("KJV: AV, King James")
+          .setValue(settings.bibleAliases)
+          .onChange((value) => {
+            settings.bibleAliases = value;
+            void save();
+          });
+      });
+    new Setting(translations)
+      .setName("Compare in embeds")
+      .setDesc(md("Bibles whose text embeds (`![John 1:1]`) also show, after the one the reference names, separated by commas: `KJV, NET`."))
+      .addText((t) =>
+        t
+          .setPlaceholder("KJV, NET")
+          .setValue(settings.compareBibles)
+          .onChange((value) => {
+            settings.compareBibles = value;
+            void save();
+          }),
+      );
+
+    const text = section(el, "Bible text").items;
+    new Setting(text)
+      .setName("Section headings")
+      .setDesc("Show the translation's headings in Bible text.")
+      .addToggle((t) =>
+        t.setValue(settings.bibleHeadings).onChange((value) => {
+          settings.bibleHeadings = value;
+          void save();
+        }),
+      );
+    new Setting(text)
+      .setName("Footnotes")
+      .setDesc("Show the translation's footnotes and cross references in Bible text.")
+      .addToggle((t) =>
+        t.setValue(settings.bibleNotes).onChange((value) => {
+          settings.bibleNotes = value;
+          void save();
+        }),
+      );
+    new Setting(text)
+      .setName("Bible stylesheet")
+      .setDesc(
+        md(
+          "A CSS file in the vault for Bible text: its tab, previews, and embeds (Obsidian's CSS snippets don't reach them). Every USX marker is a `data-style`: `[data-style=\"q2\"]`, `[data-style=\"pn\"]`, `.topos-note [data-style=\"fr\"]`. Changes to the file apply at once.",
+        ),
+      )
+      .addText((t) => {
+        t.inputEl.addClass("topos-code-input");
+        t.setPlaceholder("Bibles/bible.css")
+          .setValue(settings.bibleCss)
+          .onChange((value) => {
+            settings.bibleCss = value.trim();
+            void this.plugin.bibleStyles.load();
+            void save();
+          });
+      });
+
+    const embeds = section(el, "Embeds and previews").items;
+    new Setting(embeds)
+      .setName("Preview bare references")
+      .setDesc("Show a reference's text when hovering it in the text, not only in links.")
+      .addToggle((t) =>
+        t.setValue(settings.previewBare).onChange((value) => {
+          settings.previewBare = value;
+          void save();
+        }),
+      );
+    const counts = (none: string) => {
+      const options: Record<string, string> = { 0: none };
+      for (let n = 1; n <= 5; n++) options[n] = `${n} line${n > 1 ? "s" : ""}`;
+      return options;
+    };
+    const alone: Setting[] = [];
+    const showAlone = () => alone.forEach((s) => s.settingEl.toggleClass("topos-hidden", !settings.embedAlone));
+    new Setting(embeds)
+      .setName("Embed references on their own line")
+      .setDesc(md("A reference alone on its line shows its text, like `![John 1:1]`. In the editor, it shows the reference again while the cursor is near it."))
+      .addToggle((t) =>
+        t.setValue(settings.embedAlone).onChange((value) => {
+          settings.embedAlone = value;
+          void save();
+          showAlone();
+        }),
+      );
+    alone.push(
+      new Setting(embeds)
+        .setClass("topos-subsetting")
+        .setName("Blank lines around them")
+        .setDesc("How many blank lines must be above and below the reference (the start and end of the note count).")
+        .addDropdown((d) =>
+          d
+            .addOptions(counts("None, just its own line"))
+            .setValue(String(settings.embedAloneBlankLines))
+            .onChange((value) => {
+              settings.embedAloneBlankLines = Number(value);
+              void save();
+            }),
+        ),
+      new Setting(embeds)
+        .setClass("topos-subsetting")
+        .setName("Cursor distance")
+        .setDesc("How many lines away the cursor shows the reference to edit it, instead of its text.")
+        .addDropdown((d) =>
+          d
+            .addOption("same", "As many as the blank lines")
+            .addOptions(counts("Only on its line"))
+            .setValue(settings.embedAloneCursorLines === null ? "same" : String(settings.embedAloneCursorLines))
+            .onChange((value) => {
+              settings.embedAloneCursorLines = value === "same" ? null : Number(value);
+              void save();
+            }),
+        ),
+    );
+    showAlone();
+
+    const recordings = section(el, "Recordings", "Package Bibles with a recording have a *Listen* button in their toolbar, and a play button in embeds of the passages it reads.").items;
+    new Setting(recordings)
+      .setName("Follow along")
+      .setDesc("While a recording plays, keep the verse being read in view.")
+      .addToggle((t) =>
+        t.setValue(settings.followPlayback).onChange((value) => {
+          settings.followPlayback = value;
+          void this.plugin.saveData(settings);
+        }),
+      );
+  }
+
+  // ─── Library ─────────────────────────────────────────────────────────────
+
+  private libraryTab(el: HTMLElement): void {
+    const packages = this.plugin.packages;
+    lead(el, "The packages the vault's `biblix.toml` asks for, pinned by `biblix.lock`: Bibles, commentaries, and books. Each device installs what the lock pins.");
+
+    const top = packages.installed.filter((p) => p.dependencyOf === null);
+    const more = packages.installed.length - top.length;
+    const installed = section(el, "Installed", top.length > 0 ? `${top.length} package${top.length === 1 ? "" : "s"}${more > 0 ? `, and ${more} more in collections` : ""}.` : undefined);
+    installed.heading?.addButton((b) =>
+      b
+        .setButtonText("Add Bibles")
+        .setCta()
+        .onClick(() => this.tabs.select("add")),
+    );
+    filteredList(installed, top, {
+      key: "packages",
+      placeholder: "Filter by name, abbreviation, license, or folder",
+      noun: ["package", "packages"],
+      empty: "Nothing installed yet. Find Bibles, commentaries, and books in *Add Bibles*, or write a `biblix.toml` and run `bx install`.",
+      text: (pkg) =>
+        [pkg, ...packages.installed.filter((p) => p.dependencyOf === pkg.name)]
+          .map((p) => [p.id, p.name, p.version, p.dir, p.info?.name, p.info?.abbreviation, p.info?.license, p.info ? kindName(p.info.kind) : ""].join(" "))
+          .join(" "),
+      render: (pkg, items) => this.packageRow(items, pkg, packages.installed.filter((p) => p.dependencyOf === pkg.name)),
+    });
+
+    const imports = packages.installed.some((p) => p.path && p.dependencyOf === null && p.dir.includes("/imports/"));
+    const fromGit = packages.installed.some((p) => !p.path);
+    if (fromGit || imports || packages.changedPackages.length > 0) {
+      const updates = section(el, "Updates").items;
+      if (packages.changedPackages.length > 0) {
+        new Setting(updates)
+          .setName("Restore edited Bibles")
+          .setDesc(md(`The files of ${packages.changedPackages.map((p) => `\`${p}\``).join(", ")} were edited in the library. Restoring downloads them again; notes and annotations beside them stay.`))
+          .setClass("topos-warning-setting")
+          .addButton((b) =>
+            b
+              .setButtonText("Restore")
+              .setCta()
+              .onClick(async () => {
+                b.setDisabled(true).setButtonText("Restoring…");
+                await this.plugin.restorePackages();
+                this.redraw("library", "bibles");
+              }),
+          );
+      }
+      if (fromGit) {
+        new Setting(updates)
+          .setName("Update Bibles")
+          .setDesc(md("Moves each package installed from a repository to its newest release that `biblix.toml` allows (imports stay as they are)."))
+          .addButton((b) =>
+            b.setButtonText("Update").onClick(async () => {
+              b.setDisabled(true).setButtonText("Checking…");
+              try {
+                const changed = await this.plugin.bibleManager.update();
+                new Notice(changed.length > 0 ? `Updated ${changed.join(", ")}` : "Every Bible is up to date");
+              } catch (error) {
+                new Notice(`Couldn't update: ${errorText(error)}`, 10000);
+              }
+              this.redraw("library", "bibles");
+            }),
+          );
+      }
+      if (imports) {
+        const setting = new Setting(updates)
+          .setName("Update imports")
+          .setDesc("Makes each imported Bible (from eBible.org, fetch.bible, CCEL, or a SWORD repository) again from its publisher's download, and replaces those that changed. Notes beside them stay.");
+        const output = setting.infoEl.createEl("pre", { cls: "topos-output topos-hidden" });
+        const run = async (checkOnly: boolean, button: HTMLButtonElement) => {
+          const label = button.textContent ?? "";
+          button.disabled = true;
+          button.setText(checkOnly ? "Checking…" : "Updating…");
+          try {
+            const lines = await this.plugin.bibleManager.updateImports(checkOnly);
+            output.setText(lines.join("\n") || "This vault has no imports");
+            output.removeClass("topos-hidden");
+          } catch (error) {
+            new Notice(`Couldn't update imports: ${errorText(error)}`, 10000);
+          }
+          button.disabled = false;
+          button.setText(label);
+        };
+        setting.addButton((b) => b.setButtonText("Check").onClick(() => void run(true, b.buttonEl)));
+        setting.addButton((b) => b.setButtonText("Update").onClick(() => void run(false, b.buttonEl)));
+      }
+    }
+
+    this.storageSettings(el);
+  }
+
+  /** An installed package: its names, version, kind, license, and folder (with a collection's packages under it) */
+  private packageRow(items: HTMLElement, pkg: InstalledPackage, members: InstalledPackage[]): HTMLElement {
+    const row = items.createDiv("setting-item topos-package");
+    const info = row.createDiv("setting-item-info");
+    this.packageTitle(info, pkg);
+    if (members.length > 0) {
+      const list = info.createDiv("topos-package-members");
+      list.createDiv({ cls: "topos-package-members-label", text: `In this collection (${members.length})` });
+      for (const member of members) this.packageTitle(list.createDiv("topos-package-member"), member);
+    }
+    const control = row.createDiv("setting-item-control");
+    const keepsFolder = pkg.path && !pkg.dir.split("/").includes("imports");
+    removeButton(control, keepsFolder ? "Remove from biblix.toml (its folder stays)" : `Remove ${pkg.info?.abbreviation ?? pkg.id}`, async () => {
+      try {
+        await this.plugin.bibleManager.remove(pkg.id);
+        new Notice(`Removed ${pkg.info?.abbreviation ?? pkg.id}`);
+      } catch (error) {
+        new Notice(`Couldn't remove ${pkg.id}: ${errorText(error)}`);
+      }
+      this.redraw("library", "bibles");
+    });
+    return row;
+  }
+
+  private packageTitle(el: HTMLElement, pkg: InstalledPackage): void {
+    const info = pkg.info;
+    const title = el.createDiv("setting-item-name topos-package-title");
+    title.createSpan({ cls: "topos-package-name", text: info?.name ?? pkg.id });
+    if (info?.abbreviation) badge(title, info.abbreviation, "is-code");
+    badge(title, pkg.version, "is-version");
+    if (info && info.kind !== PackageKind.Bible) badge(title, kindName(info.kind), "is-kind");
+    if (pkg.path) badge(title, pkg.dir.includes("/imports/") ? "import" : "path");
+    const meta = el.createDiv("setting-item-description topos-package-meta");
+    if (pkg.problem) {
+      meta.addClass("is-problem");
+      setIcon(meta.createSpan("topos-meta-icon"), "alert-triangle");
+      meta.createSpan({ text: pkg.problem });
+      return;
+    }
+    meta.createSpan({ text: info?.license === "LicenseRef-PublicDomain" ? "public domain" : (info?.license ?? "no license given") });
+    meta.createSpan({ cls: "topos-dot", text: "·" });
+    meta.createEl("code", { text: pkg.dir });
+  }
+
+  /** Where packages are kept, and recordings downloaded on this device */
+  private storageSettings(el: HTMLElement): void {
+    const settings = this.plugin.settings;
+    const storage = section(el, "Storage").items;
+    new Setting(storage)
+      .setName("Packages folder")
+      .setDesc(
+        md(
+          "Each Bible book shows here as a stub (`<package>/<title>.bible`), which opens the book and which links and annotations point at, so updates don't move them; book packages' EPUBs too. `biblix.toml` and `biblix.lock` are here unless they're at the vault's root. Renaming it moves the folder and updates links to it.",
+        ),
+      )
+      .addText((t) => {
+        t.inputEl.addClass("topos-code-input");
+        t.setPlaceholder("Biblix").setValue(settings.biblixBooks);
+        // Moved when the field is left (not as each letter is typed)
+        t.inputEl.addEventListener("change", () => void this.moveBooks(t.getValue()));
+      });
+    new Setting(storage)
+      .setName("Library folder")
+      .setDesc(
+        md(
+          "Where packages are installed (`packages/<id>/<version>/`). A folder whose name starts with a dot is hidden and isn't synced: each device installs what `biblix.lock` pins, by itself. Renaming it moves what's installed.",
+        ),
+      )
+      .addText((t) => {
+        t.inputEl.addClass("topos-code-input");
+        t.setPlaceholder(".biblix").setValue(settings.biblixLibrary);
+        t.inputEl.addEventListener("change", () => void this.moveLibrary(t.getValue()));
+      });
+    new Setting(storage)
+      .setName("Hide the packages folder")
+      .setDesc("Leave it out of the file explorer, and out of Obsidian's search, quick switcher, and graph (as an excluded file). Bibles and books still open from references, and verse search still reads them.")
+      .addToggle((t) =>
+        t.setValue(settings.hideBiblixBooks).onChange(async (value) => {
+          settings.hideBiblixBooks = value;
+          await this.plugin.saveToposSettings();
+          this.plugin.applyBiblixHiding();
+        }),
+      );
+    const downloaded = new Setting(storage)
+      .setName("Downloaded recordings")
+      .setDesc("Recordings are downloaded the first time they're played, and kept in the library folder on this device (not synced).");
+    void this.plugin.media.downloaded().then(({ count, bytes }) => {
+      if (count === 0) return;
+      downloaded.setDesc(
+        md(`${count} recording${count === 1 ? "" : "s"} (${formatSize(bytes)}) kept in \`${this.plugin.media.dir()}\` on this device (not synced). Each is downloaded again when it's next played.`),
+      );
+      downloaded.addButton((b) =>
+        b
+          .setButtonText("Remove")
+          .setWarning()
+          .onClick(async () => {
+            await this.plugin.media.clear();
+            this.redraw("library");
+          }),
+      );
+    });
+  }
+
   /** Moves the packages folder (links to its files are updated) and reads the packages again */
   private async moveBooks(value: string): Promise<void> {
     const packages = this.plugin.packages;
@@ -256,13 +567,13 @@ export class ToposSettingsPanel {
       try {
         if (folder && !this.app.vault.getAbstractFileByPath(to)) await this.app.fileManager.renameFile(folder, to);
       } catch (error) {
-        new Notice(`Couldn't move ${from} to ${to}: ${error instanceof Error ? error.message : String(error)}`);
+        new Notice(`Couldn't move ${from} to ${to}: ${errorText(error)}`);
       }
     }
     await this.plugin.saveData(this.plugin.settings);
     this.plugin.applyBiblixHiding();
     await packages.load();
-    this.display();
+    this.redraw("library", "bibles");
   }
 
   /** Moves the library (what's installed) and reads the packages again */
@@ -277,422 +588,292 @@ export class ToposSettingsPanel {
         await mkdirs(this.plugin, to.slice(0, Math.max(0, to.lastIndexOf("/"))));
         await adapter.rename(from, to);
       } catch (error) {
-        new Notice(`Couldn't move ${from} to ${to}: ${error instanceof Error ? error.message : String(error)}`);
+        new Notice(`Couldn't move ${from} to ${to}: ${errorText(error)}`);
       }
     }
     await this.plugin.saveData(this.plugin.settings);
     await packages.load();
-    this.display();
+    this.redraw("library", "bibles");
   }
 
-  /** The library's packages: each one (with a button to remove it), and adding more */
-  private packageSettings(containerEl: HTMLElement): void {
-    const packages = this.plugin.packages;
-    for (const pkg of packages.installed) {
-      const info = pkg.info;
-      const kind = info && info.kind !== PackageKind.Bible ? kindName(info.kind) : null;
-      const setting = new Setting(containerEl)
-        .setName(info ? `${info.abbreviation} ${pkg.version}` : `${pkg.id} ${pkg.version}`)
-        .setDesc(pkg.problem ?? [kind, info?.name, info?.license ?? "no license given", pkg.dir].filter(Boolean).join(" · "));
-      // A collection's packages are listed under it, and go with it
-      if (pkg.dependencyOf !== null) {
-        setting.settingEl.addClass("topos-package-member");
-        setting.setDesc(`In ${pkg.dependencyOf} · ${setting.descEl.getText()}`);
-        continue;
-      }
-      setting.addExtraButton((b) =>
-          b
-            .setIcon("trash")
-            .setTooltip(pkg.path && !pkg.dir.split("/").includes("imports") ? "Remove from biblix.toml (its folder stays)" : "Remove")
-            .onClick(async () => {
-              try {
-                await this.plugin.bibleManager.remove(pkg.id);
-                new Notice(`Removed ${info?.abbreviation ?? pkg.id}`);
-              } catch (error) {
-                new Notice(`Couldn't remove ${pkg.id}: ${error instanceof Error ? error.message : String(error)}`);
-              }
-              this.display();
-            }),
-        );
-    }
-    new Setting(containerEl)
-      .setName("Add a Bible")
-      .setDesc(
-        "Search the catalogs (eBible.org's and fetch.bible's 2,000+ translations, and any added below) and install one into the library, or add a biblix package from its git repository.",
-      )
-      .addButton((b) => b.setButtonText("Search").onClick(() => new AddBibleModal(this.app, this.plugin, () => this.display()).open()))
-      .addButton((b) => b.setButtonText("Git URL").onClick(() => new GitUrlModal(this.app, this.plugin, () => this.display()).open()));
-    void this.registrySettings(containerEl.createDiv());
-    void this.catalogSettings(containerEl.createDiv());
-    if (packages.changedPackages.length > 0) {
-      new Setting(containerEl)
-        .setName("Restore edited Bibles")
-        .setDesc(`The files of ${packages.changedPackages.join(", ")} were edited in the library. Restoring downloads them again; notes and annotations beside them stay.`)
-        .addButton((b) =>
-          b
-            .setButtonText("Restore")
-            .setCta()
-            .onClick(async () => {
-              await this.plugin.restorePackages();
-              this.display();
-            }),
-        );
-    }
-    if (packages.installed.some((p) => !p.path)) {
-      new Setting(containerEl)
-        .setName("Update Bibles")
-        .setDesc("Moves each Bible installed from a repository to its newest release that biblix.toml allows (imports stay as they are).")
-        .addButton((b) =>
-          b.setButtonText("Update").onClick(async () => {
-            const notice = new Notice("Checking for updates…", 0);
-            try {
-              const changed = await this.plugin.bibleManager.update();
-              notice.hide();
-              new Notice(changed.length > 0 ? `Updated ${changed.join(", ")}` : "Every Bible is up to date");
-            } catch (error) {
-              notice.hide();
-              new Notice(`Couldn't update: ${error instanceof Error ? error.message : String(error)}`, 10000);
-            }
-            this.display();
-          }),
-        );
-    }
+  // ─── Add Bibles ──────────────────────────────────────────────────────────
+
+  private addTab(el: HTMLElement): void {
+    const installed = () => this.redraw("library", "bibles");
+    lead(el, "Search eBible.org's and fetch.bible's 2,000+ translations, CCEL's Bibles, CrossWire's SWORD Bibles and commentaries, and the registries and catalogs below. Select a result for its details.");
+    new CatalogBrowser(this.plugin, section(el, "Search the catalogs"), installed).render();
+    gitForm(section(el, "From a git repository").items, this.plugin, installed);
+    void this.sourceSettings(el.createDiv("topos-sources"));
   }
 
-  /** The catalogs Add a Bible searches: each with a remove button, and a field to add one */
-  private async catalogSettings(containerEl: HTMLElement): Promise<void> {
+  /** The registries and catalogs the browser searches: each with buttons to browse or remove it, and forms to add one */
+  private async sourceSettings(el: HTMLElement): Promise<void> {
     const manager = this.plugin.bibleManager;
-    const failed = (what: string, error: unknown) => new Notice(`${what}: ${error instanceof Error ? error.message : String(error)}`, 10000);
+    const failed = (what: string, error: unknown) => new Notice(`${what}: ${errorText(error)}`, 10000);
+    let registries: { name: string; location: string }[];
     let catalogs: { location: string; isDefault: boolean }[];
     try {
-      catalogs = await manager.catalogList();
+      [registries, catalogs] = await Promise.all([manager.registryList(), manager.catalogList()]);
     } catch (error) {
-      failed("Couldn't read the catalogs", error);
+      section(el).items.createDiv({ cls: "setting-item mod-empty-state topos-list-empty is-error", text: `The vault's registries and catalogs couldn't be read: ${errorText(error)}` });
       return;
     }
-    new Setting(containerEl)
-      .setName("Catalogs")
-      .setDesc("Downloaded catalogs are kept a day; refresh to see new releases now.")
-      .setHeading()
-      .addExtraButton((b) =>
-        b
-          .setIcon("refresh-cw")
-          .setTooltip("Refresh catalogs and registries")
-          .onClick(async () => {
-            await manager.refreshCatalogs();
-            new Notice("Catalogs will be downloaded again");
-          }),
-      );
-    for (const { location, isDefault } of catalogs) {
-      new Setting(containerEl)
-        .setName(location)
-        .setDesc(isDefault ? "One of the defaults: removing it keeps the other" : "Added in biblix.toml")
-        .addExtraButton((b) =>
+    const redrawBrowser = () => this.redraw("add");
+
+    const registryList = section(el, "Registries", "Catalogs with a name, searched first: `bx add <name>:<id>` adds their packages too.");
+    filteredList(registryList, registries, {
+      key: "registries",
+      placeholder: "Filter registries",
+      noun: ["registry", "registries"],
+      empty: "No registries yet. `bx registry init` makes one, and prints its catalog's URL.",
+      text: (r) => `${r.name} ${r.location}`,
+      render: ({ name, location }, items) => {
+        const readable = /^https?:\/\//.test(location) || location.endsWith(".toml");
+        const setting = new Setting(items).setName(name).setDesc(md(readable ? `\`${location}\`` : `\`${location}\` (a folder of repositories: only \`bx\` reads it)`));
+        setting.addExtraButton((b) =>
           b
-            .setIcon("trash")
-            .setTooltip("Stop searching it")
-            .onClick(async () => {
-              try {
-                await manager.removeCatalog(location);
-              } catch (error) {
-                failed(`Couldn't remove ${location}`, error);
-              }
-              this.display();
+            .setIcon("search")
+            .setTooltip("Browse its packages")
+            .onClick(() => {
+              CatalogBrowser.showSource(`registry:${name}`);
+              redrawBrowser();
+              this.panel("add").scrollIntoView({ block: "start" });
             }),
         );
-    }
-    let location = "";
-    new Setting(containerEl)
-      .setName("Add a catalog")
-      .setDesc("A list of packages to search too: a catalog.toml's URL (anyone can host one), eBible.org's translations.csv, fetch.bible's manifest.json, or a file's path relative to biblix.toml.")
-      .addText((t) => t.setPlaceholder("https://example.org/catalog.toml").onChange((value) => (location = value.trim())))
-      .addButton((b) =>
-        b.setButtonText("Add").onClick(async () => {
-          if (!location) return;
+        removeButton(setting.controlEl, `Remove ${name}`, async () => {
           try {
-            const count = await manager.addCatalog(location);
-            new Notice(`Added ${location}: ${count} package${count === 1 ? "" : "s"}`);
+            await manager.removeRegistry(name);
           } catch (error) {
-            failed(`Couldn't add ${location}`, error);
+            failed(`Couldn't remove ${name}`, error);
           }
-          this.display();
+          redrawBrowser();
+        });
+        return setting.settingEl;
+      },
+    });
+    this.addForm(
+      registryList.items,
+      "Add a registry",
+      [{ placeholder: "name", cls: "is-short" }, { placeholder: "https://github.com/owner/repo/releases/download/index/catalog.toml" }],
+      "Its `catalog.toml`'s URL (`bx registry init` prints it), or a file's path relative to `biblix.toml`.",
+      async ([name, location]) => {
+        if (!name || !location) throw new Error("give it a name and a URL");
+        const count = await manager.addRegistry(name, location);
+        new Notice(`Added ${name}: ${count} package${count === 1 ? "" : "s"}`);
+        redrawBrowser();
+      },
+    );
+
+    const catalogList = section(el, "Catalogs", "Lists of packages to search. Downloaded catalogs are kept a day.");
+    catalogList.heading?.addExtraButton((b) =>
+      b
+        .setIcon("refresh-cw")
+        .setTooltip("Download the catalogs and registries again")
+        .onClick(async () => {
+          await manager.refreshCatalogs();
+          new Notice("Catalogs will be downloaded again");
+          redrawBrowser();
         }),
-      );
+    );
+    filteredList(catalogList, catalogs, {
+      key: "catalogs",
+      placeholder: "Filter catalogs",
+      noun: ["catalog", "catalogs"],
+      empty: "No catalogs: only registries are searched.",
+      text: (c) => c.location,
+      render: ({ location, isDefault }, items) => {
+        const setting = new Setting(items).setName(md(`\`${location}\``)).setDesc(isDefault ? "One of the defaults (removing it keeps the others)" : md("Added in `biblix.toml`"));
+        setting.settingEl.addClass("topos-catalog");
+        if (isDefault) badge(setting.nameEl, "default");
+        removeButton(setting.controlEl, "Stop searching it", async () => {
+          try {
+            await manager.removeCatalog(location);
+          } catch (error) {
+            failed(`Couldn't remove ${location}`, error);
+          }
+          redrawBrowser();
+        });
+        return setting.settingEl;
+      },
+    });
+    this.addForm(
+      catalogList.items,
+      "Add a catalog",
+      [{ placeholder: "https://example.org/catalog.toml" }],
+      "A `catalog.toml`'s URL (anyone can host one), eBible.org's `translations.csv`, fetch.bible's `manifest.json`, a SWORD repository's `mods.d.tar.gz`, or a file's path relative to `biblix.toml`.",
+      async ([location]) => {
+        if (!location) throw new Error("give its URL");
+        const count = await manager.addCatalog(location);
+        new Notice(`Added ${location}: ${count} package${count === 1 ? "" : "s"}`);
+        redrawBrowser();
+      },
+    );
   }
 
-  /** The vault's registries (named catalogs, which `bx add name:id` uses too): each with a remove button, and adding one */
-  private async registrySettings(containerEl: HTMLElement): Promise<void> {
-    const manager = this.plugin.bibleManager;
-    const failed = (what: string, error: unknown) => new Notice(`${what}: ${error instanceof Error ? error.message : String(error)}`, 10000);
-    let registries: { name: string; location: string }[];
-    try {
-      registries = await manager.registryList();
-    } catch (error) {
-      failed("Couldn't read the registries", error);
-      return;
+  /** A row of a card with fields and an Add button, and a hint under them */
+  private addForm(
+    items: HTMLElement,
+    label: string,
+    fields: { placeholder: string; cls?: string }[],
+    hint: string,
+    add: (values: string[]) => Promise<void>,
+  ): void {
+    const row = items.createDiv("setting-item topos-add-row");
+    const info = row.createDiv("setting-item-info");
+    info.createDiv({ cls: "setting-item-name", text: label });
+    info.createDiv("setting-item-description").append(md(hint));
+    const form = info.createDiv("topos-inline-form");
+    const inputs = fields.map((f) => form.createEl("input", { cls: f.cls ?? "", attr: { type: "text", placeholder: f.placeholder, spellcheck: "false" } }));
+    const button = form.createEl("button", { text: "Add" });
+    const submit = async () => {
+      button.disabled = true;
+      button.setText("Adding…");
+      try {
+        await add(inputs.map((i) => i.value.trim()));
+      } catch (error) {
+        new Notice(`Couldn't add it: ${errorText(error)}`, 10000);
+        button.disabled = false;
+        button.setText("Add");
+      }
+    };
+    button.addEventListener("click", () => void submit());
+    for (const input of inputs) {
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") void submit();
+      });
     }
-    new Setting(containerEl).setName("Registries").setHeading();
-    for (const { name, location } of registries) {
-      new Setting(containerEl)
-        .setName(name)
-        .setDesc(/^https?:\/\//.test(location) || location.endsWith(".toml") ? location : `${location} (a folder of repositories: only bx reads it)`)
-        .addExtraButton((b) =>
-          b
-            .setIcon("trash")
-            .setTooltip("Remove")
-            .onClick(async () => {
-              try {
-                await manager.removeRegistry(name);
-              } catch (error) {
-                failed(`Couldn't remove ${name}`, error);
-              }
-              this.display();
-            }),
-        );
-    }
-    let name = "";
-    let location = "";
-    new Setting(containerEl)
-      .setName("Add a registry")
-      .setDesc("A catalog with a name: its packages are searched first, and bx adds them as name:id. Its catalog.toml's URL (bx registry init prints it), or a file's path relative to biblix.toml.")
-      .addText((t) => t.setPlaceholder("name").onChange((value) => (name = value.trim())))
-      .addText((t) => t.setPlaceholder("https://github.com/owner/repo/releases/download/index/catalog.toml").onChange((value) => (location = value.trim())))
-      .addButton((b) =>
-        b.setButtonText("Add").onClick(async () => {
-          if (!name || !location) return;
-          try {
-            const count = await manager.addRegistry(name, location);
-            new Notice(`Added ${name}: ${count} package${count === 1 ? "" : "s"}`);
-          } catch (error) {
-            failed(`Couldn't add ${name}`, error);
-          }
-          this.display();
-        }),
-      );
   }
 
-  private bibleSettings(containerEl: HTMLElement): void {
+  // ─── References ──────────────────────────────────────────────────────────
+
+  private referencesTab(el: HTMLElement): void {
     const settings = this.plugin.settings;
     const save = () => this.plugin.saveToposSettings();
-    const bibles = this.plugin.bibles.all();
-    new Setting(containerEl)
-      .setName("Bible")
-      .setDesc(
-        bibles.length > 0
-          ? "References open in this translation and show its text on hover and in embeds, unless they name another (John 3:16 KJV). A Bible is a folder of USX or USFM files (one per book, like JHN.usx), named after its folder, or a biblix package in the library."
-          : "No Bible in this vault yet. Add a folder of USX or USFM files (one per book, like JHN.usx), or install a biblix package in the library, and references open in it and show its text on hover and in embeds (![John 1:1]).",
-      )
-      .addDropdown((d) => {
-        for (const bible of bibles) d.addOption(bible.folder, `${bible.name} (${bible.books.size + bible.unknown.length} books)`);
-        if (bibles.length === 0) d.addOption("", "None found");
-        d.setValue(this.plugin.bibles.current()?.folder ?? "").onChange((value) => {
-          settings.bible = value;
-          void save();
-        });
-      });
-    new Setting(containerEl)
-      .setName("Packages folder")
-      .setDesc(
-        "Bible packages show here: each Bible book as a stub (<package>/usx/JHN.bible), which opens the book and which links and annotations point at, so updates don't move them, and each book package's EPUBs. This vault's biblix.toml and biblix.lock are here unless they're at its root. Renaming it moves the folder and updates links to it.",
-      )
-      .addText((t) => {
-        t.setPlaceholder("Biblix").setValue(settings.biblixBooks);
-        // Moved when the field is left (not as each letter is typed)
-        t.inputEl.addEventListener("change", () => void this.moveBooks(t.getValue()));
-      });
-    new Setting(containerEl)
-      .setName("Library folder")
-      .setDesc(
-        "Where packages are installed (packages/<id>/<version>/). A folder whose name starts with a dot is hidden and isn't synced: each device installs what biblix.lock pins, by itself. Renaming it moves what's installed.",
-      )
-      .addText((t) => {
-        t.setPlaceholder(".biblix").setValue(settings.biblixLibrary);
-        t.inputEl.addEventListener("change", () => void this.moveLibrary(t.getValue()));
-      });
-    new Setting(containerEl)
-      .setName("Hide the packages folder")
-      .setDesc("Leave it out of the file explorer, and out of Obsidian's search, quick switcher, and graph (as an excluded file). Bibles and books still open from references, and verse search still reads them.")
+    lead(el, "How references are written, where they link to, and how they look and behave in notes.");
+    this.formatSettings(el.createDiv());
+    this.links(el.createDiv());
+
+    const notes = section(el, "In notes").items;
+    new Setting(notes)
+      .setName("Link references in the editor")
+      .setDesc("Highlight references while editing, and open their links when clicked.")
       .addToggle((t) =>
-        t.setValue(settings.hideBiblixBooks).onChange(async (value) => {
-          settings.hideBiblixBooks = value;
-          await save();
-          this.plugin.applyBiblixHiding();
+        t.setValue(settings.linkInEditor).onChange((value) => {
+          settings.linkInEditor = value;
+          void save();
         }),
       );
-    this.packageSettings(containerEl);
-    new Setting(containerEl)
-      .setName("Translations")
+    new Setting(notes).setName("Link references in reading view").addToggle((t) =>
+      t.setValue(settings.linkInReading).onChange((value) => {
+        settings.linkInReading = value;
+        void save();
+      }),
+    );
+    new Setting(notes)
+      .setName("Require Ctrl/Cmd to open references")
+      .setDesc("On desktop: plain clicks place the cursor (or do nothing in reading view); Ctrl/Cmd-click opens the reference.")
+      .addToggle((t) =>
+        t.setValue(settings.clickNeedsModifier).onChange((value) => {
+          settings.clickNeedsModifier = value;
+          void save();
+        }),
+      );
+    new Setting(notes)
+      .setName("Tap to open references in the editor")
       .setDesc(
-        "A reference can name its translation: John 3:16 KJV, [John 3:16 (KJV)], ![John 3:16 KJV]. Each Bible's folder name is one; add other names and aliases here, one per line, like \"KJV: AV, King James\". A name the vault has no Bible for still opens its link with {translation} in the link template.",
+        "On phones and tablets: the tap that would place the cursor and open the keyboard opens the reference's link instead. Once you're typing, taps move the cursor as usual. Taps outside the editor always open references.",
       )
-      .addTextArea((t) =>
-        t
-          .setPlaceholder("KJV: AV, King James")
-          .setValue(settings.bibleAliases)
-          .onChange((value) => {
-            settings.bibleAliases = value;
-            void save();
-          }),
-      );
-    new Setting(containerEl)
-      .setName("Compare in embeds")
-      .setDesc("Bibles whose text embeds (![John 1:1]) also show, after the one the reference names, separated by commas: KJV, NET.")
-      .addText((t) =>
-        t.setValue(settings.compareBibles).onChange((value) => {
-          settings.compareBibles = value;
-          void save();
-        }),
-      );
-    new Setting(containerEl)
-      .setName("Open reference links in")
-      .setDesc("Where [John 1:1] and [text](John 1:1) open. Bare references open like before (see Link template).")
-      .addDropdown((d) =>
-        d
-          .addOptions({ bible: "The Bible", site: "The link site" })
-          .setValue(settings.referenceLinks)
-          .onChange((value) => {
-            settings.referenceLinks = value as "bible" | "site";
-            void save();
-          }),
-      );
-    new Setting(containerEl)
-      .setName("Preview bare references")
-      .setDesc("Show a reference's text when hovering it in the text, not only in links.")
       .addToggle((t) =>
-        t.setValue(settings.previewBare).onChange((value) => {
-          settings.previewBare = value;
+        t.setValue(settings.tapOpensInEditor).onChange((value) => {
+          settings.tapOpensInEditor = value;
           void save();
         }),
       );
-    new Setting(containerEl)
-      .setName("Embed references on their own line")
-      .setDesc("A reference alone on its line shows its text, like ![John 1:1]. In the editor, it shows the reference again while the cursor is near it.")
-      .addToggle((t) =>
-        t.setValue(settings.embedAlone).onChange((value) => {
-          settings.embedAlone = value;
-          void save();
-          this.display();
-        }),
-      );
-    if (settings.embedAlone) {
-      const counts = (none: string) => {
-        const options: Record<string, string> = { 0: none };
-        for (let n = 1; n <= 5; n++) options[n] = `${n} line${n > 1 ? "s" : ""}`;
-        return options;
-      };
-      new Setting(containerEl)
-        .setName("Blank lines around them")
-        .setDesc("How many blank lines must be above and below the reference (the start and end of the note count).")
-        .addDropdown((d) =>
-          d
-            .addOptions(counts("None, just its own line"))
-            .setValue(String(settings.embedAloneBlankLines))
-            .onChange((value) => {
-              settings.embedAloneBlankLines = Number(value);
-              void save();
-            }),
-        );
-      new Setting(containerEl)
-        .setName("Cursor distance")
-        .setDesc("How many lines away the cursor shows the reference to edit it, instead of its text.")
-        .addDropdown((d) =>
-          d
-            .addOption("same", "As many as the blank lines")
-            .addOptions(counts("Only on its line"))
-            .setValue(settings.embedAloneCursorLines === null ? "same" : String(settings.embedAloneCursorLines))
-            .onChange((value) => {
-              settings.embedAloneCursorLines = value === "same" ? null : Number(value);
-              void save();
-            }),
-        );
-    }
-    new Setting(containerEl)
+    this.referenceColor(notes);
+    new Setting(notes)
       .setName("Mark references in other documents")
-      .setDesc("Find references in transcripts (Transcript++) and other file-plus-plus documents as they open, and mark them like references in notes. EPUBs follow Search EPUB files.")
+      .setDesc(md("Find references in transcripts (Transcript++) and other file-plus-plus documents as they open, and mark them like references in notes. EPUBs follow *Search → Search EPUB files*."))
       .addToggle((t) =>
         t.setValue(settings.markInDocuments).onChange((value) => {
           settings.markInDocuments = value;
           void save();
         }),
       );
-    new Setting(containerEl)
-      .setName("Section headings")
-      .setDesc("Show the translation's headings in Bible text.")
+
+    const complete = section(el, "Autocomplete").items;
+    new Setting(complete)
+      .setName("Suggest references while typing")
+      .setDesc("After a book name, suggest chapters, then verses, then range ends.")
       .addToggle((t) =>
-        t.setValue(settings.bibleHeadings).onChange((value) => {
-          settings.bibleHeadings = value;
+        t.setValue(settings.autocomplete).onChange((value) => {
+          settings.autocomplete = value;
           void save();
         }),
       );
-    new Setting(containerEl)
-      .setName("Footnotes")
-      .setDesc("Show the translation's footnotes and cross references in Bible text.")
-      .addToggle((t) =>
-        t.setValue(settings.bibleNotes).onChange((value) => {
-          settings.bibleNotes = value;
-          void save();
-        }),
-      );
-    new Setting(containerEl)
-      .setName("Bible stylesheet")
-      .setDesc(
-        "A CSS file in the vault for Bible text: its tab, previews, and embeds (Obsidian's CSS snippets don't reach them). Every USX marker is a data-style: [data-style=\"q2\"], [data-style=\"pn\"], .topos-note [data-style=\"fr\"]. Changes to the file apply at once.",
-      )
-      .addText((t) =>
-        t
-          .setPlaceholder("Bibles/bible.css")
-          .setValue(settings.bibleCss)
+    new Setting(complete)
+      .setName("Complete book names")
+      .setDesc("In prose, completing every word would be noisy, so by default only words that start with a capital letter or number complete to book names.")
+      .addDropdown((d) =>
+        d
+          .addOptions({ off: "Never", capitalized: "When capitalized", always: "Always" })
+          .setValue(settings.bookCompletion)
           .onChange((value) => {
-            settings.bibleCss = value.trim();
-            void this.plugin.bibleStyles.load();
+            settings.bookCompletion = value as BookCompletion;
             void save();
           }),
       );
+    new Setting(complete).setName("Number of suggestions").addSlider((s) =>
+      s
+        .setLimits(5, 100, 5)
+        .setValue(settings.suggestionLimit)
+        .setDynamicTooltip()
+        .onChange((value) => {
+          settings.suggestionLimit = value;
+          void save();
+        }),
+    );
   }
 
-  private referenceColor(containerEl: HTMLElement): void {
+  /** The references' color: the accent color until one is picked */
+  private referenceColor(items: HTMLElement): void {
     const settings = this.plugin.settings;
-    new Setting(containerEl)
-      .setName("Reference color")
-      .setDesc(
+    const setting = new Setting(items).setName("Reference color");
+    const draw = () => {
+      setting.controlEl.empty();
+      setting.setDesc(
         settings.referenceColor
           ? "The glow, dashed underline, and hover highlight of references."
           : "The glow, dashed underline, and hover highlight of references. Your accent color until you pick one.",
-      )
-      .addColorPicker((c) =>
-        c.setValue(settings.referenceColor || accentColor(containerEl)).onChange((value) => {
-          settings.referenceColor = value;
-          void this.plugin.saveToposSettings();
-        }),
-      )
-      .addExtraButton((b) =>
-        b
-          .setIcon("rotate-ccw")
-          .setTooltip("Use the accent color")
-          .onClick(() => {
-            settings.referenceColor = "";
-            void this.plugin.saveToposSettings();
-            this.display();
-          }),
       );
+      setting
+        .addExtraButton((b) =>
+          b
+            .setIcon("rotate-ccw")
+            .setTooltip("Use the accent color")
+            .onClick(() => {
+              settings.referenceColor = "";
+              void this.plugin.saveToposSettings();
+              draw();
+            }),
+        )
+        .addColorPicker((c) =>
+          c.setValue(settings.referenceColor || accentColor(items)).onChange((value) => {
+            settings.referenceColor = value;
+            void this.plugin.saveToposSettings();
+          }),
+        );
+    };
+    draw();
   }
 
   /** Where references open: a site, a template of your own, or nowhere */
-  private links(containerEl: HTMLElement): void {
+  private links(box: HTMLElement): void {
     const settings = this.plugin.settings;
-    const choice = (template: string) =>
-      !template.trim() ? "none" : (SITES.find((site) => site.template === template)?.id ?? "custom");
-    new Setting(containerEl)
-      .setName("Links")
-      .setHeading()
-      .setDesc(
-        `A link template is an address with placeholders: ${Object.keys(PLACEHOLDERS)
-          .map((name) => `{${name}}`)
-          .join(" ")}. Filters change a value: {book|${Object.keys(FILTERS).join("|")}}. ` +
-          "A part in [ ] is left out when a placeholder in it has no value, like {verse} for a whole chapter.",
-      );
+    const choice = (template: string) => (!template.trim() ? "none" : (SITES.find((site) => site.template === template)?.id ?? "custom"));
+    box.empty();
+    const items = section(box, "Links").items;
     let sites: DropdownComponent | undefined;
-    new Setting(containerEl)
+    new Setting(items)
       .setName("Open references in")
       .setDesc("Where clicking a reference, the sidebar's ↗ button, and reading view links go.")
       .addDropdown((d) => {
@@ -706,21 +887,23 @@ export class ToposSettingsPanel {
           if (value === "none") settings.linkTemplate = "";
           if (value === "custom" && !settings.linkTemplate.trim()) settings.linkTemplate = "https://";
           void this.plugin.saveToposSettings();
-          this.display();
+          this.links(box);
         });
       });
     if (!settings.linkTemplate.trim()) return;
-    const template = new Setting(containerEl).setName("Link template");
+    const template = new Setting(items).setName("Link template").setClass("topos-tall-setting");
     const preview = () => {
       const error = templateError(settings.linkTemplate);
       const examples = ["John 3:16-18", "Psalm 23"].map((reference) => {
         const passage = this.plugin.topos.parse(reference, BookStyle.Name);
         return (passage && linkUrl(settings.linkTemplate, passage)) ?? `no link for ${reference}`;
       });
-      template.setDesc(error ? `Can't be used: ${error}` : `Preview: ${examples.join("   ")}`);
+      template.setDesc(error ? `Can't be used: ${error}` : md(`Preview: ${examples.map((e) => `\`${e}\``).join("   ")}`));
       template.descEl.toggleClass("topos-query-error", error !== null);
     };
+    let input: HTMLInputElement | undefined;
     template.addText((t) => {
+      input = t.inputEl;
       t.inputEl.addClass("topos-query-input");
       t.setPlaceholder("https://example.com/{book.id}/{chapter}[/{verse}]")
         .setValue(settings.linkTemplate)
@@ -732,12 +915,55 @@ export class ToposSettingsPanel {
         });
     });
     preview();
+    // What a template can hold: each placeholder inserts itself where the cursor was
+    const help = template.settingEl.createEl("details", { cls: "topos-help" });
+    help.createEl("summary", { text: "Placeholders and filters" });
+    help
+      .createEl("p")
+      .append(
+        md(
+          `Select one to insert it. Filters change a value: \`{book|lower|kebab}\` (${Object.keys(FILTERS)
+            .map((f) => `\`${f}\``)
+            .join(", ")}). A part in \`[ ]\` is left out when a placeholder in it has no value, like \`{verse}\` for a whole chapter.`,
+        ),
+      );
+    const list = help.createDiv("topos-placeholder-list");
+    for (const [name, what] of Object.entries(PLACEHOLDERS)) {
+      const row = list.createEl("button", { cls: "topos-placeholder", attr: { type: "button" } });
+      row.createEl("code", { text: `{${name}}` });
+      row.createSpan({ text: what });
+      row.addEventListener("click", () => {
+        if (!input) return;
+        const start = input.selectionStart ?? input.value.length;
+        const end = input.selectionEnd ?? start;
+        input.setRangeText(`{${name}}`, start, end, "end");
+        input.dispatchEvent(new Event("input"));
+        input.focus();
+      });
+    }
   }
 
-  private formatSettings(containerEl: HTMLElement): void {
+  /**
+   * How references are written (the CLI's --psg-fmt fields), with a preview: completions, the
+   * sidebar, the dialogs, and "Normalize references" all use it
+   */
+  private formatSettings(box: HTMLElement): void {
     const { settings } = this.plugin;
     const format = settings.format;
-    const heading = new Setting(containerEl).setName("Reference format").setHeading();
+    box.empty();
+    const writing = section(box, "Writing references", "How completions, normalized references (the *Normalize references* command), and search results are written.");
+    writing.heading?.addExtraButton((b) =>
+      b
+        .setIcon("rotate-ccw")
+        .setTooltip("Reset the format")
+        .onClick(() => {
+          settings.format = { ...DEFAULT_FORMAT };
+          void this.plugin.saveToposSettings();
+          this.formatSettings(box);
+        }),
+    );
+    const items = writing.items;
+    const previewSetting = new Setting(items).setName("Format preview").setClass("topos-format-preview");
     const preview = () => {
       const topos = this.plugin.topos;
       const style = bookStyle(settings.style);
@@ -745,12 +971,25 @@ export class ToposSettingsPanel {
         .map((text) => topos.parse(text, BookStyle.Name))
         .filter((passage) => passage !== null)
         .map((passage) => written(topos, passage, style, format));
-      heading.setDesc(`Preview: ${samples.join("   ")}`);
+      previewSetting.setDesc(md(samples.map((s) => `\`${s}\``).join("   ")));
     };
     const save = () => {
       void this.plugin.saveToposSettings();
       preview();
     };
+    new Setting(items).setName("Book names").addDropdown((d) =>
+      d
+        .addOptions({
+          name: "Full name (John 3:16)",
+          abbreviation: "Abbreviation (Jn 3:16)",
+          osis: "OSIS (John.3.16)",
+        })
+        .setValue(settings.style)
+        .onChange((value) => {
+          settings.style = value as StyleName;
+          save();
+        }),
+    );
     const texts: [keyof FormatSettings, string, string][] = [
       ["bookSeparator", "Between the book and chapter", "John␣3:16"],
       ["chapterVerse", "Between chapter and verse", "3:16"],
@@ -759,29 +998,29 @@ export class ToposSettingsPanel {
       ["chapterSeparator", "Between chapters", "3:16; 4:1"],
     ];
     for (const [key, name, example] of texts) {
-      new Setting(containerEl)
+      new Setting(items)
         .setName(name)
-        .setDesc(example)
-        .addText((t) =>
-          t
-            .setPlaceholder(JSON.stringify(DEFAULT_FORMAT[key]))
+        .setDesc(md(`\`${example}\``))
+        .addText((t) => {
+          t.inputEl.addClass("topos-separator-input");
+          t.setPlaceholder(JSON.stringify(DEFAULT_FORMAT[key]))
             .setValue(String(format[key]))
             .onChange((value) => {
               // Separators can be spaces, so only an empty field means the default
               (format[key] as string) = value === "" ? (DEFAULT_FORMAT[key] as string) : value;
               save();
-            }),
-        );
+            });
+        });
     }
-    const toggles: [keyof FormatSettings, string, string][] = [
-      ["joinAdjacent", "Join adjacent verses", "3:16-18, not 3:16,17,18"],
-      ["omitFirstVerseOfChapterRange", "Leave out the first verse of chapter ranges", "1-2:3, not 1:1-2:3"],
-      ["chapterInSingleChapterBooks", "Chapter in single-chapter books", "Jude 1:5, not Jude 5"],
+    const toggles: [keyof FormatSettings, string, string, string][] = [
+      ["joinAdjacent", "Join adjacent verses", "3:16-18", "3:16,17,18"],
+      ["omitFirstVerseOfChapterRange", "Leave out the first verse of chapter ranges", "1-2:3", "1:1-2:3"],
+      ["chapterInSingleChapterBooks", "Chapter in single-chapter books", "Jude 1:5", "Jude 5"],
     ];
-    for (const [key, name, example] of toggles) {
-      new Setting(containerEl)
+    for (const [key, name, on, off] of toggles) {
+      new Setting(items)
         .setName(name)
-        .setDesc(example)
+        .setDesc(md(`\`${on}\`, not \`${off}\``))
         .addToggle((t) =>
           t.setValue(format[key] as boolean).onChange((value) => {
             (format[key] as boolean) = value;
@@ -789,80 +1028,242 @@ export class ToposSettingsPanel {
           }),
         );
     }
-    new Setting(containerEl).addButton((b) =>
-      b.setButtonText("Reset the format").onClick(() => {
-        settings.format = { ...DEFAULT_FORMAT };
-        void this.plugin.saveToposSettings();
-        this.display();
-      }),
-    );
     preview();
   }
 
-  /** Each saved search is a name and the CLI's filter options, editable here */
-  private savedSearches(containerEl: HTMLElement): void {
-    const { settings } = this.plugin;
-    new Setting(containerEl)
-      .setName("Saved searches")
-      .setHeading()
+  // ─── Search ──────────────────────────────────────────────────────────────
+
+  private searchTab(el: HTMLElement): void {
+    const settings = this.plugin.settings;
+    const save = () => this.plugin.saveToposSettings();
+    lead(el, "Which files are searched for references, how, and the searches saved for the sidebar.");
+
+    const files = section(el, "What's searched").items;
+    new Setting(files)
+      .setName("File extensions")
+      .setDesc(md("Files to search, separated by commas: `md, txt, srt`."))
+      .addText((t) => {
+        t.inputEl.addClass("topos-code-input");
+        t.setValue(settings.extensions).onChange((value) => {
+          settings.extensions = value;
+          void save().then(() => this.plugin.reindexSoon());
+        });
+      });
+    new Setting(files)
+      .setName("Excluded folders")
+      .setDesc("One folder per line.")
+      .setClass("topos-tall-setting")
+      .addTextArea((t) => {
+        t.inputEl.rows = 3;
+        t.inputEl.addClass("topos-code-input");
+        t.setPlaceholder("Templates\nArchive")
+          .setValue(settings.excludeFolders)
+          .onChange((value) => {
+            settings.excludeFolders = value;
+            void save().then(() => this.plugin.reindexSoon());
+          });
+      });
+    let onMobile: Setting | null = null;
+    new Setting(files)
+      .setName("Search EPUB files")
       .setDesc(
-          'Filters written like the topos CLI\'s options, after any folders or files to search: Sermons --nt -g "Pauline Epistles" -b John --exclude-book Philemon -i "Romans 8" -o "John 1" --exclude-overlap "Psalm 23" (-o is explicit overlap; --any-overlap counts whole chapters too, and --exact-overlap means exactly that passage). --glob, --iglob (a ! before the glob leaves its files out), and --path-regex pick files by path. Save the sidebar\'s filters with its Save button, or add one here.',
+        `Find references in EPUBs too. With the EPUB++ plugin, which opens EPUBs in Obsidian, their references show in the book, with a sidebar tab to step through them and save one as a highlight, and results open in the book.${this.plugin.epubs.api ? "" : " (EPUB++ isn't enabled.)"}`,
+      )
+      .addToggle((t) =>
+        t.setValue(settings.searchEpubs).onChange((value) => {
+          settings.searchEpubs = value;
+          void save().then(() => this.plugin.epubs.toggled());
+          onMobile?.settingEl.toggleClass("topos-hidden", !value);
+        }),
       );
+    if (!Platform.isDesktopApp) {
+      onMobile = new Setting(files)
+        .setClass("topos-subsetting")
+        .setName("Search new EPUBs on this device")
+        .setDesc(
+          "Books a computer has indexed are never searched here: their references sync with the vault. Turn this on to also search books no other device has indexed yet (slow for a big library).",
+        )
+        .addToggle((t) =>
+          t.setValue(settings.searchEpubsOnMobile).onChange((value) => {
+            settings.searchEpubsOnMobile = value;
+            void save().then(() => this.plugin.reindex());
+          }),
+        );
+      onMobile.settingEl.toggleClass("topos-hidden", !settings.searchEpubs);
+    }
+
+    const index = section(el, "Index").items;
+    new Setting(index)
+      .setName("Reference index")
+      .setDesc(
+        `${this.plugin.refs.referenceCount.toLocaleString()} references in ${this.plugin.refs.fileCount.toLocaleString()} files. The index is kept in the plugin's folder and syncs with your settings, so each file is searched once (on any device). Rebuilding searches every file again.`,
+      )
+      .addButton((b) =>
+        b.setButtonText("Rebuild").onClick(async () => {
+          b.setDisabled(true).setButtonText("Rebuilding…");
+          await this.plugin.reindex(true);
+          this.redraw("search");
+        }),
+      );
+    if (Platform.isDesktopApp) this.engineSettings(index.createDiv("topos-setting-block"));
+
+    this.savedSearches(el.createDiv());
+  }
+
+  /** The built-in engine or the topos CLI (desktop only) */
+  private engineSettings(box: HTMLElement): void {
+    const settings = this.plugin.settings;
+    const save = () => this.plugin.saveToposSettings();
+    box.empty();
+    new Setting(box)
+      .setName("Search engine")
+      .setDesc(
+        md(
+          "*Built in* searches in a background thread, everywhere. *topos CLI* runs the native command-line tool, which is much faster for many files and EPUBs (install it with `cargo install topos-bible-cli`). Either way, only new and changed files are searched; edits are always searched by the built-in engine.",
+        ),
+      )
+      .addDropdown((d) =>
+        d
+          .addOptions({ builtin: "Built in", cli: "topos CLI" })
+          .setValue(settings.engine)
+          .onChange((value) => {
+            settings.engine = value as "builtin" | "cli";
+            void save().then(() => this.plugin.indexer.resetCli());
+            this.engineSettings(box);
+          }),
+      );
+    if (settings.engine !== "cli") return;
+    const command = new Setting(box)
+      .setClass("topos-subsetting")
+      .setName("topos command")
+      .setDesc(md("Leave empty to use `~/.cargo/bin/topos`, or `topos` from `PATH`."))
+      .addText((t) => {
+        t.inputEl.addClass("topos-code-input");
+        t.setPlaceholder(this.plugin.cliPath())
+          .setValue(settings.cliPath)
+          .onChange((value) => {
+            settings.cliPath = value.trim();
+            void save();
+          });
+      });
+    command.addButton((b) =>
+      b.setButtonText("Test").onClick(async () => {
+        setMd(command.descEl, await this.plugin.testCli());
+      }),
+    );
+    new Setting(box)
+      .setClass("topos-subsetting")
+      .setName("Cache CLI results")
+      .setDesc(md("Reuse results for files that have not changed since the last run (`topos --cache`)."))
+      .addToggle((t) =>
+        t.setValue(settings.cliCache).onChange((value) => {
+          settings.cliCache = value;
+          void save();
+        }),
+      );
+  }
+
+  /** Each saved search is a name and the CLI's filter options, editable here */
+  private savedSearches(box: HTMLElement): void {
+    const { settings } = this.plugin;
     const persist = () => {
       void this.plugin.saveData(settings).then(() => this.plugin.search.set({}));
     };
-    settings.queries.forEach((saved, i) => {
-      const setting = new Setting(containerEl);
-      const showErrors = () => {
-        const { errors } = parseQuery(saved.query);
-        setting.setDesc(errors.join("; "));
-        setting.descEl.toggleClass("topos-query-error", errors.length > 0);
-      };
-      setting
-        .addText((t) =>
-          t
-            .setPlaceholder("Name")
-            .setValue(saved.name)
-            .onChange((value) => {
-              saved.name = value;
-              persist();
-            }),
-        )
-        .addText((t) => {
-          t.inputEl.addClass("topos-query-input");
-          t.setPlaceholder('--nt -g "Pauline Epistles"')
-            .setValue(saved.query)
-            .onChange((value) => {
-              saved.query = value;
-              showErrors();
-              persist();
-            });
-        })
-        .addExtraButton((b) =>
-          b
-            .setIcon("search")
-            .setTooltip("Show in the sidebar")
-            .onClick(() => void this.plugin.openQuery(saved)),
-        )
-        .addExtraButton((b) =>
-          b
-            .setIcon("trash")
-            .setTooltip("Delete")
-            .onClick(() => {
-              settings.queries.splice(i, 1);
-              persist();
-              this.display();
-            }),
-        );
-      showErrors();
-    });
-    new Setting(containerEl).addButton((b) =>
-      b.setButtonText("Add a saved search").onClick(() => {
+    box.empty();
+    const saved = section(box, "Saved searches");
+    saved.heading?.addButton((b) =>
+      b.setButtonText("Add a search").onClick(() => {
         settings.queries.push({ name: `Search ${settings.queries.length + 1}`, query: "" });
         persist();
-        this.display();
+        this.savedSearches(box);
       }),
     );
+    const help = saved.heading?.infoEl.createEl("details", { cls: "topos-help" });
+    help?.createEl("summary", { text: "How to write a search" });
+    help
+      ?.createEl("p")
+      .append(
+        md(
+          'Filters are written like the topos CLI\'s options, after any folders or files to search: `Sermons --nt -g "Pauline Epistles" -b John --exclude-book Philemon -i "Romans 8" -o "John 1" --exclude-overlap "Psalm 23"`. `-o` is explicit overlap; `--any-overlap` counts whole chapters too, and `--exact-overlap` means exactly that passage. `--glob`, `--iglob` (a `!` before the glob leaves its files out), and `--path-regex` pick files by path. Save the sidebar\'s filters with its *Save* button, or add one here.',
+        ),
+      );
+    filteredList(saved, settings.queries, {
+      key: "queries",
+      placeholder: "Filter saved searches",
+      noun: ["search", "searches"],
+      empty: "No saved searches yet: save the sidebar's filters with its *Save* button, or add one here.",
+      text: (q) => `${q.name} ${q.query}`,
+      render: (query, items) => {
+        const setting = new Setting(items).setClass("topos-saved-search");
+        const showErrors = () => {
+          const { errors } = parseQuery(query.query);
+          setting.setDesc(errors.join("; "));
+          setting.descEl.toggleClass("topos-query-error", errors.length > 0);
+        };
+        setting
+          .addText((t) => {
+            t.inputEl.addClass("topos-saved-search-name");
+            t.setPlaceholder("Name")
+              .setValue(query.name)
+              .onChange((value) => {
+                query.name = value;
+                persist();
+              });
+          })
+          .addText((t) => {
+            t.inputEl.addClass("topos-query-input");
+            t.setPlaceholder('--nt -g "Pauline Epistles"')
+              .setValue(query.query)
+              .onChange((value) => {
+                query.query = value;
+                showErrors();
+                persist();
+              });
+          })
+          .addExtraButton((b) =>
+            b
+              .setIcon("search")
+              .setTooltip("Show in the sidebar")
+              .onClick(() => void this.plugin.openQuery(query)),
+          )
+          .addExtraButton((b) =>
+            b
+              .setIcon("trash-2")
+              .setTooltip("Delete")
+              .onClick(() => {
+                settings.queries.splice(settings.queries.indexOf(query), 1);
+                persist();
+                this.savedSearches(box);
+              }),
+          );
+        showErrors();
+        return setting.settingEl;
+      },
+    });
+  }
+}
+
+/** Literals in file-plus-plus's descriptions (`{{text}}`, `"&color=<name>"`, `[[Wikilinks]]`, `v=3:16-18`) shown as code, like these settings' */
+function codeLiterals(el: HTMLElement): void {
+  const literal = /\{\{\w+\}\}|"[^"]*[&<>=[\]{}][^"]*"|\[\[\w+\]\]|\bv=[\d:-]+/g;
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  const texts: Text[] = [];
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) if (!node.parentElement?.closest("code")) texts.push(node as Text);
+  for (const text of texts) {
+    const value = text.data;
+    if (!literal.test(value)) continue;
+    literal.lastIndex = 0;
+    const fragment = document.createDocumentFragment();
+    let at = 0;
+    for (const match of value.matchAll(literal)) {
+      fragment.append(value.slice(at, match.index));
+      const code = document.createElement("code");
+      code.textContent = match[0].replace(/^"|"$/g, "");
+      fragment.append(code);
+      at = match.index + match[0].length;
+    }
+    fragment.append(value.slice(at));
+    text.replaceWith(fragment);
   }
 }
 
@@ -881,10 +1282,4 @@ function accentColor(el: HTMLElement): string {
   } catch {
     return "#000000";
   }
-}
-
-/** What a package kind is called, for the settings (`book`, `collection`) */
-function kindName(kind: PackageKind): string {
-  const name = Object.entries(PackageKind).find(([, value]) => value === kind)?.[0] ?? "";
-  return name.replace(/(?<!^)([A-Z])/g, " $1").toLowerCase();
 }

@@ -16,7 +16,7 @@ import {
   type WorkspaceLeaf,
 } from "obsidian";
 import { around } from "file-plus-plus/obsidian";
-import { FilePlusPlusPlugin, type DocumentEmbed, type EmbedContext } from "file-plus-plus/obsidian";
+import { FilePlusPlusPlugin, type DocumentEmbed, type DocumentView, type EmbedContext } from "file-plus-plus/obsidian";
 import type { FppSettings } from "file-plus-plus/obsidian";
 import { OffsetUnit, type BookTextOptions, type Passage, type Topos, type ToposTranslations } from "biblix";
 import type { EditorView } from "@codemirror/view";
@@ -39,8 +39,10 @@ import { DocumentSupport } from "./documents/support.ts";
 import workerSource from "topos-worker-source";
 import { GoToReferenceModal, InsertReferenceModal, SavedQueryModal } from "./modals.ts";
 import { linkReferences, relinkEditor } from "./reading.ts";
-import { bookStyle, DEFAULT_SETTINGS, ToposSettingsPanel, type ToposSettings } from "./settings.ts";
+import { bookStyle, DEFAULT_SETTINGS, openSettings, ToposSettingsPanel, type ToposSettings } from "./settings.ts";
 import { BibleEmbed } from "./bible/embed.ts";
+import { BibleMedia } from "./bible/media.ts";
+import { BibleView } from "./bible/view.ts";
 import { createBibleFormat } from "./bible/format.ts";
 import { STUB_EXTENSION } from "./core/stubs.ts";
 import { BibleLibrary } from "./bible/library.ts";
@@ -81,6 +83,8 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
   });
   /** Adds, installs, and removes biblix packages */
   bibleManager = new BibleManager(this);
+  /** Package Bibles' recordings, downloaded when first played */
+  media = new BibleMedia(this);
   /** The vault's CSS for Bible text (the `bibleCss` setting) */
   bibleStyles = new BibleStyles(this);
   private translationsCache: ToposTranslations | null = null;
@@ -133,6 +137,11 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
   protected override defaultSettings(): PluginSettings {
     // Links into a Bible are labeled with the reference (file-plus-plus's default: "book, chapter")
     return { ...super.defaultSettings(), aliasTemplate: "{{reference}}", ...structuredClone(DEFAULT_SETTINGS) };
+  }
+
+  /** The Bible tab, with a player for books that have a recording */
+  override createView(leaf: WorkspaceLeaf): DocumentView<BibleBook, BibleReader> {
+    return new BibleView(leaf, this);
   }
 
   override createEmbed(ctx: EmbedContext, file: TFile, subpath: string): DocumentEmbed<BibleBook, BibleReader> {
@@ -333,6 +342,32 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
     const file = this.settings.referenceLinks === "bible" && bible ? await this.bibles.bookFile(passage, bible) : null;
     if (file) await this.openDocument(file, this.passageLocator(passage), newLeaf);
     else this.openReference(passage, translation);
+  }
+
+  /**
+   * The Bibles whose packages list a recording of a passage's book: the one it names (else the
+   * current one) first
+   */
+  recordedBibles(passage: Passage, translation?: string | null): NonNullable<ReturnType<BibleLibrary["named"]>>[] {
+    const recorded = new Set(this.packages.recorded(passage.bookId).map((n) => n.toLowerCase()));
+    const first = this.bibles.forText(translation);
+    return this.bibles
+      .all()
+      .filter((b) => b.package && recorded.has(b.name.toLowerCase()))
+      .sort((a, b) => Number(b === first) - Number(a === first));
+  }
+
+  /** Plays a passage from a Bible's recording (the first of `recordedBibles`), in its book's tab */
+  async playPassage(passage: Passage, translation?: string | null): Promise<void> {
+    for (const bible of this.recordedBibles(passage, translation)) {
+      const file = await this.bibles.bookFile(passage, bible);
+      if (!file || !(await this.packages.recording(file.path, passage.bookId))) continue;
+      await this.openDocument(file, this.passageLocator(passage), false);
+      const view = this.views().find((v): v is BibleView => v instanceof BibleView && v.file?.path === file.path && v.leaf === this.app.workspace.getMostRecentLeaf());
+      if (view && (await view.whenRecording())) await view.playPassage(passageParts(passage));
+      return;
+    }
+    new Notice(`No Bible here has a recording of ${passage.reference}.`);
   }
 
   /** A link to a passage in a Bible (`Bibles/BSB/JHN.usx#v=3:16`): the one named, else the current one, if it has the book */
@@ -661,6 +696,20 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
 
   // Navigation
 
+  /** Makes each import again from its publisher's download, replacing those that changed; says what changed */
+  async updateImports(): Promise<void> {
+    const notice = new Notice("Updating imported Bibles…", 0);
+    try {
+      const lines = await this.bibleManager.updateImports();
+      notice.hide();
+      const changed = lines.filter((line) => line.includes("→"));
+      new Notice(changed.length > 0 ? changed.join("\n") : "Every imported Bible is up to date", 10000);
+    } catch (error) {
+      notice.hide();
+      new Notice(`Couldn't update imports: ${error instanceof Error ? error.message : String(error)}`, 10000);
+    }
+  }
+
   /** Puts back the files of Bible packages edited in the library (through biblix's installer) */
   async restorePackages(): Promise<void> {
     const notice = new Notice("Restoring Bible packages…", 0);
@@ -816,9 +865,19 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
 
   private addCommands(): void {
     this.addCommand({
+      id: "add-bibles",
+      name: "Add a Bible, commentary, or book",
+      callback: () => openSettings(this, "add"),
+    });
+    this.addCommand({
       id: "restore-biblix-packages",
       name: "Restore edited Bible packages",
       callback: () => void this.restorePackages(),
+    });
+    this.addCommand({
+      id: "update-biblix-imports",
+      name: "Update imported Bibles from their publishers",
+      callback: () => void this.updateImports(),
     });
     this.addCommand({
       id: "reload-biblix-packages",
@@ -903,6 +962,27 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
     });
     addParallelCommands(this);
     this.addCommand({
+      id: "play-recording",
+      name: "Play or pause this book's recording",
+      checkCallback: (checking) => {
+        const leaf = this.app.workspace.getMostRecentLeaf();
+        const view = this.views().find((v): v is BibleView => v instanceof BibleView && v.leaf === leaf);
+        if (!view?.recording) return false;
+        if (!checking) void view.listen();
+        return true;
+      },
+    });
+    this.addCommand({
+      id: "play-reference",
+      name: "Play the reference under the cursor",
+      editorCheckCallback: (checking, editor) => {
+        const passage = this.referenceAtCursor(editor);
+        if (!passage || this.recordedBibles(passage).length === 0) return false;
+        if (!checking) void this.playPassage(passage);
+        return true;
+      },
+    });
+    this.addCommand({
       id: "normalize-references",
       name: "Normalize references in the selection or note",
       editorCallback: (editor) => this.normalize(editor),
@@ -913,6 +993,15 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
     const passage = this.referenceAtCursor(editor);
     if (!passage) return;
     menu.addSeparator();
+    const recorded = this.recordedBibles(passage)[0];
+    if (recorded) {
+      menu.addItem((item) =>
+        item
+          .setTitle(`Play ${passage.reference} (${recorded.name})`)
+          .setIcon("play")
+          .onClick(() => void this.playPassage(passage)),
+      );
+    }
     menu.addItem((item) =>
       item
         .setTitle(`Open ${passage.reference} in ${this.linkSite()}`)

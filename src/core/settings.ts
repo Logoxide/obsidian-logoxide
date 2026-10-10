@@ -69,6 +69,10 @@ export interface ToposSettings {
   biblixBooks: string;
   /** Hide the packages folder from the file explorer and from Obsidian's search */
   hideBiblixBooks: boolean;
+  /** While a Bible's recording plays, keep the verse being read in view */
+  followPlayback: boolean;
+  /** The recordings' playback speed (the player's speed button) */
+  playbackRate: number;
   /** Translations' names and aliases, one per line: `KJV: AV, King James` (see core/translations.ts) */
   bibleAliases: string;
   /** Bibles embeds also show, by name, separated by commas: `KJV, NET` */
@@ -130,6 +134,8 @@ export const DEFAULT_SETTINGS: ToposSettings = {
   biblixLibrary: ".biblix",
   biblixBooks: "Biblix",
   hideBiblixBooks: false,
+  followPlayback: true,
+  playbackRate: 1,
   bibleAliases: "",
   compareBibles: "",
   bibleNotes: false,

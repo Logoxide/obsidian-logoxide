@@ -183,6 +183,27 @@ that Bible, its hover and embed show that Bible's text, and completion offers th
   Bible beside it, on the same verse* open the same verse in another translation; beside it, the
   two tabs keep the verse at the top of either one at the top of the other as you scroll
 
+#### Recordings
+
+A package can list recordings of its books (its `[media]`: each audio or video file's URL, size,
+and SHA-256, and WebVTT timings giving each verse's place in it). A book with one shows
+**Listen** (headphones) in its tab's toolbar, which plays from the verse at the top of the page:
+
+- The first time a recording is played, the plugin says how big it is and asks before
+  downloading it. It's checked against the size and hash the package lists and kept on this
+  device only, in the library folder (`.biblix/media/`, not synced), so it's downloaded once
+  however many versions of the package list it. *Downloaded recordings* in the settings says how
+  much is kept and removes it
+- The verse being read is highlighted and kept in view (*Follow along*, also the target button in
+  the player; scrolling by hand pauses it for a few seconds). The line above the player names the
+  verse; tapping it goes back there
+- To play from a verse: tap its verse number while the player is open (Ctrl/Cmd-click any time),
+  or right-click it for **Play from 3:16**; a selection also gives **Play 3:16-18**, which stops at
+  its end. Following a link or the contents while it plays moves the playback there
+- `![John 3:16-18 AUD]` embeds a play button when the Bible has a recording of the passage: it
+  plays the passage in the note. In the editor, *Play John 3:16 (AUD)* in the menu of a reference
+  (and the command *Play the reference under the cursor*) opens the book and plays the passage
+
 A USX file opens in a reading tab built on file-plus-plus (the engine of EPUB++): the book
 as one page with a chapter list, search, verse numbers, headings (footnotes optional), and
 highlights. Links into a book are `[[JHN.usx#v=3:16-18]]` (verses, `v=3` for a chapter, `;` between

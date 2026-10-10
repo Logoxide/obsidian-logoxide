@@ -98,18 +98,26 @@ async function loadBook(plugin: ToposPlugin, app: App, file: TFile): Promise<Bib
   let text: string;
   let extension = file.extension;
   let stubBible: string | null = null;
+  let book: ToposBook | null = null;
   if (file.extension === STUB_EXTENSION) {
     // A package's book: read from the library, where its stub says
     const target = await plugin.packages.stubTarget(file);
     if (!target) throw new Error(`${file.path}: its package isn't installed (run bx install, or add it again)`);
-    text = await app.vault.adapter.read(target.path);
     extension = target.path.slice(target.path.lastIndexOf(".") + 1).toLowerCase();
     stubBible = target.bible;
+    // One of several books in a file, or a format other than USX and USFM (OSIS, ThML): biblix reads it
+    if (target.book || !BOOK_EXTENSIONS.includes(extension)) {
+      book = await plugin.packages.stubBook(file, target.book);
+      if (!book) throw new Error(`${file.path}: its package has no such book`);
+      text = "";
+    } else text = await app.vault.adapter.read(target.path);
   } else {
     text = await app.vault.cachedRead(file);
   }
-  if (extension === "usfm" || extension === "sfm") text = Biblix.new().usfmToUsx(text);
-  const book = ToposBook.parse(topos, "usx", text);
+  if (!book) {
+    if (extension === "usfm" || extension === "sfm") text = Biblix.new().usfmToUsx(text);
+    book = ToposBook.parse(topos, "usx", text);
+  }
   if (!book) throw new Error("not a USX file");
   const bookId = book.bookId() ?? 0;
   const info = topos.books().find((b) => b.id === bookId);

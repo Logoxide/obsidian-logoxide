@@ -75,30 +75,46 @@ class TFile {
 }
 /** Records each setting's name, description, and controls, so a test can change them */
 class FakeSetting {
+  /** Every setting drawn since the last `display()` */
+  static all: FakeSetting[] = [];
   name = "";
   desc = "";
   controls: any[] = [];
-  descEl = { toggleClass() {} };
+  settingEl: any;
+  infoEl: any;
+  nameEl: any;
+  descEl: any;
+  controlEl: any;
   constructor(containerEl: any) {
-    containerEl.settings.push(this);
+    FakeSetting.all.push(this);
+    this.settingEl = containerEl.createDiv("setting-item");
+    this.infoEl = this.settingEl.createDiv("setting-item-info");
+    this.nameEl = this.infoEl.createDiv("setting-item-name");
+    this.descEl = this.infoEl.createDiv("setting-item-description");
+    this.controlEl = this.settingEl.createDiv("setting-item-control");
   }
   private control(kind: string, build: (c: any) => void) {
-    const control: any = { kind, inputEl: { addClass() {}, addEventListener() {} } };
-    for (const method of ["setPlaceholder", "setValue", "addOptions", "addOption", "setLimits", "setDynamicTooltip", "setButtonText", "setIcon", "setTooltip"]) {
+    const control: any = { kind, inputEl: document.createElement("input"), buttonEl: document.createElement("button") };
+    for (const method of ["setPlaceholder", "setValue", "addOptions", "addOption", "setLimits", "setDynamicTooltip", "setButtonText", "setIcon", "setTooltip", "setCta", "setWarning", "setDisabled"]) {
       control[method] = (value: any) => {
         if (method === "setValue") control.value = value;
         if (method === "setButtonText") control.text = value;
         return control;
       };
     }
+    control.getValue = () => control.value;
     control.onChange = (handler: any) => ((control.change = handler), control);
     control.onClick = (handler: any) => ((control.click = handler), control);
     build(control);
     this.controls.push(control);
     return this;
   }
-  setName(name: string) { this.name = name; return this; }
-  setDesc(desc: string) { this.desc = desc; return this; }
+  private static text(value: any) {
+    return typeof value === "string" ? value : (value?.textContent ?? "");
+  }
+  setName(name: any) { this.name = FakeSetting.text(name); return this; }
+  setDesc(desc: any) { this.desc = FakeSetting.text(desc); return this; }
+  setClass() { return this; }
   setHeading() { return this; }
   addText(build: any) { return this.control("text", build); }
   addTextArea(build: any) { return this.control("text", build); }
@@ -396,6 +412,8 @@ test("the built plugin loads, indexes, and runs its commands", async (t) => {
   await plugin.indexer.save();
   const packs = readdirSync(join(vaultPath, manifest.dir, "index/packs"));
   assert.ok(packs.length > 0 && packs.every((name) => name.startsWith(`${plugin.device}-`)), packs.join());
+  // Notes' packs are named for their kind: an app that searches no EPUBs never reads EPUBs' packs
+  assert.ok(packs.every((name) => name.startsWith(`${plugin.device}-text-`)), packs.join());
   const searched: string[] = [];
   const counting = (p: any) => {
     const indexFiles = p.indexFiles.bind(p);
@@ -412,8 +430,6 @@ test("the built plugin loads, indexes, and runs its commands", async (t) => {
 
   // Another device (its files have other times after syncing) confirms the notes by their text
   const phoneApp = Object.create(app, { storage: { value: new Map() } });
-  // Notes' packs are named for their kind: an app that searches no EPUBs never reads EPUBs' packs
-  assert.ok(packs.every((name) => name.startsWith(`${plugin.device}-text-`)), packs.join());
   const realFiles = app.vault.getFiles;
   app.vault.getFiles = () => realFiles().map((f: any) => Object.assign(f, { stat: { mtime: 99, size: f.stat.size } }));
   const phone = counting(new ToposPlugin(phoneApp, manifest));
@@ -487,24 +503,26 @@ test("the built plugin loads, indexes, and runs its commands", async (t) => {
   plugin.saveData = async () => {};
   // topos's settings, which file-plus-plus's settings tab shows first
   const tab = {
-    containerEl: {
-      settings: [] as any[],
-      createDiv() {
-        return this;
-      },
-    },
+    containerEl: document.createElement("div"),
     display() {
-      this.containerEl.settings = [];
+      FakeSetting.all = [];
+      this.containerEl = document.createElement("div");
       plugin.displaySettings(this.containerEl, () => this.display());
     },
   };
   tab.display();
-  const setting = (name: string) => tab.containerEl.settings.find((s: any) => s.name === name);
-  assert.equal(setting("Reference format").desc, "Preview: John 3:16,17,18; 4:1-5:3   Jude 1:5");
+  // Its tabs
+  assert.deepEqual(
+    [...tab.containerEl.querySelectorAll(".topos-tab")].map((el: any) => el.textContent),
+    ["Bibles", "Library", "Add Bibles", "References", "Search", "Reader", "Highlights"],
+  );
+  // Settings still shown (a part of a tab is drawn again when what it shows changes)
+  const setting = (name: string): any => FakeSetting.all.find((s: any) => s.name === name && tab.containerEl.contains(s.settingEl));
+  assert.equal(setting("Format preview").desc, "John 3:16,17,18; 4:1-5:3   Jude 1:5");
   setting("Join adjacent verses").controls[0].change(true);
   setting("Chapter in single-chapter books").controls[0].change(false);
   setting("Range").controls[0].change("–");
-  assert.equal(setting("Reference format").desc, "Preview: John 3:16–18; 4:1–5:3   Jude 5");
+  assert.equal(setting("Format preview").desc, "John 3:16–18; 4:1–5:3   Jude 5");
   // An empty separator field goes back to the default
   setting("Range").controls[0].change("");
   assert.equal(plugin.settings.format.range, "-");
@@ -512,10 +530,7 @@ test("the built plugin loads, indexes, and runs its commands", async (t) => {
   const note = fakeEditor("See jn 3:16,17,18");
   plugin.commands.find((c: any) => c.id === "normalize-references").editorCallback(note);
   assert.equal(note.value, "See John 3:16-18");
-  const reset = tab.containerEl.settings
-    .flatMap((s: any) => s.controls)
-    .find((c: any) => c.text === "Reset the format");
-  reset.click();
+  setting("Writing references").controls[0].click();
   assert.equal(plugin.settings.format.joinAdjacent, false);
 
   // Links: a site, a template of your own, or none

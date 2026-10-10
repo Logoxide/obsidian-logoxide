@@ -1,7 +1,8 @@
 import { Notice, TFile, TFolder } from "obsidian";
-import { Biblix, PackageKind, type BiblixPackage, type LockedEntry, type PackageFile, type Passage, type ToposBook, type ToposTranslations } from "biblix";
+import { Biblix, PackageKind, type BiblixPackage, type LockedEntry, type MediaFile, type PackageFile, type Passage, type ToposBook, type ToposTranslations } from "biblix";
 import { RESERVED, STUB_EXTENSION, parseStub, staleStubs, stubNames, stubPath, stubText } from "../core/stubs.ts";
 import type ToposPlugin from "../main.ts";
+import type { Timing } from "../core/timings.ts";
 import type { BookEdition } from "./reader.ts";
 
 /** The vault's manifest: at its root, else in the library's folder */
@@ -32,6 +33,17 @@ interface PackageBible {
   version: string;
   /** Each book's verse hashes (8 hex digits) by `chapter:verse`, as read */
   hashes: Map<number, Map<string, string>>;
+  /** Each book's recording and where it reads each verse, once looked for (null: none) */
+  recordings: Map<number, Recording | null>;
+}
+
+/** A recording of a package Bible's book (its `[media]`), and where it reads each verse */
+export interface Recording {
+  file: MediaFile;
+  /** The Bible's name (`BSB`) */
+  bible: string;
+  /** In the recording's order */
+  timings: Timing[];
 }
 
 /** A package the vault's lock file names, for the settings */
@@ -276,7 +288,7 @@ export class BiblixBibles {
     // The vault's own names for it, when its biblix.toml gives them (a fork's)
     const name = entry.abbreviation ?? info.abbreviation;
     const aliases = entry.aliases ?? info.aliases;
-    return { info: summary, bible: { id: info.id, dependency: entry.name, name, aliases, pkg, books: new Map(), dir, stubs: new Map(), stubFiles: new Map(), version: entry.version, hashes: new Map() }, book: null };
+    return { info: summary, bible: { id: info.id, dependency: entry.name, name, aliases, pkg, books: new Map(), dir, stubs: new Map(), stubFiles: new Map(), version: entry.version, hashes: new Map(), recordings: new Map() }, book: null };
   }
 
   /** Writes what a package's cache wrote into the plugin's folder */
@@ -435,8 +447,9 @@ export class BiblixBibles {
     const named = new Map<string, TFile>();
     for (const file of existing) {
       const stub = parseStub(await vault.cachedRead(file));
-      if (stub) named.set(`${stub.package}\n${stub.path}`, file);
+      if (stub) named.set(`${stub.package}\n${stub.path}\n${stub.book ?? ""}`, file);
     }
+    const bookInfo = this.plugin.topos?.books() ?? [];
     const wanted = new Set<string>();
     for (const bible of this.bibles) {
       bible.stubs = new Map();
@@ -446,16 +459,22 @@ export class BiblixBibles {
         continue;
       }
       const files = bible.pkg.bookFiles();
-      const names = stubNames(files.map((f) => ({ path: f.path, title: f.title ?? null })));
-      for (const file of files) {
-        const stub = { package: bible.dependency, path: file.path };
-        const path = stubPath(root, stub, names.get(file.path) ?? null);
+      // A file of several books (a whole Bible in OSIS or ThML) gets a stub for each, named by its book
+      const shared = new Set(files.filter((f, i) => files.findIndex((o) => o.path === f.path) !== i).map((f) => f.path));
+      const keyed = files.map((f) => {
+        const info = shared.has(f.path) ? bookInfo.find((b) => b.id === f.bookId) : undefined;
+        return { file: f, key: info ? `${f.path}#${info.usfm}` : f.path, book: info?.usfm, title: info ? info.name : (f.title ?? null) };
+      });
+      const names = stubNames(keyed.map((k) => ({ path: k.key, title: k.title })));
+      for (const { file, key, book } of keyed) {
+        const stub = { package: bible.dependency, path: file.path, ...(book ? { book } : {}) };
+        const path = stubPath(root, stub, names.get(key) ?? null);
         wanted.add(path);
         bible.stubs.set(file.bookId, path);
-        bible.stubFiles.set(file.path, path);
+        if (!bible.stubFiles.has(file.path)) bible.stubFiles.set(file.path, path);
         const text = stubText(stub);
         // Named otherwise before (its file's path, or an older title): renamed, so links follow
-        const before = named.get(`${stub.package}\n${stub.path}`);
+        const before = named.get(`${stub.package}\n${stub.path}\n${stub.book ?? ""}`);
         if (before && before.path !== path && !vault.getAbstractFileByPath(path)) {
           await this.folder(path.slice(0, path.lastIndexOf("/")));
           await this.rename(before, path);
@@ -527,11 +546,26 @@ export class BiblixBibles {
    * The book a stub names: its file in the library (or a path package's folder), and the Bible it's
    * in. Null when the stub names a package the vault doesn't have (or isn't a stub)
    */
-  async stubTarget(stub: TFile): Promise<{ path: string; bible: string } | null> {
+  async stubTarget(stub: TFile): Promise<{ path: string; bible: string; book: string | null } | null> {
     await this.loading;
     const named = parseStub(await this.plugin.app.vault.cachedRead(stub));
     const bible = named && this.bibles.find((b) => b.dependency === named.package);
-    return named && bible ? { path: `${bible.dir}/${named.path}`, bible: bible.name } : null;
+    return named && bible ? { path: `${bible.dir}/${named.path}`, bible: bible.name, book: named.book ?? null } : null;
+  }
+
+  /**
+   * A stub's book read by biblix, for files the reader can't parse itself (OSIS, ThML, and files of
+   * several books); a new book each time, which the reader disposes
+   */
+  async stubBook(stub: TFile, code: string | null): Promise<ToposBook | null> {
+    await this.loading;
+    const named = parseStub(await this.plugin.app.vault.cachedRead(stub));
+    const bible = named && this.bibles.find((b) => b.dependency === named.package);
+    if (!named || !bible) return null;
+    const bookId = code
+      ? this.plugin.topos?.books().find((b) => b.usfm === code)?.id
+      : bible.pkg.bookFiles().find((f) => f.path === named.path)?.bookId;
+    return bookId === undefined ? null : bible.pkg.book(bookId);
   }
 
   /**
@@ -564,6 +598,40 @@ export class BiblixBibles {
       },
       said: (message) => new Notice(message, 8000),
     };
+  }
+
+  /** The names of the package Bibles whose `[media]` may read a book (a file listed for it, or for no one book) */
+  recorded(bookId: number): string[] {
+    const code = this.plugin.topos?.books().find((b) => b.id === bookId)?.usfm;
+    return this.bibles
+      .filter((b) => b.recordings.get(bookId) !== null && b.stubs.has(bookId) && b.pkg.media().some((f) => f.book === null || f.book === code))
+      .map((b) => b.name);
+  }
+
+  /**
+   * The recording of a stub's book, from its package's `[media]` (the file listed for the book, or
+   * a file whose timings read it), with where it reads each verse; null when it has none
+   */
+  async recording(stub: string, bookId: number): Promise<Recording | null> {
+    await this.loading;
+    const bible = this.bibles.find((b) => b.stubs.get(bookId) === stub);
+    if (!bible) return null;
+    if (bible.recordings.has(bookId)) return bible.recordings.get(bookId) ?? null;
+    let found: Recording | null = null;
+    const code = this.plugin.topos.books().find((b) => b.id === bookId)?.usfm;
+    for (const file of bible.pkg.media()) {
+      if (file.book !== null && file.book !== code) continue;
+      try {
+        const timings = bible.pkg.timings(file).filter((t) => t.bookId === bookId);
+        if (timings.length === 0) continue;
+        found = { file, bible: bible.name, timings: timings.map((t) => ({ chapter: t.chapter, verse: t.verse, last: t.last, startMs: t.startMs, endMs: t.endMs })) };
+        break;
+      } catch (error) {
+        console.warn(`Topos Bible: ${bible.name}'s timings for ${file.path}`, error);
+      }
+    }
+    bible.recordings.set(bookId, found);
+    return found;
   }
 
   /** The stub of a package's book file (its path from the vault's root), if it has one */

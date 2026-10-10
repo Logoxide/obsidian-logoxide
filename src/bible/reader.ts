@@ -249,6 +249,50 @@ ${USX_CSS}
     return [moved, ...parts.slice(1)];
   }
 
+  /** The text of verses (a bridge's whole verses), as a range */
+  versesRange(part: VersePart): Range | null {
+    return this.partRange(part);
+  }
+
+  /** The verses a range covers (a collapsed range: the verse it's in) */
+  versesOf(range: Range): VersePart | null {
+    const units = this.unitsOfRange(range);
+    const a = units && this.markers[units.first];
+    const b = units && this.markers[units.last];
+    return a && b ? { chapter: a.chapter, verse: a.verse, endChapter: b.chapter, endVerse: b.last } : null;
+  }
+
+  /** The verse a verse number is (its marker, `span.topos-verse`) */
+  verseOfMarker(el: Element): { chapter: number; verse: number } | null {
+    const marker = this.markers.find((m) => m.el === el);
+    return marker ? { chapter: marker.chapter, verse: marker.verse } : null;
+  }
+
+  /**
+   * The verse at a point in the viewport (a right-click without a selection): the last verse
+   * number before it in its section, by where the numbers are drawn
+   */
+  verseAtPoint(x: number, y: number, target: Node | null): { chapter: number; verse: number } | null {
+    const body = target instanceof Element ? sectionBody(target as HTMLElement) : target?.parentElement ? sectionBody(target.parentElement) : null;
+    let found: Marker | null = null;
+    for (const m of this.markers) {
+      if (body && !body.contains(m.el)) {
+        if (found) break;
+        continue;
+      }
+      const r = m.el.getBoundingClientRect();
+      if (r.top > y || (r.bottom >= y && r.left > x)) break;
+      found = m;
+    }
+    return found ? { chapter: found.chapter, verse: found.verse } : null;
+  }
+
+  /** The first verse in view */
+  verseInView(): { chapter: number; verse: number } | null {
+    const part = parseVerseLocator(this.getLocation()?.locator ?? "")?.[0];
+    return part ? { chapter: part.chapter, verse: Math.max(1, part.verse) } : null;
+  }
+
   /** From the first verse of a part to the next verse after it (or the end of its chapter) */
   private partRange(part: VersePart): Range | null {
     const key = (c: number, v: number) => c * 1000 + v;

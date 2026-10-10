@@ -1142,7 +1142,670 @@ body:not(.is-mobile) .topos-pane.is-narrow .topos-pane-card:is(:hover, :focus-wi
   background: color-mix(in srgb, var(--background-secondary) 92%, transparent);
 }
 
-/* A collection's packages, under it in the settings */
+
+/* A Bible's recording (src/bible/view.ts): above the text, file-plus-plus's player under a line naming the verse being read */
+.topos-listen {
+  flex: 0 0 auto;
+  background: var(--background-secondary);
+  border-bottom: var(--border-width) solid var(--background-modifier-border);
+}
+.topos-listen:empty {
+  display: none;
+}
+.topos-listen-header {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-1);
+  padding: var(--size-4-1) var(--size-4-3) 0;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+.topos-listen-icon {
+  display: inline-flex;
+}
+.topos-listen-icon svg {
+  width: 16px;
+  height: 16px;
+}
+.topos-listen-header .topos-listen-now {
+  flex: 1;
+  min-width: 0;
+  justify-content: flex-start;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-normal);
+  font-size: var(--font-ui-small);
+  font-variant-numeric: tabular-nums;
+  padding: 0 var(--size-4-1);
+  height: 28px;
+  cursor: pointer;
+}
+.topos-listen-header .topos-listen-button.is-active {
+  color: var(--interactive-accent);
+}
+/* A passage's embed playing it */
+.topos-embed-player {
+  border-bottom: var(--border-width) solid var(--background-modifier-border);
+}
+
+/* ─── Settings (src/settings.ts, src/settings/) ─────────────────────────── */
+/* Laid out like Obsidian's own tabs (1.11+): each heading's settings in a card (`setting-group`,
+   `setting-items`), lists with their search at the card's top. These rules add the tabs and what
+   Obsidian has no style for */
+
+.topos-settings {
+  --topos-settings-gap: var(--size-4-6);
+}
+.topos-hidden {
+  display: none !important;
+}
+
+/* Tabs: a row that stays at the top while the settings scroll, scrolling sideways when narrow */
+.topos-tabs {
+  position: sticky;
+  top: calc(-1 * var(--size-4-8));
+  z-index: 3;
+  display: flex;
+  gap: var(--size-2-2);
+  max-width: var(--setting-group-max-width, none);
+  margin: 0 auto var(--size-4-4);
+  padding: var(--size-4-2) var(--size-2-2);
+  background: var(--settings-background, var(--background-primary));
+  border-bottom: var(--border-width) solid var(--background-modifier-border);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.topos-tabs::-webkit-scrollbar {
+  display: none;
+}
+.topos-tabs .topos-tab {
+  flex: 1 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--size-2-3);
+  height: auto;
+  padding: var(--size-2-3) var(--size-4-2);
+  border: none;
+  border-radius: var(--radius-m);
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  font-weight: var(--font-medium);
+  cursor: var(--cursor);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.topos-tabs .topos-tab:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+.topos-tabs .topos-tab.is-active {
+  background: color-mix(in srgb, var(--interactive-accent) 16%, transparent);
+  color: var(--text-accent);
+}
+.topos-tab-icon {
+  display: inline-flex;
+}
+.topos-tab-icon svg {
+  width: var(--icon-s);
+  height: var(--icon-s);
+}
+.topos-tab-panel:not(.is-active) {
+  display: none;
+}
+.topos-tab-lead {
+  max-width: var(--setting-group-max-width, none);
+  margin: 0 auto var(--size-4-4);
+  padding: 0 var(--size-4-4);
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  line-height: var(--line-height-normal);
+}
+.topos-tab-panel .setting-group + .setting-group,
+.topos-tab-panel > div > .setting-group:first-child,
+.topos-tab-panel > div + .setting-group,
+.topos-tab-panel .topos-sources > .setting-group {
+  margin-top: var(--topos-settings-gap);
+}
+/* Two cards in one group (file-plus-plus's blocks of settings) */
+.topos-tab-panel .setting-items + .setting-items,
+.topos-tab-panel .topos-group-text + .setting-items {
+  margin-top: var(--size-4-2);
+}
+.topos-tab-panel .topos-group-text {
+  margin: 0 0 var(--size-4-3);
+  padding: 0 var(--size-4-4);
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+/* A heading's description, under its name */
+.topos-settings .setting-item-heading .setting-item-description {
+  padding-top: var(--size-2-2);
+  font-weight: var(--font-normal);
+}
+.topos-settings .setting-item-heading .setting-item-info {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.topos-settings .setting-item-heading .setting-item-control {
+  flex: 0 0 auto;
+}
+.topos-settings .setting-item > .topos-help {
+  flex: 1 1 100%;
+  order: 3;
+  margin-top: 0;
+}
+
+/* Code and names in descriptions */
+.topos-settings :is(.setting-item-description, .setting-item-name, .topos-tab-lead, .topos-list-empty, .topos-help, .topos-empty-state-text) code {
+  padding: 0.05em 0.25em;
+  border-radius: var(--radius-s);
+  background: var(--code-background);
+  color: var(--code-normal);
+  font-family: var(--font-monospace);
+  font-size: 0.88em;
+  overflow-wrap: anywhere;
+}
+.topos-settings :is(.setting-item-description, .topos-tab-lead, .topos-list-empty, .topos-help) em {
+  color: var(--text-normal);
+  font-style: normal;
+  font-weight: var(--font-medium);
+}
+.topos-settings .topos-code-input,
+.topos-settings .topos-separator-input {
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-small);
+}
+.topos-settings .topos-separator-input {
+  width: 6em;
+  text-align: center;
+}
+/* A setting that only matters when the one above it is on */
+.topos-settings .setting-item.topos-subsetting {
+  padding-inline-start: calc(var(--setting-items-padding-x, var(--size-4-4)) + var(--size-4-5));
+}
+.topos-settings .setting-item.topos-subsetting .setting-item-name::before {
+  content: "↳ ";
+  color: var(--text-faint);
+}
+.topos-settings .topos-warning-setting .setting-item-name {
+  color: var(--text-warning);
+}
+/* A setting whose control is a wide field: the field goes under its description */
+.topos-settings .topos-tall-setting {
+  flex-wrap: wrap;
+}
+.topos-settings .topos-tall-setting .setting-item-info {
+  flex: 1 1 100%;
+  margin-inline-end: 0;
+}
+.topos-settings .topos-tall-setting .setting-item-control {
+  flex: 1 1 100%;
+}
+.topos-settings .topos-tall-setting :is(textarea, input[type="text"]) {
+  width: 100%;
+}
+.topos-format-preview .setting-item-description {
+  font-size: var(--font-ui-medium);
+  padding-top: var(--size-2-3);
+}
+/* A block of settings drawn again on its own, inside a card */
+.topos-setting-block > .setting-item::before {
+  content: "";
+  position: absolute;
+  top: calc(-1 * var(--border-width));
+  left: var(--setting-items-padding-x, var(--size-4-4));
+  right: var(--setting-items-padding-x, var(--size-4-4));
+  border-top: var(--setting-items-divider-width, 1px) solid var(--background-modifier-border);
+}
+
+/* Badges beside a name: a package's abbreviation, version, kind */
+.topos-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--size-4-2);
+  border-radius: var(--pill-radius, 999px);
+  background: var(--background-modifier-hover);
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-normal);
+  line-height: 1.7;
+  white-space: nowrap;
+}
+.topos-badge.is-code {
+  font-family: var(--font-monospace);
+  color: var(--text-normal);
+  background: color-mix(in srgb, var(--interactive-accent) 16%, transparent);
+}
+.topos-badge.is-kind {
+  color: var(--text-accent);
+  background: transparent;
+  box-shadow: inset 0 0 0 var(--border-width) color-mix(in srgb, var(--interactive-accent) 45%, transparent);
+}
+.topos-badge.is-version {
+  font-variant-numeric: tabular-nums;
+}
+.setting-item-name > .topos-badge {
+  margin-inline-start: var(--size-4-2);
+}
+
+/* Lists: the search at the card's top, with a count beside it */
+.topos-list .setting-group-search {
+  flex-wrap: nowrap;
+}
+.topos-list-count {
+  flex: 0 0 auto;
+  margin-inline-end: var(--setting-items-padding-x, var(--size-4-4));
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+  font-variant-numeric: tabular-nums;
+}
+.topos-settings .topos-list-empty {
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  text-align: center;
+}
+.topos-settings .topos-list-empty.is-error {
+  color: var(--text-error);
+}
+.topos-search-field {
+  min-width: 0;
+}
+.topos-search-field input {
+  width: 100%;
+}
+.topos-remove.is-armed {
+  color: var(--text-on-accent);
+  background: var(--background-modifier-error);
+}
+.topos-remove.is-busy {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* Installed packages */
+.topos-package-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--size-2-3);
+}
+.topos-package-name {
+  margin-inline-end: var(--size-2-2);
+}
+.topos-package-title > .topos-badge {
+  margin: 0;
+}
+.topos-package-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--size-2-3);
+}
+.topos-settings .topos-package-meta code {
+  background: transparent;
+  padding: 0;
+  color: var(--text-faint);
+}
+.topos-package-meta.is-problem {
+  color: var(--text-error);
+}
+.topos-meta-icon,
+.topos-entry-add-icon {
+  display: inline-flex;
+}
+.topos-meta-icon svg {
+  width: 12px;
+  height: 12px;
+}
+.topos-dot {
+  color: var(--text-faint);
+}
+.topos-package-members {
+  margin-top: var(--size-4-2);
+  padding-inline-start: var(--size-4-3);
+  border-inline-start: 2px solid var(--background-modifier-border);
+}
+.topos-package-members-label {
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
 .topos-package-member {
-  padding-inline-start: 2em;
+  padding: var(--size-2-3) 0;
+}
+.topos-package-member .setting-item-name {
+  font-size: var(--font-ui-small);
+}
+.topos-output {
+  max-height: 16em;
+  margin: var(--size-4-2) 0 0;
+  padding: var(--size-4-2) var(--size-4-3);
+  overflow: auto;
+  border-radius: var(--radius-m);
+  background: var(--background-primary-alt);
+  font-size: var(--font-ui-smaller);
+  white-space: pre-wrap;
+}
+
+/* No Bible yet */
+.topos-settings .topos-empty-state {
+  flex-direction: column;
+  align-items: center;
+  gap: var(--size-4-2);
+  padding: var(--size-4-8) var(--size-4-4);
+  text-align: center;
+}
+.topos-empty-state-icon {
+  color: var(--text-faint);
+}
+.topos-empty-state-icon svg {
+  width: 32px;
+  height: 32px;
+}
+.topos-empty-state-title {
+  font-weight: var(--font-semibold);
+}
+.topos-empty-state-text {
+  max-width: 32em;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+/* The catalog browser: search and filters at the card's top, a row for each package */
+.topos-browser .setting-group-search > .search-input-container input {
+  height: var(--input-height);
+}
+.topos-browser-refresh {
+  margin-inline-end: var(--setting-items-padding-x, var(--size-4-4));
+}
+.topos-browser-refresh.is-spinning svg {
+  animation: topos-spin 0.8s linear infinite;
+}
+.topos-settings .topos-browser-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--size-4-2);
+  overflow: visible;
+}
+.topos-settings .setting-group-filter {
+  height: auto;
+  padding: var(--size-2-1) var(--size-4-3);
+  border-radius: var(--pill-radius, 999px);
+  box-shadow: none;
+  font-size: var(--font-ui-small);
+}
+.topos-settings .setting-group-filter:not(.is-active) {
+  background: transparent;
+  border: var(--border-width) solid var(--background-modifier-border);
+  color: var(--text-muted);
+}
+.topos-settings .setting-group-filter.is-active {
+  background: var(--interactive-accent);
+  border: var(--border-width) solid var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+.topos-settings .topos-entry:hover .topos-entry-add:not(:disabled) {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+.topos-settings .topos-package {
+  align-items: flex-start;
+}
+.topos-browser-filters .setting-group-filters {
+  margin-inline-end: 0;
+  padding-inline-end: 0;
+}
+.topos-browser-filters-end {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-3);
+}
+.topos-browser-filters-end .dropdown {
+  max-width: 16em;
+}
+.topos-browser-hide {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-2-3);
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  white-space: nowrap;
+  cursor: var(--cursor);
+}
+.topos-settings .topos-browser-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--size-4-2);
+  margin: 0;
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+}
+.topos-settings .topos-browser-status.is-error {
+  color: var(--text-error);
+}
+.topos-browser-more {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--size-4-3);
+}
+.topos-browser-more:empty {
+  display: none;
+}
+.topos-settings .topos-entry {
+  align-items: flex-start;
+  transition: background-color 0.15s ease;
+}
+.topos-settings .topos-entry:hover {
+  background-color: var(--background-modifier-hover);
+}
+.topos-entry-main {
+  cursor: var(--cursor);
+}
+.topos-entry-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--size-2-3);
+}
+.topos-entry-title > .topos-badge {
+  margin: 0;
+}
+.topos-entry-name {
+  margin-inline-end: var(--size-2-2);
+}
+.topos-entry-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-2-2) var(--size-4-3);
+}
+.topos-entry-meta-part {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-2-2);
+  min-width: 0;
+}
+.topos-entry-details {
+  display: none;
+  margin-top: var(--size-4-2);
+  padding-top: var(--size-4-2);
+  border-top: var(--border-width) dashed var(--background-modifier-border);
+  font-size: var(--font-ui-small);
+}
+.topos-entry.is-open .topos-entry-details {
+  display: block;
+}
+.topos-entry-details p {
+  margin: 0 0 var(--size-4-2);
+  color: var(--text-muted);
+}
+.topos-entry-details dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--size-2-2) var(--size-4-3);
+  margin: 0;
+}
+.topos-entry-details dt {
+  color: var(--text-faint);
+}
+.topos-entry-details dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.topos-entry-actions .topos-entry-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--size-2-3);
+  min-width: 7em;
+}
+.topos-entry-add-icon svg {
+  width: var(--icon-xs);
+  height: var(--icon-xs);
+}
+.topos-entry-actions .topos-entry-add:disabled {
+  opacity: 1;
+  cursor: default;
+}
+.topos-settings .topos-entry.is-installed .topos-entry-add {
+  color: var(--color-green);
+  background: transparent;
+  box-shadow: none;
+}
+.topos-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: topos-spin 0.8s linear infinite;
+}
+@keyframes topos-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* A row with fields and an Add button (a git URL, a registry, a catalog) */
+.topos-add-row .setting-item-info {
+  flex: 1 1 auto;
+}
+.topos-inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-4-2);
+  margin-top: var(--size-4-2);
+}
+.topos-inline-form input {
+  flex: 1 1 14em;
+  min-width: 0;
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-small);
+}
+.topos-inline-form input.is-short {
+  flex: 0 1 9em;
+}
+.topos-catalog .setting-item-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--size-2-3);
+}
+
+/* Help that opens under a setting: a template's placeholders, how to write a search */
+.topos-help {
+  margin-top: var(--size-4-2);
+  font-size: var(--font-ui-small);
+  font-weight: var(--font-normal);
+  color: var(--text-muted);
+}
+.topos-help summary {
+  width: fit-content;
+  color: var(--text-accent);
+  cursor: var(--cursor);
+}
+.topos-help p {
+  margin: var(--size-4-2) 0;
+}
+.topos-placeholder-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15em, 1fr));
+  gap: var(--size-2-3);
+}
+.topos-help .topos-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  height: auto;
+  padding: var(--size-2-3) var(--size-4-2);
+  border: var(--border-width) solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: var(--background-primary);
+  box-shadow: none;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  text-align: start;
+  white-space: normal;
+  cursor: var(--cursor);
+}
+.topos-help .topos-placeholder:hover {
+  border-color: var(--interactive-accent);
+}
+
+/* Saved searches: the name narrow, the query wide, any errors under them */
+.topos-settings .topos-saved-search {
+  flex-wrap: wrap;
+  align-items: center;
+}
+.topos-saved-search .setting-item-info {
+  order: 2;
+  flex: 1 1 100%;
+}
+.topos-saved-search .setting-item-info:has(.setting-item-description:empty) {
+  display: none;
+}
+.topos-saved-search .setting-item-control {
+  flex: 1 1 100%;
+  justify-content: flex-start;
+}
+.topos-saved-search .topos-saved-search-name {
+  flex: 0 1 10em;
+  min-width: 6em;
+}
+.topos-saved-search .topos-query-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Phones: the tabs' names under their icons, results' buttons full width */
+.is-phone .topos-tabs .topos-tab {
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--size-2-3) var(--size-4-2);
+  font-size: var(--font-ui-smaller);
+}
+.is-phone .topos-browser-filters-end {
+  flex: 1 1 100%;
+  justify-content: space-between;
+}
+.is-phone .topos-settings .topos-entry {
+  flex-wrap: wrap;
+}
+.is-phone .topos-entry-actions {
+  flex: 1 1 100%;
+}
+.is-phone .topos-entry-actions .topos-entry-add {
+  width: 100%;
 }
