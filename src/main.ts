@@ -15,7 +15,7 @@ import {
   type Workspace,
   type WorkspaceLeaf,
 } from "obsidian";
-import { around } from "file-plus-plus/obsidian";
+import { around, hoverLink } from "file-plus-plus/obsidian";
 import { FilePlusPlusPlugin, type DocumentEmbed, type DocumentView, type EmbedContext } from "file-plus-plus/obsidian";
 import type { FppSettings } from "file-plus-plus/obsidian";
 import { OffsetUnit, type BookTextOptions, type Passage, type Topos, type ToposTranslations } from "logoxide";
@@ -378,12 +378,13 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
 
   /**
    * Shows a passage's text in a hover preview (Obsidian's page preview, with the Bible's embed), from
-   * the Bible it names or the current one
+   * the Bible it names or the current one; none if the pointer left the reference while finding it,
+   * and it hides as the pointer heads away (`hoverLink`)
    */
   async previewPassage(event: MouseEvent, targetEl: HTMLElement, passage: Passage, hoverParent: HoverParent, translation?: string | null): Promise<void> {
     const file = await this.bibles.bookFile(passage, this.bibles.forText(translation));
     if (!file) return;
-    this.app.workspace.trigger("hover-link", {
+    hoverLink(this.app, {
       event,
       source: HOVER_SOURCE,
       hoverParent,
