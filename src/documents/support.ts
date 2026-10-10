@@ -1,6 +1,6 @@
 import { FPP_API_READY, FPP_API_UNLOAD, fileApis, type FileApi } from "file-plus-plus/obsidian";
 import type { TFile } from "obsidian";
-import { OffsetUnit, type Passage } from "biblix";
+import { OffsetUnit, type Passage } from "logoxide";
 import { written } from "../core/references.ts";
 import { bookStyle } from "../core/settings.ts";
 import { EPUB_PLUGIN_ID } from "../epub/api.ts";

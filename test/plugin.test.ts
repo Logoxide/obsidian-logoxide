@@ -370,7 +370,7 @@ test("the built plugin loads, indexes, and runs its commands", async (t) => {
       this.storage.set(key, value);
     },
   };
-  const manifest = { id: "topos-bible", name: "Topos Bible", dir: ".obsidian/plugins/topos-bible", version: "0.4.0" };
+  const manifest = { id: "logoxide", name: "Logoxide", dir: ".obsidian/plugins/logoxide", version: "0.4.0" };
   mkdirSync(join(vaultPath, manifest.dir), { recursive: true });
   // The JSON cache from before the index is removed, and so are packs in another format
   writeFileSync(join(vaultPath, manifest.dir, "epub-index.json"), "{}");
@@ -388,7 +388,7 @@ test("the built plugin loads, indexes, and runs its commands", async (t) => {
   assert.equal(existsSync(oldPack), false);
 
   // The Bible tab (and the plain text of USX files, from file-plus-plus), and the sidebar
-  assert.deepEqual(plugin.viewTypes, ["topos-bible", "topos-bible-source", "topos-bible-search", "topos-bible-search-pane"]);
+  assert.deepEqual(plugin.viewTypes, ["logoxide", "logoxide-source", "logoxide-search", "logoxide-search-pane"]);
   assert.deepEqual(
     plugin.refs.all().map((h: any) => `${h.path} ${h.passage.reference}`),
     ["Archive/old.md Genesis 1:1", "Sermons/a.md John 3:16", "Sermons/a.md Romans 8:28", "Sermons/b.md Psalm 23"],

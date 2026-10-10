@@ -17,7 +17,7 @@ async function loadApp() {
     entry,
     `import { act } from "react";
      import { createRoot } from "react-dom/client";
-     import { Topos } from "biblix";
+     import { Topos } from "logoxide";
      import { PaneApp } from ${src("view/PaneApp.tsx")};
      import { ErrorBoundary } from ${src("view/ErrorBoundary.tsx")};
      import { SearchStore } from ${src("view/store.ts")};
@@ -60,7 +60,7 @@ async function loadApp() {
     format: "esm",
     platform: "node",
     jsx: "automatic",
-    external: ["obsidian", "biblix", "react", "react-dom"],
+    external: ["obsidian", "logoxide", "react", "react-dom"],
     nodePaths: [new URL("../node_modules", import.meta.url).pathname],
     outfile,
     logLevel: "silent",
@@ -180,7 +180,7 @@ test("in the search tab, Collapse all also collapses groups that appear later", 
     entry,
     `import { act } from "react";
      import { createRoot } from "react-dom/client";
-     import { Topos } from "biblix";
+     import { Topos } from "logoxide";
      import { PaneApp } from ${src("view/PaneApp.tsx")};
      import { SearchStore } from ${src("view/store.ts")};
      import { ReferenceIndex } from ${src("core/index.ts")};
@@ -216,7 +216,7 @@ test("in the search tab, Collapse all also collapses groups that appear later", 
     format: "esm",
     platform: "node",
     jsx: "automatic",
-    external: ["obsidian", "biblix", "react", "react-dom"],
+    external: ["obsidian", "logoxide", "react", "react-dom"],
     nodePaths: [new URL("../node_modules", import.meta.url).pathname],
     outfile,
     logLevel: "silent",

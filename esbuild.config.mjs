@@ -32,11 +32,11 @@ const filePlusPlus = {
     });
   },
 };
-const pkg = fileURLToPath(new URL("./node_modules/biblix/", import.meta.url));
+const pkg = fileURLToPath(new URL("./node_modules/logoxide/", import.meta.url));
 
 const alias = {
-  "biblix": `${pkg}biblix.js`,
-  "biblix-wasm": `${pkg}biblix_bg.wasm`,
+  "logoxide": `${pkg}logoxide.js`,
+  "logoxide-wasm": `${pkg}logoxide_bg.wasm`,
 };
 
 /**

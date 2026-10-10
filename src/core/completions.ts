@@ -1,4 +1,4 @@
-import { CompletionKind, OffsetUnit, type BookStyle, type Completion, type Topos, type ToposTranslations } from "biblix";
+import { CompletionKind, OffsetUnit, type BookStyle, type Completion, type Topos, type ToposTranslations } from "logoxide";
 import { DEFAULT_FORMAT, withFormat, type FormatSettings } from "./format.ts";
 
 export type BookCompletion = "off" | "capitalized" | "always";

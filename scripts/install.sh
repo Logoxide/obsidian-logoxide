@@ -4,7 +4,7 @@ set -euo pipefail
 vault="${1:?usage: scripts/install.sh <vault folder>}"
 cd "$(dirname "$0")/.."
 npm run build
-target="$vault/.obsidian/plugins/topos-bible"
+target="$vault/.obsidian/plugins/logoxide"
 mkdir -p "$target"
 cp dist/main.js dist/manifest.json dist/styles.css "$target/"
-echo "Installed to $target; enable \"Topos Bible\" under Settings → Community plugins"
+echo "Installed to $target; enable \"Logoxide\" under Settings → Community plugins"

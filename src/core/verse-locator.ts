@@ -1,4 +1,4 @@
-import type { Passage, PassageSegment } from "biblix";
+import type { Passage, PassageSegment } from "logoxide";
 
 /**
  * Places in a Bible book, as link subpaths: `v=3:16`, `v=3:16-18`, `v=3:16-4:2`, a chapter `v=3`,
@@ -21,7 +21,7 @@ const PART = /^(\d+)(?::(\d+))?(?:-(\d+)(?::(\d+))?)?$/;
 
 /**
  * What a link to a package's Bible was made with: the package's version, and the hash of its
- * first verse's words (8 hex digits of biblix's verse hash). `v=3:16&ver=1.0.2&vh=9f86d081`: when
+ * first verse's words (8 hex digits of logoxide's verse hash). `v=3:16&ver=1.0.2&vh=9f86d081`: when
  * the installed version has other words at 3:16, the link finds them where they are now
  */
 export interface Edition {

@@ -1,26 +1,26 @@
 import { Notice, TFile, TFolder } from "obsidian";
-import { Biblix, PackageKind, type BiblixPackage, type LockedEntry, type MediaFile, type PackageFile, type Passage, type ToposBook, type ToposTranslations } from "biblix";
+import { Logoxide, PackageKind, type LogoxidePackage, type LockedEntry, type MediaFile, type PackageFile, type Passage, type ToposBook, type ToposTranslations } from "logoxide";
 import { RESERVED, STUB_EXTENSION, parseStub, staleStubs, stubNames, stubPath, stubText } from "../core/stubs.ts";
 import type ToposPlugin from "../main.ts";
 import type { Timing } from "../core/timings.ts";
 import type { BookEdition } from "./reader.ts";
 
 /** The vault's manifest: at its root, else in the library's folder */
-export const MANIFEST = "biblix.toml";
-export const LOCK = "biblix.lock";
+export const MANIFEST = "logoxide.toml";
+export const LOCK = "logoxide.lock";
 
 /** How many parsed books each package keeps */
 const BOOKS_KEPT = 3;
 
-/** A Bible from a biblix package */
+/** A Bible from a logoxide package */
 interface PackageBible {
   id: string;
-  /** What the vault's `biblix.toml` calls it (its id, or a fork's own name) */
+  /** What the vault's `logoxide.toml` calls it (its id, or a fork's own name) */
   dependency: string;
   /** What references name it by (`BSB`) */
   name: string;
   aliases: string[];
-  pkg: BiblixPackage;
+  pkg: LogoxidePackage;
   /** Books read last */
   books: Map<number, ToposBook>;
   /** The package's folder, from the vault's root */
@@ -49,10 +49,10 @@ export interface Recording {
 /** A package the vault's lock file names, for the settings */
 export interface InstalledPackage {
   id: string;
-  /** What the vault's biblix.toml calls it (its id, or a fork's own name) */
+  /** What the vault's logoxide.toml calls it (its id, or a fork's own name) */
   name: string;
   version: string;
-  /** The package biblix.toml asks for that brings it in (a collection), when it doesn't ask for this one itself */
+  /** The package logoxide.toml asks for that brings it in (a collection), when it doesn't ask for this one itself */
   dependencyOf: string | null;
   /** Its folder, from the vault's root */
   dir: string;
@@ -61,7 +61,7 @@ export interface InstalledPackage {
   /** What it is, once read (else why it couldn't be) */
   info: { name: string; abbreviation: string; license: string | null; kind: PackageKind } | null;
   problem: string | null;
-  /** Whether it's in use: `enabled = false` in biblix.toml turns it (and what it brings in) off, keeping it installed */
+  /** Whether it's in use: `enabled = false` in logoxide.toml turns it (and what it brings in) off, keeping it installed */
   enabled: boolean;
 }
 
@@ -77,13 +77,13 @@ interface PackageBook {
 /** A copy of a book package's file in the packages folder, as recorded */
 interface Copy {
   path: string;
-  /** The package (as biblix.toml calls it) and its file, when recorded (older records have neither) */
+  /** The package (as logoxide.toml calls it) and its file, when recorded (older records have neither) */
   package?: string;
   file?: string;
 }
 
 /** Where the copies of book packages' EPUBs are recorded (in the plugin's folder), so only those are ever removed */
-const COPIES = "biblix-copies.json";
+const COPIES = "logoxide-copies.json";
 
 /** A package Bible's book files in the vault, for the reader */
 export interface PackageFiles {
@@ -93,17 +93,17 @@ export interface PackageFiles {
 }
 
 /**
- * The Bibles and books a vault's `biblix.toml` asks for (and those its collections bring in), as
- * its `biblix.lock` pins them, read with biblix from the library (`.biblix/` by default: hidden and
+ * The Bibles and books a vault's `logoxide.toml` asks for (and those its collections bring in), as
+ * its `logoxide.lock` pins them, read with logoxide from the library (`.logoxide/` by default: hidden and
  * not synced, so each device installs what the lock pins) or a path package's folder. They show in
- * the packages folder (`Biblix/` by default, with the vault's `biblix.toml`): a stub for each Bible
+ * the packages folder (`Logoxide/` by default, with the vault's `logoxide.toml`): a stub for each Bible
  * book, which the reader opens, and a copy of each book package's EPUBs, which EPUB++ opens and
  * verse search reads. Bibles give the translations references can name, with their own verse
  * counts. Their parsed cache is kept in the plugin's folder.
  *
- * `bx install` (with `BIBLIX_HOME` set to the library, in the packages folder) installs them too.
+ * `lx install` (with `LOGOXIDE_HOME` set to the library, in the packages folder) installs them too.
  */
-export class BiblixBibles {
+export class LogoxideBibles {
   private bibles: PackageBible[] = [];
   private books: PackageBook[] = [];
   /** The EPUB copies in the packages folder, as last written */
@@ -117,7 +117,7 @@ export class BiblixBibles {
   installed: InstalledPackage[] = [];
   /** Packages whose own files changed since the lock was written (edited in the library): restore them */
   changedPackages: string[] = [];
-  /** The folder of the vault's biblix.toml ("" for its root), as last read */
+  /** The folder of the vault's logoxide.toml ("" for its root), as last read */
   base = "";
   private loading: Promise<void> | null = null;
 
@@ -127,14 +127,14 @@ export class BiblixBibles {
     private readonly changed: () => void,
   ) {}
 
-  /** The library's folder in the vault: installed packages (the setting; `.biblix` by default) */
+  /** The library's folder in the vault: installed packages (the setting; `.logoxide` by default) */
   libraryDir(): string {
-    return this.plugin.settings.biblixLibrary.trim().replace(/^\/+|\/+$/g, "") || ".biblix";
+    return this.plugin.settings.logoxideLibrary.trim().replace(/^\/+|\/+$/g, "") || ".logoxide";
   }
 
-  /** The packages folder: biblix.toml, imports, stubs, and EPUB copies (the setting; `Biblix` by default) */
+  /** The packages folder: logoxide.toml, imports, stubs, and EPUB copies (the setting; `Logoxide` by default) */
   booksDir(): string {
-    return this.plugin.settings.biblixBooks.trim().replace(/^\/+|\/+$/g, "") || "Biblix";
+    return this.plugin.settings.logoxideBooks.trim().replace(/^\/+|\/+$/g, "") || "Logoxide";
   }
 
   /**
@@ -152,7 +152,7 @@ export class BiblixBibles {
 
   private cacheDir(): string | null {
     const dir = this.plugin.manifest?.dir;
-    return dir ? `${dir}/biblix-cache` : null;
+    return dir ? `${dir}/logoxide-cache` : null;
   }
 
   /** The names of the Bibles read */
@@ -171,7 +171,7 @@ export class BiblixBibles {
     try {
       await this.moveOldLibrary();
     } catch (error) {
-      console.warn("Topos Bible: moving the installed packages into the library", error);
+      console.warn("Logoxide: moving the installed packages into the library", error);
     }
     const base = (await adapter.exists(MANIFEST)) ? "" : this.booksDir();
     const at = (name: string) => (base ? `${base}/${name}` : name);
@@ -185,22 +185,22 @@ export class BiblixBibles {
     let missing = false;
     if (await adapter.exists(at(MANIFEST))) {
       await this.plugin.engine();
-      const biblix = Biblix.new();
+      const logoxide = Logoxide.new();
       try {
         lock = (await adapter.exists(at(LOCK))) ? await adapter.read(at(LOCK)) : null;
-        const project = biblix.parseProject(await adapter.read(at(MANIFEST)), lock);
-        for (const name of project.unlocked()) problems.push(`${name}: not installed yet (run bx install)`);
-        // What each package biblix.toml asks for is, so a collection's packages count as the vault's
+        const project = logoxide.parseProject(await adapter.read(at(MANIFEST)), lock);
+        for (const name of project.unlocked()) problems.push(`${name}: not installed yet (run lx install)`);
+        // What each package logoxide.toml asks for is, so a collection's packages count as the vault's
         const kinds = new Map<string, PackageKind>();
         for (const entry of project.packages()) {
           const dir = this.dirOf(entry, base);
           const listed: InstalledPackage = { id: entry.id, name: entry.name, version: entry.version, dependencyOf: entry.dependencyOf, dir, path: entry.location.tag === "Path", info: null, problem: null, enabled: entry.enabled };
           installed.push(listed);
-          // Turned off: named from its biblix.toml alone, and not read (its Bible, books, and stubs leave the vault until it's on)
+          // Turned off: named from its logoxide.toml alone, and not read (its Bible, books, and stubs leave the vault until it's on)
           if (!entry.enabled) {
             if (await adapter.exists(`${dir}/${MANIFEST}`)) {
               try {
-                const info = biblix.packageInfo(await adapter.read(`${dir}/${MANIFEST}`));
+                const info = logoxide.packageInfo(await adapter.read(`${dir}/${MANIFEST}`));
                 listed.info = { name: info.name, abbreviation: info.abbreviation, license: info.license ?? info.licenseFile ?? null, kind: info.kind };
                 if (entry.dependencyOf === null) kinds.set(entry.name, info.kind);
               } catch {
@@ -216,7 +216,7 @@ export class BiblixBibles {
               missing = true;
               throw new Error(`not installed in ${dir} yet`);
             }
-            const opened = await this.open(biblix, entry, base, problems, changed);
+            const opened = await this.open(logoxide, entry, base, problems, changed);
             listed.info = opened.info;
             if (entry.dependencyOf === null) kinds.set(entry.name, opened.info.kind);
             if (opened.bible && ours) bibles.push(opened.bible);
@@ -243,7 +243,7 @@ export class BiblixBibles {
     this.base = base;
     // Said once each time the set of edited packages changes
     if (changed.length > 0 && changed.join() !== this.changedPackages.join()) {
-      new Notice(`Topos Bible: the files of ${changed.join(", ")} were edited in the library. Run "Restore edited Bible packages" to put them back (notes beside them stay).`, 15000);
+      new Notice(`Logoxide: the files of ${changed.join(", ")} were edited in the library. Run "Restore edited Bible packages" to put them back (notes beside them stay).`, 15000);
     }
     this.changedPackages = changed;
     try {
@@ -256,18 +256,18 @@ export class BiblixBibles {
     } catch (error) {
       problems.push(`books: ${message(error)}`);
     }
-    if (problems.length > 0) console.warn("Topos Bible: biblix packages", problems);
+    if (problems.length > 0) console.warn("Logoxide: logoxide packages", problems);
     this.changed();
     // A device the lock was synced to installs what it pins (once for each lock file)
     if (missing && lock !== null && lock !== this.installedFrom) {
       this.installedFrom = lock;
       void this.plugin.bibleManager.installLocked().catch((error: unknown) => {
-        new Notice(`Topos Bible: couldn't install the vault's Bible packages: ${message(error)}`, 10000);
+        new Notice(`Logoxide: couldn't install the vault's Bible packages: ${message(error)}`, 10000);
       });
     }
   }
 
-  /** Whether a package biblix.toml asks for is on (`enabled = false` turns one off without removing it) */
+  /** Whether a package logoxide.toml asks for is on (`enabled = false` turns one off without removing it) */
   isEnabled(name: string): boolean {
     return this.installed.find((p) => p.name === name && p.dependencyOf === null)?.enabled ?? true;
   }
@@ -289,7 +289,7 @@ export class BiblixBibles {
 
   /** A locked package: what it is, and its Bible or its books */
   private async open(
-    biblix: Biblix,
+    logoxide: Logoxide,
     entry: LockedEntry,
     base: string,
     problems: string[],
@@ -301,9 +301,9 @@ export class BiblixBibles {
     const cacheDir = this.cacheDir();
     // The cache is per package (`<id>/<version>-<checksum>/`)
     const cache = cacheDir && (await adapter.exists(`${cacheDir}/${entry.id}`)) ? await readTree(this.plugin, `${cacheDir}/${entry.id}`, `${entry.id}/`) : [];
-    const pkg = biblix.openPackage(files, entry.features, cache);
+    const pkg = logoxide.openPackage(files, entry.features, cache);
     if (entry.checksum && pkg.checksum() !== entry.checksum) {
-      problems.push(`${entry.id} ${entry.version}: its files changed since biblix.lock was written (Restore puts them back)`);
+      problems.push(`${entry.id} ${entry.version}: its files changed since logoxide.lock was written (Restore puts them back)`);
       changed.push(entry.name);
     }
     await this.saveCache(pkg);
@@ -315,14 +315,14 @@ export class BiblixBibles {
       pkg.dispose();
       return { info: summary, bible: null, book: files.length > 0 ? { dependency: entry.name, dir, files } : null };
     }
-    // The vault's own names for it, when its biblix.toml gives them (a fork's)
+    // The vault's own names for it, when its logoxide.toml gives them (a fork's)
     const name = entry.abbreviation ?? info.abbreviation;
     const aliases = entry.aliases ?? info.aliases;
     return { info: summary, bible: { id: info.id, dependency: entry.name, name, aliases, pkg, books: new Map(), dir, stubs: new Map(), stubFiles: new Map(), version: entry.version, hashes: new Map(), recordings: new Map() }, book: null };
   }
 
   /** Writes what a package's cache wrote into the plugin's folder */
-  private async saveCache(pkg: BiblixPackage): Promise<void> {
+  private async saveCache(pkg: LogoxidePackage): Promise<void> {
     const cacheDir = this.cacheDir();
     const writes = pkg.cacheWrites();
     if (!cacheDir) return;
@@ -354,7 +354,7 @@ export class BiblixBibles {
   }
 
   /**
-   * Each package Bible's books, as their stubs (`Biblix/bsb/usx/JHN.bible`): the reader, hover, and
+   * Each package Bible's books, as their stubs (`Logoxide/bsb/usx/JHN.bible`): the reader, hover, and
    * embeds open those, so links and annotations point at a path no update moves
    */
   files(): PackageFiles[] {
@@ -371,7 +371,7 @@ export class BiblixBibles {
   }
 
   /**
-   * Copies each book package's EPUBs into the packages folder (`Biblix/<package>/epub/book.epub`),
+   * Copies each book package's EPUBs into the packages folder (`Logoxide/<package>/epub/book.epub`),
    * where EPUB++ opens them and verse search reads them; a copy that differs from the package (an
    * update, or an edit) is written again, so links and highlights keep their path. Copies of books
    * the vault no longer has are removed: only files this wrote, never others
@@ -385,7 +385,7 @@ export class BiblixBibles {
     const saved = record && (await adapter.exists(record)) ? (JSON.parse(await adapter.read(record)) as (string | Copy)[]) : [];
     const written = new Map<string, Copy>(saved.map((c) => (typeof c === "string" ? [c, { path: c }] : [c.path, c])));
     const books = this.books.filter((b) => !RESERVED.includes(b.dependency));
-    // Each copy's path: its title in its package's folder (`Biblix/tdp/The Dorean Principle.epub`)
+    // Each copy's path: its title in its package's folder (`Logoxide/tdp/The Dorean Principle.epub`)
     const copies = books.flatMap((book) => {
       const names = stubNames(book.files);
       return book.files.map((file) => {
@@ -584,7 +584,7 @@ export class BiblixBibles {
   }
 
   /**
-   * A stub's book read by biblix, for files the reader can't parse itself (OSIS, ThML, and files of
+   * A stub's book read by logoxide, for files the reader can't parse itself (OSIS, ThML, and files of
    * several books); a new book each time, which the reader disposes
    */
   async stubBook(stub: TFile, code: string | null): Promise<ToposBook | null> {
@@ -657,7 +657,7 @@ export class BiblixBibles {
         found = { file, bible: bible.name, timings: timings.map((t) => ({ chapter: t.chapter, verse: t.verse, last: t.last, startMs: t.startMs, endMs: t.endMs })) };
         break;
       } catch (error) {
-        console.warn(`Topos Bible: ${bible.name}'s timings for ${file.path}`, error);
+        console.warn(`Logoxide: ${bible.name}'s timings for ${file.path}`, error);
       }
     }
     bible.recordings.set(bookId, found);

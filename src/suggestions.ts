@@ -1,5 +1,5 @@
 import { setIcon } from "obsidian";
-import { BookStyle, CompletionKind, type Passage } from "biblix";
+import { BookStyle, CompletionKind, type Passage } from "logoxide";
 import type { Hit } from "./core/search.ts";
 import type ToposPlugin from "./main.ts";
 

@@ -1,6 +1,6 @@
 import { TFile } from "obsidian";
 import { PROVIDER_ID, referenceProvider } from "../documents/provider.ts";
-import type { EpubReference } from "biblix";
+import type { EpubReference } from "logoxide";
 import { bookHits, epubReferences, sectionKey } from "../core/epub.ts";
 import { written } from "../core/references.ts";
 import type { Hit } from "../core/search.ts";

@@ -1,7 +1,7 @@
 import { END, type VersePart } from "./verse-locator.ts";
 
 /**
- * Where each verse is in a recording, as a package's WebVTT timings give them (biblix's
+ * Where each verse is in a recording, as a package's WebVTT timings give them (logoxide's
  * `VerseTiming`: a cue per verse, `JHN 3:16`, or per bridge, `JHN 3:17-18`), in the recording's order
  */
 export interface Timing {

@@ -1,5 +1,5 @@
 import { App, Editor, SuggestModal, setIcon } from "obsidian";
-import { CompletionKind, type Completion } from "biblix";
+import { CompletionKind, type Completion } from "logoxide";
 import { applyCompletion, completionsBefore } from "./core/completions.ts";
 import { written } from "./core/format.ts";
 import { NO_FILTERS } from "./core/filters.ts";

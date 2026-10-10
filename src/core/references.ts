@@ -1,4 +1,4 @@
-import { OffsetUnit, type BookStyle, type Match, type Topos } from "biblix";
+import { OffsetUnit, type BookStyle, type Match, type Topos } from "logoxide";
 import { DEFAULT_FORMAT, written, type FormatSettings } from "./format.ts";
 
 export { written };

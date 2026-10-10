@@ -1,5 +1,5 @@
 import { requestUrl } from "obsidian";
-import { Biblix, ChangeKind, type BiblixCatalog, type BiblixInstaller, type BiblixProject, type CatalogEntry, type FetchRequest, type InstallStep, type PackageFile, type PackageLocation, type UpdateMode } from "biblix";
+import { Logoxide, ChangeKind, type LogoxideCatalog, type LogoxideInstaller, type LogoxideProject, type CatalogEntry, type FetchRequest, type InstallStep, type PackageFile, type PackageLocation, type UpdateMode } from "logoxide";
 import type ToposPlugin from "../main.ts";
 import { LOCK, MANIFEST, buffer, join, message, mkdirs, readTree } from "./packages.ts";
 
@@ -7,13 +7,13 @@ import { LOCK, MANIFEST, buffer, join, message, mkdirs, readTree } from "./packa
 const CATALOG_KEPT_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Adding, installing, and removing biblix packages, with Obsidian doing the I/O: downloads through
+ * Adding, installing, and removing logoxide packages, with Obsidian doing the I/O: downloads through
  * `requestUrl` (which works on mobile and isn't held to CORS), files through the vault's adapter.
- * biblix resolves exactly as `bx install` does, so the vault's `biblix.lock` works with `bx` too.
+ * logoxide resolves exactly as `lx install` does, so the vault's `logoxide.lock` works with `lx` too.
  */
 export class BibleManager {
-  private catalog: BiblixCatalog | null = null;
-  private catalogLoading: Promise<BiblixCatalog> | null = null;
+  private catalog: LogoxideCatalog | null = null;
+  private catalogLoading: Promise<LogoxideCatalog> | null = null;
 
   constructor(private readonly plugin: ToposPlugin) {}
 
@@ -21,39 +21,39 @@ export class BibleManager {
     return this.plugin.app.vault.adapter;
   }
 
-  /** Where the vault's biblix.toml is: at its root if it has one there, else in the packages folder */
+  /** Where the vault's logoxide.toml is: at its root if it has one there, else in the packages folder */
   private async base(): Promise<string> {
     return (await this.adapter.exists(MANIFEST)) ? "" : this.plugin.packages.booksDir();
   }
 
-  private async project(biblix: Biblix): Promise<{ project: BiblixProject; base: string }> {
+  private async project(logoxide: Logoxide): Promise<{ project: LogoxideProject; base: string }> {
     const base = await this.base();
     const at = (name: string) => join(base, name);
     const manifest = (await this.adapter.exists(at(MANIFEST))) ? await this.adapter.read(at(MANIFEST)) : null;
     const lock = (await this.adapter.exists(at(LOCK))) ? await this.adapter.read(at(LOCK)) : null;
-    return { project: biblix.parseProject(manifest, lock), base };
+    return { project: logoxide.parseProject(manifest, lock), base };
   }
 
   /** Every catalog the vault searches (its own, then the defaults: eBible.org's, fetch.bible's, CCEL's, CrossWire's), downloaded at most once a day */
-  async catalogs(): Promise<BiblixCatalog> {
+  async catalogs(): Promise<LogoxideCatalog> {
     if (this.catalog) return this.catalog;
     this.catalogLoading ??= this.loadCatalogs().finally(() => (this.catalogLoading = null));
     return this.catalogLoading;
   }
 
-  private async loadCatalogs(): Promise<BiblixCatalog> {
+  private async loadCatalogs(): Promise<LogoxideCatalog> {
     await this.plugin.engine();
-    const biblix = Biblix.new();
-    const { project, base } = await this.project(biblix);
-    let merged: BiblixCatalog | null = null;
+    const logoxide = Logoxide.new();
+    const { project, base } = await this.project(logoxide);
+    let merged: LogoxideCatalog | null = null;
     const failed: string[] = [];
-    // The vault's registries first (catalogs; a folder of repositories is only for bx), then its catalogs
+    // The vault's registries first (catalogs; a folder of repositories is only for lx), then its catalogs
     const registries = project.registries().map((r) => r.location);
     for (const location of [...registries, ...project.catalogs()]) {
       try {
-        const catalog = biblix.parseCatalogBytes(location, await this.catalogBytes(location, base));
+        const catalog = logoxide.parseCatalogBytes(location, await this.catalogBytes(location, base));
         if (merged) {
-          const next: BiblixCatalog = merged.merge(catalog);
+          const next: LogoxideCatalog = merged.merge(catalog);
           merged.dispose();
           catalog.dispose();
           merged = next;
@@ -64,7 +64,7 @@ export class BibleManager {
     }
     project.dispose();
     if (!merged) throw new Error(failed.join("\n") || "no catalogs");
-    if (failed.length > 0) console.warn("Topos Bible: catalogs", failed);
+    if (failed.length > 0) console.warn("Logoxide: catalogs", failed);
     this.catalog = merged;
     return merged;
   }
@@ -97,18 +97,18 @@ export class BibleManager {
   /** The catalogs searched, in order, and whether each is one of the defaults (eBible.org's, fetch.bible's, CCEL's, CrossWire's) */
   async catalogList(): Promise<{ location: string; isDefault: boolean }[]> {
     await this.plugin.engine();
-    const { project } = await this.project(Biblix.new());
+    const { project } = await this.project(Logoxide.new());
     const list = project.catalogs().map((location) => ({ location, isDefault: project.isDefaultCatalog(location) }));
     project.dispose();
     return list;
   }
 
-  /** Searches a catalog too (a URL, or a path relative to biblix.toml), after reading it to check it; how many packages it lists */
+  /** Searches a catalog too (a URL, or a path relative to logoxide.toml), after reading it to check it; how many packages it lists */
   async addCatalog(location: string): Promise<number> {
     await this.plugin.engine();
-    const biblix = Biblix.new();
-    const { project, base } = await this.project(biblix);
-    const catalog = biblix.parseCatalogBytes(location, await this.catalogBytes(location, base));
+    const logoxide = Logoxide.new();
+    const { project, base } = await this.project(logoxide);
+    const catalog = logoxide.parseCatalogBytes(location, await this.catalogBytes(location, base));
     const count = catalog.count();
     catalog.dispose();
     const added = project.addCatalog(location);
@@ -120,7 +120,7 @@ export class BibleManager {
   /** The vault's registries, by name */
   async registryList(): Promise<{ name: string; location: string }[]> {
     await this.plugin.engine();
-    const { project } = await this.project(Biblix.new());
+    const { project } = await this.project(Logoxide.new());
     const list = project.registries().map((r) => ({ name: r.name, location: r.location }));
     project.dispose();
     return list;
@@ -129,9 +129,9 @@ export class BibleManager {
   /** Names a registry (a catalog's URL, or a file in the vault), after reading it to check it; how many packages it lists */
   async addRegistry(name: string, location: string): Promise<number> {
     await this.plugin.engine();
-    const biblix = Biblix.new();
-    const { project, base } = await this.project(biblix);
-    const catalog = biblix.parseCatalogBytes(location, await this.catalogBytes(location, base));
+    const logoxide = Logoxide.new();
+    const { project, base } = await this.project(logoxide);
+    const catalog = logoxide.parseCatalogBytes(location, await this.catalogBytes(location, base));
     const count = catalog.count();
     catalog.dispose();
     const added = project.addRegistry(name, location);
@@ -142,7 +142,7 @@ export class BibleManager {
 
   async removeRegistry(name: string): Promise<void> {
     await this.plugin.engine();
-    const { project, base } = await this.project(Biblix.new());
+    const { project, base } = await this.project(Logoxide.new());
     const removed = project.removeRegistry(name);
     project.dispose();
     await this.saveManifest(removed, base);
@@ -151,13 +151,13 @@ export class BibleManager {
   /** Stops searching a catalog (removing a default one turns the defaults off, keeping the other) */
   async removeCatalog(location: string): Promise<void> {
     await this.plugin.engine();
-    const { project, base } = await this.project(Biblix.new());
+    const { project, base } = await this.project(Logoxide.new());
     const removed = project.removeCatalog(location);
     project.dispose();
     await this.saveManifest(removed, base);
   }
 
-  private async saveManifest(project: BiblixProject, base: string): Promise<void> {
+  private async saveManifest(project: LogoxideProject, base: string): Promise<void> {
     await mkdirs(this.plugin, base);
     await this.adapter.write(join(base, MANIFEST), project.manifestText());
     project.dispose();
@@ -171,16 +171,16 @@ export class BibleManager {
   }
 
   /** Answers what an installer asks for: downloads, or files in the vault */
-  private async answer(installer: BiblixInstaller, request: FetchRequest, base: string): Promise<void> {
+  private async answer(installer: LogoxideInstaller, request: FetchRequest, base: string): Promise<void> {
     // A registry's catalog or a release's archive: from the web, or a file in the vault
     if (request.tag === "Download") {
-      if (/^(\/|file:\/\/)/.test(request.url)) throw new Error(`${request.url} is a file outside the vault: use bx for it, or a registry on the web`);
+      if (/^(\/|file:\/\/)/.test(request.url)) throw new Error(`${request.url} is a file outside the vault: use lx for it, or a registry on the web`);
       const bytes = /^https?:\/\//.test(request.url) ? await download(request.url) : await this.adapter.readBinary(join(base, request.url));
       installer.provideDownload(request.url, new Uint8Array(bytes));
       return;
     }
     if (request.tag !== "Files" && !/^https?:\/\//.test(request.repository)) {
-      throw new Error(`${request.repository} isn't on the web: use bx for it (bx install, bx update, or bx install --repair to restore it)`);
+      throw new Error(`${request.repository} isn't on the web: use lx for it (lx install, lx update, or lx install --repair to restore it)`);
     }
     if (request.tag === "Refs") {
       installer.provideRefs(request.repository, new Uint8Array(await download(request.url)));
@@ -207,7 +207,7 @@ export class BibleManager {
   }
 
   /** Installs the project's packages, then saves its manifest and lock file and reads the packages again; the lock's text */
-  private async install(biblix: Biblix, project: BiblixProject, base: string, installer = biblix.installer(), update: UpdateMode = { tag: "Nothing" }): Promise<string> {
+  private async install(logoxide: Logoxide, project: LogoxideProject, base: string, installer = logoxide.installer(), update: UpdateMode = { tag: "Nothing" }): Promise<string> {
     let step: InstallStep = installer.install(project, update);
     while (step.tag === "Fetch") {
       await this.answer(installer, step.request, base);
@@ -230,9 +230,9 @@ export class BibleManager {
   /** Adds a git repository's package (its newest release) and installs it; its id */
   async addGit(url: string): Promise<string> {
     await this.plugin.engine();
-    const biblix = Biblix.new();
-    const { project, base } = await this.project(biblix);
-    const installer = biblix.installer();
+    const logoxide = Logoxide.new();
+    const { project, base } = await this.project(logoxide);
+    const installer = logoxide.installer();
     let step = installer.inspect(url, null, null, null);
     while (step.tag === "Fetch") {
       await this.answer(installer, step.request, base);
@@ -242,20 +242,20 @@ export class BibleManager {
     const added = project.addDependency(info.id, { git: url, registry: null, path: null, version: info.version, tag: null, branch: null, rev: null, features: [], defaultFeatures: true, packageId: null, abbreviation: null, aliases: null });
     project.dispose();
     // The same installer: it has the archive already
-    await this.install(biblix, added, base, installer);
+    await this.install(logoxide, added, base, installer);
     added.dispose();
     return info.abbreviation;
   }
 
-  /** Adds a registry's package (its newest release, as `bx add` would) and installs it; its abbreviation */
+  /** Adds a registry's package (its newest release, as `lx add` would) and installs it; its abbreviation */
   private async addRelease(entry: CatalogEntry, catalog: string): Promise<string> {
     await this.plugin.engine();
-    const biblix = Biblix.new();
-    const { project, base } = await this.project(biblix);
+    const logoxide = Logoxide.new();
+    const { project, base } = await this.project(logoxide);
     const newest = entry.releases.at(-1)?.version ?? null;
     const added = project.addDependency(entry.id, { git: null, registry: catalog, path: null, version: newest, tag: null, branch: null, rev: null, features: [], defaultFeatures: true, packageId: null, abbreviation: null, aliases: null });
     project.dispose();
-    await this.install(biblix, added, base);
+    await this.install(logoxide, added, base);
     added.dispose();
     return entry.abbreviation;
   }
@@ -265,12 +265,12 @@ export class BibleManager {
     if (entry.source.tag === "Git") return this.addGit(entry.source.url);
     if (entry.source.tag === "Registry") return this.addRelease(entry, entry.source.catalog);
     await this.plugin.engine();
-    const biblix = Biblix.new();
-    const { project, base } = await this.project(biblix);
+    const logoxide = Logoxide.new();
+    const { project, base } = await this.project(logoxide);
     const relative = `imports/${entry.id}`;
     const dir = join(base, relative);
     if (await this.adapter.exists(dir)) throw new Error(`${dir} already exists`);
-    const files = await importFiles(biblix, entry);
+    const files = await importFiles(logoxide, entry);
     for (const file of files) {
       const path = `${dir}/${file.path}`;
       await mkdirs(this.plugin, path.slice(0, path.lastIndexOf("/")));
@@ -278,7 +278,7 @@ export class BibleManager {
     }
     const added = project.addDependency(entry.id, { git: null, registry: null, path: relative, version: null, tag: null, branch: null, rev: null, features: [], defaultFeatures: true, packageId: null, abbreviation: null, aliases: null });
     project.dispose();
-    await this.install(biblix, added, base);
+    await this.install(logoxide, added, base);
     added.dispose();
     return entry.abbreviation;
   }
@@ -290,33 +290,33 @@ export class BibleManager {
   async restore(): Promise<string[]> {
     await this.plugin.engine();
     const changed = [...this.plugin.packages.changedPackages];
-    const biblix = Biblix.new();
-    const { project, base } = await this.project(biblix);
-    await this.install(biblix, project, base, biblix.installer(), { tag: "Repair" });
+    const logoxide = Logoxide.new();
+    const { project, base } = await this.project(logoxide);
+    await this.install(logoxide, project, base, logoxide.installer(), { tag: "Repair" });
     project.dispose();
     return changed;
   }
 
   /**
-   * Installs what the vault's biblix.lock pins and this device's library doesn't have (the lock
+   * Installs what the vault's logoxide.lock pins and this device's library doesn't have (the lock
    * synced from another device), exactly as locked
    */
   async installLocked(): Promise<void> {
     await this.plugin.engine();
-    const biblix = Biblix.new();
-    const { project, base } = await this.project(biblix);
-    await this.install(biblix, project, base);
+    const logoxide = Logoxide.new();
+    const { project, base } = await this.project(logoxide);
+    await this.install(logoxide, project, base);
     project.dispose();
   }
 
-  /** Moves every git package to the newest release its requirement allows (like `bx update`); what changed */
+  /** Moves every git package to the newest release its requirement allows (like `lx update`); what changed */
   async update(): Promise<string[]> {
     await this.plugin.engine();
-    const biblix = Biblix.new();
-    const { project, base } = await this.project(biblix);
+    const logoxide = Logoxide.new();
+    const { project, base } = await this.project(logoxide);
     const before = new Map(project.packages().map((p) => [p.id, p.version]));
-    const lock = await this.install(biblix, project, base, biblix.installer(), { tag: "All" });
-    const after = biblix.parseProject(project.manifestText(), lock);
+    const lock = await this.install(logoxide, project, base, logoxide.installer(), { tag: "All" });
+    const after = logoxide.parseProject(project.manifestText(), lock);
     const changed = after
       .packages()
       .filter((p) => before.get(p.id) !== p.version)
@@ -328,14 +328,14 @@ export class BibleManager {
 
   /**
    * Makes each import (`imports/<id>/`) again from its publisher's download, like
-   * `bx import --update`, and replaces those that changed (unless only checking), then locks them
+   * `lx import --update`, and replaces those that changed (unless only checking), then locks them
    * again; a line for each. eBible.org's and SWORD imports are downloaded only when their catalog
    * lists a newer version; fetch.bible's and CCEL's each time (their texts change without one)
    */
   async updateImports(checkOnly = false): Promise<string[]> {
     await this.plugin.engine();
-    const biblix = Biblix.new();
-    const { project, base } = await this.project(biblix);
+    const logoxide = Logoxide.new();
+    const { project, base } = await this.project(logoxide);
     const catalog = await this.catalogs();
     const lines: string[] = [];
     const changed: string[] = [];
@@ -344,20 +344,20 @@ export class BibleManager {
       const dir = this.locationDir(entry.location, base);
       try {
         const current = await readTree(this.plugin, dir);
-        const pkg = biblix.openPackage(current, entry.features, []);
+        const pkg = logoxide.openPackage(current, entry.features, []);
         const upstream = pkg.info().upstream;
         pkg.dispose();
         if (!upstream) continue;
-        const from = await this.importEntry(biblix, catalog, upstream, base);
+        const from = await this.importEntry(logoxide, catalog, upstream, base);
         if (!from) {
           lines.push(`${entry.name}: in none of the catalogs searched`);
           continue;
         }
-        if (biblix.importIsCurrent(from, entry.version)) {
+        if (logoxide.importIsCurrent(from, entry.version)) {
           lines.push(`${entry.name} ${entry.version}: up to date`);
           continue;
         }
-        const update = biblix.updateImport(current, await importFiles(biblix, from));
+        const update = logoxide.updateImport(current, await importFiles(logoxide, from));
         if (!update) {
           lines.push(`${entry.name} ${entry.version}: up to date`);
           continue;
@@ -379,7 +379,7 @@ export class BibleManager {
       }
     }
     if (changed.length > 0) {
-      await this.install(biblix, project, base, biblix.installer(), { tag: "Only", ids: changed });
+      await this.install(logoxide, project, base, logoxide.installer(), { tag: "Only", ids: changed });
       await this.plugin.packages.load();
     }
     project.dispose();
@@ -387,24 +387,24 @@ export class BibleManager {
   }
 
   /** The catalog entry an import was made from, by its upstream: in the catalogs searched, else (a SWORD module) its repository's */
-  private async importEntry(biblix: Biblix, catalog: BiblixCatalog, upstream: string, base: string): Promise<CatalogEntry | null> {
+  private async importEntry(logoxide: Logoxide, catalog: LogoxideCatalog, upstream: string, base: string): Promise<CatalogEntry | null> {
     const found = catalog.findUpstream(upstream);
     const root = upstream.split("/packages/")[0];
     if (found || root === upstream || !root) return found ?? null;
     const location = `${root}/mods.d.tar.gz`;
-    const repository = biblix.parseCatalogBytes(location, await this.catalogBytes(location, base));
+    const repository = logoxide.parseCatalogBytes(location, await this.catalogBytes(location, base));
     const entry = repository.findUpstream(upstream);
     repository.dispose();
     return entry ?? null;
   }
 
   /**
-   * Turns a package on or off by what biblix.toml calls it (`enabled = false`): off, it stays installed and locked, so turning it on
+   * Turns a package on or off by what logoxide.toml calls it (`enabled = false`): off, it stays installed and locked, so turning it on
    * again needs no download, but it isn't read
    */
   async setEnabled(name: string, enabled: boolean): Promise<void> {
     await this.plugin.engine();
-    const { project, base } = await this.project(Biblix.new());
+    const { project, base } = await this.project(Logoxide.new());
     const changed = project.setEnabled(name, enabled);
     project.dispose();
     await this.adapter.write(join(base, MANIFEST), changed.manifestText());
@@ -415,13 +415,13 @@ export class BibleManager {
   /** Removes a package from the vault's manifest, and its files (unless another entry uses them) */
   async remove(id: string): Promise<void> {
     await this.plugin.engine();
-    const biblix = Biblix.new();
-    const { project, base } = await this.project(biblix);
+    const logoxide = Logoxide.new();
+    const { project, base } = await this.project(logoxide);
     const gone = project.packages().filter((p) => p.id === id);
     const removed = project.removeDependency(id);
     project.dispose();
-    const lock = await this.install(biblix, removed, base);
-    const after = biblix.parseProject(removed.manifestText(), lock);
+    const lock = await this.install(logoxide, removed, base);
+    const after = logoxide.parseProject(removed.manifestText(), lock);
     const kept = new Set(after.packages().map((p) => this.locationDir(p.location, base)));
     after.dispose();
     removed.dispose();
@@ -455,12 +455,12 @@ function changeName(change: ChangeKind): string {
 }
 
 /** A catalog entry's import: its publisher's download made into a package's files */
-async function importFiles(biblix: Biblix, entry: CatalogEntry): Promise<PackageFile[]> {
+async function importFiles(logoxide: Logoxide, entry: CatalogEntry): Promise<PackageFile[]> {
   const source = entry.source;
-  if (source.tag === "Ebible") return biblix.importEbible(entry, new Uint8Array(await download(source.zipUrl)));
-  if (source.tag === "Ccel") return biblix.importCcel(entry, new Uint8Array(await download(source.url)));
-  if (source.tag === "Sword") return biblix.importSword(entry, new Uint8Array(await downloadFirst(source.zipUrls)));
-  if (source.tag === "FetchBible") return biblix.importFetchBible(entry, await downloadBooks(source.books));
+  if (source.tag === "Ebible") return logoxide.importEbible(entry, new Uint8Array(await download(source.zipUrl)));
+  if (source.tag === "Ccel") return logoxide.importCcel(entry, new Uint8Array(await download(source.url)));
+  if (source.tag === "Sword") return logoxide.importSword(entry, new Uint8Array(await downloadFirst(source.zipUrls)));
+  if (source.tag === "FetchBible") return logoxide.importFetchBible(entry, await downloadBooks(source.books));
   throw new Error(`${entry.id} isn't imported: add it`);
 }
 

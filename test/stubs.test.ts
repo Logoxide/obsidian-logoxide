@@ -3,11 +3,11 @@ import { test } from "node:test";
 import { fileName, parseStub, staleStubs, stubNames, stubPath, stubText } from "../src/core/stubs.ts";
 
 test("a book's stub is named by its title, without a version", () => {
-  assert.equal(stubPath("Biblix", { package: "bsb", path: "usx/JHN.usx" }, "John"), "Biblix/bsb/John.bible");
-  assert.equal(stubPath("Biblix", { package: "tdp", path: "epub/tdp.epub" }, "The Dorean Principle", "epub"), "Biblix/tdp/The Dorean Principle.epub");
+  assert.equal(stubPath("Logoxide", { package: "bsb", path: "usx/JHN.usx" }, "John"), "Logoxide/bsb/John.bible");
+  assert.equal(stubPath("Logoxide", { package: "tdp", path: "epub/tdp.epub" }, "The Dorean Principle", "epub"), "Logoxide/tdp/The Dorean Principle.epub");
   // Without a title: the book's path
-  assert.equal(stubPath("Biblix", { package: "bsb", path: "usx/JHN.usx" }), "Biblix/bsb/usx/JHN.bible");
-  assert.equal(stubPath("Biblix", { package: "kjv-bob", path: "usfm/43-JHN.usfm" }), "Biblix/kjv-bob/usfm/43-JHN.bible");
+  assert.equal(stubPath("Logoxide", { package: "bsb", path: "usx/JHN.usx" }), "Logoxide/bsb/usx/JHN.bible");
+  assert.equal(stubPath("Logoxide", { package: "kjv-bob", path: "usfm/43-JHN.usfm" }), "Logoxide/kjv-bob/usfm/43-JHN.bible");
   // A dot in a folder isn't the extension
   assert.equal(stubPath("", { package: "p", path: "v1.0/JHN" }), "p/v1.0/JHN.bible");
 });
@@ -16,16 +16,16 @@ test("a stub's text names its package and book", () => {
   const stub = { package: "bsb", path: "usx/JHN.usx" };
   assert.deepEqual(parseStub(stubText(stub)), stub);
   assert.equal(parseStub("# My notes"), null);
-  assert.equal(parseStub('{"biblix": 1}'), null);
+  assert.equal(parseStub('{"logoxide": 1}'), null);
   // One book of a file that holds several (a whole Bible in ThML)
   const john = { package: "kjv", path: "thml/kjv.xml", book: "JHN" };
-  assert.equal(stubText(john), '{"biblix":"kjv","path":"thml/kjv.xml","book":"JHN"}\n');
+  assert.equal(stubText(john), '{"logoxide":"kjv","path":"thml/kjv.xml","book":"JHN"}\n');
   assert.deepEqual(parseStub(stubText(john)), john);
 });
 
 test("only stubs no package has are removed", () => {
-  const existing = ["Biblix/bsb/usx/JHN.bible", "Biblix/bsb/usx/ROM.bible", "Biblix/bsb/usx/JHN - Annotations.md"];
-  assert.deepEqual(staleStubs(existing, new Set(["Biblix/bsb/usx/JHN.bible"])), ["Biblix/bsb/usx/ROM.bible"]);
+  const existing = ["Logoxide/bsb/usx/JHN.bible", "Logoxide/bsb/usx/ROM.bible", "Logoxide/bsb/usx/JHN - Annotations.md"];
+  assert.deepEqual(staleStubs(existing, new Set(["Logoxide/bsb/usx/JHN.bible"])), ["Logoxide/bsb/usx/ROM.bible"]);
 });
 
 test("titles become file names, unique in their package", () => {

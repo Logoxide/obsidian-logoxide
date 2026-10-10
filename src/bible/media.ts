@@ -1,5 +1,5 @@
 import { Modal, Notice, Setting, type App } from "obsidian";
-import { Biblix, type MediaFile } from "biblix";
+import { Logoxide, type MediaFile } from "logoxide";
 import { formatSize } from "../core/timings.ts";
 import type ToposPlugin from "../main.ts";
 import { download } from "./manage.ts";
@@ -8,7 +8,7 @@ import { buffer, message, mkdirs, type Recording } from "./packages.ts";
 /**
  * Package Bibles' recordings (their `[media]`): downloaded the first time one is played (with
  * `requestUrl`, so on mobile too, after saying how big it is), checked against the size and SHA-256
- * the package lists, and kept by that hash in the library's `media/` (`.biblix/media/bd/bdc6…`,
+ * the package lists, and kept by that hash in the library's `media/` (`.logoxide/media/bd/bdc6…`,
  * hidden and not synced: each device downloads what it plays), where every version listing the
  * same file finds it again
  */
@@ -25,7 +25,7 @@ export class BibleMedia {
 
   /** Where a recording is kept, once downloaded */
   path(file: MediaFile): string {
-    return `${this.plugin.packages.libraryDir()}/${Biblix.new().mediaStorePath(file)}`;
+    return `${this.plugin.packages.libraryDir()}/${Logoxide.new().mediaStorePath(file)}`;
   }
 
   /** Whether it's been downloaded */
@@ -45,7 +45,7 @@ export class BibleMedia {
       try {
         await this.download(file, what);
       } catch (error) {
-        new Notice(`Topos Bible: couldn't download the recording of ${what}: ${message(error)}`, 10000);
+        new Notice(`Logoxide: couldn't download the recording of ${what}: ${message(error)}`, 10000);
         return null;
       }
     }
@@ -60,7 +60,7 @@ export class BibleMedia {
         const notice = new Notice(`Downloading the recording of ${what} (${formatSize(Number(file.size))})…`, 0);
         try {
           const bytes = new Uint8Array(await download(file.url));
-          Biblix.new().verifyMedia(file, bytes);
+          Logoxide.new().verifyMedia(file, bytes);
           const path = this.path(file);
           await mkdirs(this.plugin, path.slice(0, path.lastIndexOf("/")));
           await this.plugin.app.vault.adapter.writeBinary(path, buffer(bytes));

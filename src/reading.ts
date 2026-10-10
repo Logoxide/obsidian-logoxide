@@ -1,5 +1,5 @@
 import { Component, MarkdownRenderChild, type MarkdownPostProcessor } from "obsidian";
-import type { Passage } from "biblix";
+import type { Passage } from "logoxide";
 import { blankAround, findReferences, wholeReference } from "./core/syntax.ts";
 import { hoverParent, named } from "./editor/decorations.ts";
 import type ToposPlugin from "./main.ts";

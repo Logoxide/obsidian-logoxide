@@ -1,4 +1,4 @@
-import { BookStyle } from "biblix";
+import { BookStyle } from "logoxide";
 import type { BookCompletion } from "./completions.ts";
 import { SITES } from "./links.ts";
 import { DEFAULT_FORMAT, type FormatSettings } from "./format.ts";
@@ -58,17 +58,17 @@ export interface ToposSettings {
   /** The Bible references open in and preview from: a folder of USX files ("" for the first) */
   bible: string;
   /**
-   * The biblix library's folder: installed packages (`packages/<id>/<version>/`). A dot-folder by
-   * default, so it isn't synced or shown: each device installs what `biblix.lock` pins
+   * The logoxide library's folder: installed packages (`packages/<id>/<version>/`). A dot-folder by
+   * default, so it isn't synced or shown: each device installs what `logoxide.lock` pins
    */
-  biblixLibrary: string;
+  logoxideLibrary: string;
   /**
-   * The vault's Bible packages folder: its `biblix.toml` and `biblix.lock` (unless they're at the
+   * The vault's Bible packages folder: its `logoxide.toml` and `logoxide.lock` (unless they're at the
    * vault's root), imports, each Bible book's stub, and each book package's EPUBs
    */
-  biblixBooks: string;
+  logoxideBooks: string;
   /** Hide the packages folder from the file explorer and from Obsidian's search */
-  hideBiblixBooks: boolean;
+  hideLogoxideBooks: boolean;
   /** While a Bible's recording plays, keep the verse being read in view */
   followPlayback: boolean;
   /** The recordings' playback speed (the player's speed button) */
@@ -103,7 +103,7 @@ export interface ToposSettings {
   markInDocuments: boolean;
   /** Once file-plus-plus's default link label has become `{{reference}}` */
   bibleAliasDefault?: boolean;
-  /** The entry this plugin added to Obsidian's excluded files to hide the packages folder (`Biblix/`), to take out again */
+  /** The entry this plugin added to Obsidian's excluded files to hide the packages folder (`Logoxide/`), to take out again */
   hiddenFilter?: string;
 }
 
@@ -131,9 +131,9 @@ export const DEFAULT_SETTINGS: ToposSettings = {
   cliPath: "",
   cliCache: true,
   bible: "",
-  biblixLibrary: ".biblix",
-  biblixBooks: "Biblix",
-  hideBiblixBooks: false,
+  logoxideLibrary: ".logoxide",
+  logoxideBooks: "Logoxide",
+  hideLogoxideBooks: false,
   followPlayback: true,
   playbackRate: 1,
   bibleAliases: "",

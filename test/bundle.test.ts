@@ -8,13 +8,13 @@ import { pathToFileURL } from "node:url";
 import esbuild from "esbuild";
 
 test("the embedded WebAssembly loads in a bundle", async () => {
-  const pkg = new URL("../node_modules/biblix/", import.meta.url).pathname;
+  const pkg = new URL("../node_modules/logoxide/", import.meta.url).pathname;
   const dir = mkdtempSync(join(tmpdir(), "topos-bundle-"));
   const entry = join(dir, "entry.ts");
   writeFileSync(
     entry,
     `import { loadTopos } from ${JSON.stringify(new URL("../src/engine.ts", import.meta.url).pathname)};
-     import { OffsetUnit } from "biblix";
+     import { OffsetUnit } from "logoxide";
      export async function run() {
        const topos = await loadTopos();
        return topos.search("Read Jn 3:16", OffsetUnit.Utf16).map((m) => m.passage.reference);
@@ -27,8 +27,8 @@ test("the embedded WebAssembly loads in a bundle", async () => {
     format: "esm",
     platform: "neutral",
     alias: {
-      "biblix": `${pkg}biblix.js`,
-      "biblix-wasm": `${pkg}biblix_bg.wasm`,
+      "logoxide": `${pkg}logoxide.js`,
+      "logoxide-wasm": `${pkg}logoxide_bg.wasm`,
     },
     loader: { ".wasm": "binary" },
     outfile,
@@ -39,13 +39,13 @@ test("the embedded WebAssembly loads in a bundle", async () => {
 });
 
 test("the bundled worker loads the engine it is sent and searches", async () => {
-  const pkg = new URL("../node_modules/biblix/", import.meta.url).pathname;
+  const pkg = new URL("../node_modules/logoxide/", import.meta.url).pathname;
   const result = await esbuild.build({
     entryPoints: [new URL("../src/indexers/worker.ts", import.meta.url).pathname],
     bundle: true,
     write: false,
     format: "iife",
-    alias: { "biblix": `${pkg}biblix.js` },
+    alias: { "logoxide": `${pkg}logoxide.js` },
     logLevel: "silent",
   });
   // Node's worker threads stand in for a Web Worker: give the script the worker globals it uses
@@ -57,7 +57,7 @@ test("the bundled worker loads the engine it is sent and searches", async () => 
   const replies: unknown[] = [];
   const next = () => new Promise((resolve) => worker.once("message", resolve));
   try {
-    worker.postMessage({ type: "init", wasm: readFileSync(`${pkg}biblix_bg.wasm`) });
+    worker.postMessage({ type: "init", wasm: readFileSync(`${pkg}logoxide_bg.wasm`) });
     replies.push(await next());
     worker.postMessage({ type: "search", id: 1, files: [{ path: "a.md", text: "Read Jn 3:16" }] });
     replies.push(await next());

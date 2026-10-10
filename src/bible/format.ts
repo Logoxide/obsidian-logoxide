@@ -1,7 +1,7 @@
 import type { FileFormat } from "file-plus-plus/obsidian";
 import { serializeTextFragment, withTextDirective } from "file-plus-plus/core";
 import type { App, TFile } from "obsidian";
-import { Biblix, ToposBook, type BookVerse, type PassageSegment } from "biblix";
+import { Logoxide, ToposBook, type BookVerse, type PassageSegment } from "logoxide";
 import { formatVerseLocator, parseVerseLocator } from "../core/verse-locator.ts";
 import type ToposPlugin from "../main.ts";
 import { BOOK_EXTENSIONS } from "../core/bibles.ts";
@@ -10,13 +10,13 @@ import { BIBLE_SCHEMES, BibleReader, type BibleBook } from "./reader.ts";
 
 /**
  * USX and USFM files (one Bible book each) for file-plus-plus: their own tab, previews, and embeds.
- * USFM is read as USX through biblix
+ * USFM is read as USX through logoxide
  */
 export function createBibleFormat(plugin: ToposPlugin): FileFormat<BibleBook, BibleReader> {
   return {
     name: "Bible",
     noun: "book",
-    // A biblix package's books open through their stubs (`.bible`, see core/stubs.ts)
+    // A logoxide package's books open through their stubs (`.bible`, see core/stubs.ts)
     extensions: [...BOOK_EXTENSIONS, STUB_EXTENSION],
     plainText: true,
     icon: "book-open-text",
@@ -102,10 +102,10 @@ async function loadBook(plugin: ToposPlugin, app: App, file: TFile): Promise<Bib
   if (file.extension === STUB_EXTENSION) {
     // A package's book: read from the library, where its stub says
     const target = await plugin.packages.stubTarget(file);
-    if (!target) throw new Error(`${file.path}: its package isn't installed (run bx install, or add it again)`);
+    if (!target) throw new Error(`${file.path}: its package isn't installed (run lx install, or add it again)`);
     extension = target.path.slice(target.path.lastIndexOf(".") + 1).toLowerCase();
     stubBible = target.bible;
-    // One of several books in a file, or a format other than USX and USFM (OSIS, ThML): biblix reads it
+    // One of several books in a file, or a format other than USX and USFM (OSIS, ThML): logoxide reads it
     if (target.book || !BOOK_EXTENSIONS.includes(extension)) {
       book = await plugin.packages.stubBook(file, target.book);
       if (!book) throw new Error(`${file.path}: its package has no such book`);
@@ -115,7 +115,7 @@ async function loadBook(plugin: ToposPlugin, app: App, file: TFile): Promise<Bib
     text = await app.vault.cachedRead(file);
   }
   if (!book) {
-    if (extension === "usfm" || extension === "sfm") text = Biblix.new().usfmToUsx(text);
+    if (extension === "usfm" || extension === "sfm") text = Logoxide.new().usfmToUsx(text);
     book = ToposBook.parse(topos, "usx", text);
   }
   if (!book) throw new Error("not a USX file");

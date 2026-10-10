@@ -20,11 +20,11 @@ export interface Bible {
   books: Map<number, string>;
   /** Files whose book isn't known from their name yet (read their `<book code>`) */
   unknown: string[];
-  /** From a biblix package (its verse counts come from biblix, not `VerseCounts`) */
+  /** From a logoxide package (its verse counts come from logoxide, not `VerseCounts`) */
   package?: boolean;
 }
 
-/** Book files' extensions: USX, and USFM (read as USX through biblix) */
+/** Book files' extensions: USX, and USFM (read as USX through logoxide) */
 export const BOOK_EXTENSIONS = ["usx", "usfm"];
 
 /**

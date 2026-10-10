@@ -29,7 +29,7 @@ async function load() {
     bundle: true,
     format: "esm",
     platform: "node",
-    external: ["biblix"],
+    external: ["logoxide"],
     alias: { obsidian: stub },
     nodePaths: [new URL("../node_modules", import.meta.url).pathname],
     outfile,
@@ -50,7 +50,7 @@ test("editor links follow the settings after a refresh", async () => {
   });
   Object.defineProperty(globalThis, "navigator", { value: window.navigator, configurable: true });
   const { EditorView, referenceDecorations, refreshReferences, linkUrl, relinkEditor, DEFAULT_SETTINGS, livePreview } = await load();
-  const { Topos } = await import("biblix");
+  const { Topos } = await import("logoxide");
   const topos = Topos.new();
   const settings = { ...DEFAULT_SETTINGS };
   const plugin = {
@@ -129,7 +129,7 @@ test("editor links follow the settings after a refresh", async () => {
 
 test("reference links and embeds in live preview hide their syntax unless the cursor is in them", async () => {
   const { EditorView, referenceDecorations, DEFAULT_SETTINGS, livePreview, editorLivePreviewField } = await load();
-  const { Topos } = await import("biblix");
+  const { Topos } = await import("logoxide");
   const { EditorSelection } = await import("@codemirror/state");
   const topos = Topos.new();
   const settings = { ...DEFAULT_SETTINGS };
@@ -173,7 +173,7 @@ test("reference links and embeds in live preview hide their syntax unless the cu
 
 test("with embedAlone, a reference alone on its line shows its text unless the cursor is near it", async () => {
   const { EditorView, referenceDecorations, refreshReferences, relinkEditor, DEFAULT_SETTINGS, livePreview, editorLivePreviewField } = await load();
-  const { Topos } = await import("biblix");
+  const { Topos } = await import("logoxide");
   const { EditorSelection } = await import("@codemirror/state");
   const settings = { ...DEFAULT_SETTINGS, embedAlone: true };
   const plugin = {

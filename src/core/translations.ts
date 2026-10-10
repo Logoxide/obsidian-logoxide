@@ -1,4 +1,4 @@
-import { ToposTranslations } from "biblix";
+import { ToposTranslations } from "logoxide";
 
 /**
  * Translations a reference can name (`John 3:16 KJV`, `[John 3:16 (KJV)]`): the Bibles in the vault

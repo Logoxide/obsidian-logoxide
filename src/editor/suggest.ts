@@ -5,7 +5,7 @@ import {
   type EditorSuggestContext,
   type EditorSuggestTriggerInfo,
 } from "obsidian";
-import type { Completion } from "biblix";
+import type { Completion } from "logoxide";
 import { completionsBefore } from "../core/completions.ts";
 import { renderCompletion } from "../suggestions.ts";
 import type ToposPlugin from "../main.ts";

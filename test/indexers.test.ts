@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { OffsetUnit, Topos } from "biblix";
+import { OffsetUnit, Topos } from "logoxide";
 import { cliBatches, cliFailed, CliOutputParser, OutdatedCliError, parseIndexLine, vaultPath } from "../src/core/cli.ts";
 import { ReferenceIndex } from "../src/core/index.ts";
 import { searchText, type Hit } from "../src/core/search.ts";

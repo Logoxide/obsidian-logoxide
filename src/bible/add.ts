@@ -1,4 +1,4 @@
-import { PackageKind, type CatalogEntry } from "biblix";
+import { PackageKind, type CatalogEntry } from "logoxide";
 
 /** What a package kind is called (`book`, `collection`, `commentary`) */
 export function kindName(kind: PackageKind): string {

@@ -1,9 +1,9 @@
-import init, { Topos } from "biblix";
-import wasm from "biblix-wasm";
+import init, { Topos } from "logoxide";
+import wasm from "logoxide-wasm";
 
 /**
  * Loads the embedded WebAssembly module and creates the engine.
- * esbuild points `biblix` at the package's core module (no automatic loading) and embeds
+ * esbuild points `logoxide` at the package's core module (no automatic loading) and embeds
  * the `.wasm` file, so this works offline and on mobile.
  */
 export async function loadTopos(): Promise<Topos> {

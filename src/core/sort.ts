@@ -1,4 +1,4 @@
-import type { Passage } from "biblix";
+import type { Passage } from "logoxide";
 import type { Hit } from "./search.ts";
 
 export type SortOrder = "file" | "bible";

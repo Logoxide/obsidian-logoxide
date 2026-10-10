@@ -1,7 +1,7 @@
 // References in notes by how they're written: links, explicit links, embeds, and bare references
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Topos } from "biblix";
+import { Topos } from "logoxide";
 import { findReferences, wholeReference } from "../src/core/syntax.ts";
 
 const topos = Topos.new();

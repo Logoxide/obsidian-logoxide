@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { BookStyle, Topos } from "biblix";
+import { BookStyle, Topos } from "logoxide";
 import { completionsBefore } from "../src/core/completions.ts";
 import { linkUrl } from "../src/core/links.ts";
 import { findReferences, wholeNamedReference } from "../src/core/syntax.ts";

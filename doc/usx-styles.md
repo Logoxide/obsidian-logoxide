@@ -1,7 +1,7 @@
 # Formatting USX: which tags matter
 
 Notes for whoever next works on how Bible text looks (October 2026). Bible text is USX (USFM is
-converted to USX by biblix first), rendered to HTML by topos-bible-markup and styled by this
+converted to USX by logoxide first), rendered to HTML by topos-bible-markup and styled by this
 plugin.
 
 ## Where each part lives
@@ -23,7 +23,7 @@ target) needs a change in topos.
 
 ## The tags real Bibles use
 
-Counted in the BSB (USX) and the KJV (USFM) from biblix. Get these right first.
+Counted in the BSB (USX) and the KJV (USFM) from logoxide. Get these right first.
 
 | Tag | BSB | KJV | Becomes | Notes |
 |---|---|---|---|---|

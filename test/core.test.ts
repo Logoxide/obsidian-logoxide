@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { BookStyle, Topos } from "biblix";
+import { BookStyle, Topos } from "logoxide";
 import { compileFilters, keep, NO_FILTERS, type Filters } from "../src/core/filters.ts";
 import { linkUrl, siteName, SITES, templateError, templateFromTranslation } from "../src/core/links.ts";
 import {
@@ -429,7 +429,7 @@ async function loadInputs() {
     format: "esm",
     platform: "node",
     jsx: "automatic",
-    external: ["biblix", "react", "react-dom"],
+    external: ["logoxide", "react", "react-dom"],
     outfile: out,
     logLevel: "silent",
   });

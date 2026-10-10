@@ -1,7 +1,7 @@
 import { Component, ItemView, MarkdownRenderer, Platform, setIcon, type HoverPopover, type ViewStateResult, type Workspace, type WorkspaceLeaf } from "obsidian";
 import { StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import type { Passage } from "biblix";
+import type { Passage } from "logoxide";
 import type { Hit } from "../core/search.ts";
 import { linkElement } from "../reading.ts";
 import type ToposPlugin from "../main.ts";
@@ -9,7 +9,7 @@ import { ErrorBoundary } from "./ErrorBoundary.tsx";
 import { DEFAULT_LOOK, PaneApp, type PaneHost, type PaneLook } from "./PaneApp.tsx";
 import { SearchStore, type SearchState } from "./store.ts";
 
-export const SEARCH_PANE_VIEW = "topos-bible-search-pane";
+export const SEARCH_PANE_VIEW = "logoxide-search-pane";
 
 /** What a search tab saves with the workspace */
 interface PaneState {

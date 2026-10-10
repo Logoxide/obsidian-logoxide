@@ -1,4 +1,4 @@
-import type { Passage, Topos } from "biblix";
+import type { Passage, Topos } from "logoxide";
 
 export type Testament = "old" | "new";
 

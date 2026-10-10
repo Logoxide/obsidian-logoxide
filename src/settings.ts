@@ -1,5 +1,5 @@
 import { App, Notice, type DropdownComponent, Platform, Setting, setIcon } from "obsidian";
-import { BookStyle, PackageKind } from "biblix";
+import { BookStyle, PackageKind } from "logoxide";
 import { DEFAULT_FORMAT, written, type FormatSettings } from "./core/format.ts";
 import { parseQuery } from "./core/query.ts";
 import type { BookCompletion } from "./core/completions.ts";
@@ -368,7 +368,7 @@ export class ToposSettingsPanel {
 
   private libraryTab(el: HTMLElement): void {
     const packages = this.plugin.packages;
-    lead(el, "The packages the vault's `biblix.toml` asks for, pinned by `biblix.lock`: Bibles, commentaries, and books. Each device installs what the lock pins.");
+    lead(el, "The packages the vault's `logoxide.toml` asks for, pinned by `logoxide.lock`: Bibles, commentaries, and books. Each device installs what the lock pins.");
 
     const all = packages.installed.filter((p) => p.dependencyOf === null);
     const more = packages.installed.length - all.length;
@@ -395,7 +395,7 @@ export class ToposSettingsPanel {
       key: "packages",
       placeholder: "Filter by name, abbreviation, license, or folder",
       noun: ["package", "packages"],
-      empty: "Nothing installed yet. Find Bibles, commentaries, and books in *Add Bibles*, or write a `biblix.toml` and run `bx install`.",
+      empty: "Nothing installed yet. Find Bibles, commentaries, and books in *Add Bibles*, or write a `logoxide.toml` and run `lx install`.",
       text: (pkg) =>
         [pkg, ...packages.installed.filter((p) => p.dependencyOf === pkg.name)]
           .map((p) => [p.id, p.name, p.version, p.dir, p.info?.name, p.info?.abbreviation, p.info?.license, p.info ? kindName(p.info.kind) : "", p.enabled ? "" : "off"].join(" "))
@@ -426,7 +426,7 @@ export class ToposSettingsPanel {
       if (fromGit) {
         new Setting(updates)
           .setName("Update Bibles")
-          .setDesc(md("Moves each package installed from a repository to its newest release that `biblix.toml` allows (imports stay as they are)."))
+          .setDesc(md("Moves each package installed from a repository to its newest release that `logoxide.toml` allows (imports stay as they are)."))
           .addButton((b) =>
             b.setButtonText("Update").onClick(async () => {
               b.setDisabled(true).setButtonText("Checking…");
@@ -494,7 +494,7 @@ export class ToposSettingsPanel {
       this.redraw("library", "bibles");
     });
     const keepsFolder = pkg.path && !pkg.dir.split("/").includes("imports");
-    removeButton(control, keepsFolder ? "Remove from biblix.toml (its folder stays)" : `Remove ${pkg.info?.abbreviation ?? pkg.id}`, async () => {
+    removeButton(control, keepsFolder ? "Remove from logoxide.toml (its folder stays)" : `Remove ${pkg.info?.abbreviation ?? pkg.id}`, async () => {
       try {
         await this.plugin.bibleManager.remove(pkg.id);
         new Notice(`Removed ${pkg.info?.abbreviation ?? pkg.id}`);
@@ -535,12 +535,12 @@ export class ToposSettingsPanel {
       .setName("Packages folder")
       .setDesc(
         md(
-          "Each Bible book shows here as a stub (`<package>/<title>.bible`), which opens the book and which links and annotations point at, so updates don't move them; book packages' EPUBs too. `biblix.toml` and `biblix.lock` are here unless they're at the vault's root. Renaming it moves the folder and updates links to it.",
+          "Each Bible book shows here as a stub (`<package>/<title>.bible`), which opens the book and which links and annotations point at, so updates don't move them; book packages' EPUBs too. `logoxide.toml` and `logoxide.lock` are here unless they're at the vault's root. Renaming it moves the folder and updates links to it.",
         ),
       )
       .addText((t) => {
         t.inputEl.addClass("topos-code-input");
-        t.setPlaceholder("Biblix").setValue(settings.biblixBooks);
+        t.setPlaceholder("Logoxide").setValue(settings.logoxideBooks);
         // Moved when the field is left (not as each letter is typed)
         t.inputEl.addEventListener("change", () => void this.moveBooks(t.getValue()));
       });
@@ -548,22 +548,22 @@ export class ToposSettingsPanel {
       .setName("Library folder")
       .setDesc(
         md(
-          "Where packages are installed (`packages/<id>/<version>/`). A folder whose name starts with a dot is hidden and isn't synced: each device installs what `biblix.lock` pins, by itself. Renaming it moves what's installed.",
+          "Where packages are installed (`packages/<id>/<version>/`). A folder whose name starts with a dot is hidden and isn't synced: each device installs what `logoxide.lock` pins, by itself. Renaming it moves what's installed.",
         ),
       )
       .addText((t) => {
         t.inputEl.addClass("topos-code-input");
-        t.setPlaceholder(".biblix").setValue(settings.biblixLibrary);
+        t.setPlaceholder(".logoxide").setValue(settings.logoxideLibrary);
         t.inputEl.addEventListener("change", () => void this.moveLibrary(t.getValue()));
       });
     new Setting(storage)
       .setName("Hide the packages folder")
       .setDesc("Leave it out of the file explorer, and out of Obsidian's search, quick switcher, and graph (as an excluded file). Bibles and books still open from references, and verse search still reads them.")
       .addToggle((t) =>
-        t.setValue(settings.hideBiblixBooks).onChange(async (value) => {
-          settings.hideBiblixBooks = value;
+        t.setValue(settings.hideLogoxideBooks).onChange(async (value) => {
+          settings.hideLogoxideBooks = value;
           await this.plugin.saveToposSettings();
-          this.plugin.applyBiblixHiding();
+          this.plugin.applyLogoxideHiding();
         }),
       );
     const downloaded = new Setting(storage)
@@ -590,7 +590,7 @@ export class ToposSettingsPanel {
   private async moveBooks(value: string): Promise<void> {
     const packages = this.plugin.packages;
     const from = packages.booksDir();
-    this.plugin.settings.biblixBooks = value;
+    this.plugin.settings.logoxideBooks = value;
     const to = packages.booksDir();
     if (from !== to) {
       const folder = this.app.vault.getFolderByPath(from);
@@ -601,7 +601,7 @@ export class ToposSettingsPanel {
       }
     }
     await this.plugin.saveData(this.plugin.settings);
-    this.plugin.applyBiblixHiding();
+    this.plugin.applyLogoxideHiding();
     await packages.load();
     this.redraw("library", "bibles");
   }
@@ -611,7 +611,7 @@ export class ToposSettingsPanel {
     const packages = this.plugin.packages;
     const adapter = this.app.vault.adapter;
     const from = packages.libraryDir();
-    this.plugin.settings.biblixLibrary = value;
+    this.plugin.settings.logoxideLibrary = value;
     const to = packages.libraryDir();
     if (from !== to && (await adapter.exists(from)) && !(await adapter.exists(to))) {
       try {
@@ -650,16 +650,16 @@ export class ToposSettingsPanel {
     }
     const redrawBrowser = () => this.redraw("add");
 
-    const registryList = section(el, "Registries", "Catalogs with a name, searched first: `bx add <name>:<id>` adds their packages too.");
+    const registryList = section(el, "Registries", "Catalogs with a name, searched first: `lx add <name>:<id>` adds their packages too.");
     filteredList(registryList, registries, {
       key: "registries",
       placeholder: "Filter registries",
       noun: ["registry", "registries"],
-      empty: "No registries yet. `bx registry init` makes one, and prints its catalog's URL.",
+      empty: "No registries yet. `lx registry init` makes one, and prints its catalog's URL.",
       text: (r) => `${r.name} ${r.location}`,
       render: ({ name, location }, items) => {
         const readable = /^https?:\/\//.test(location) || location.endsWith(".toml");
-        const setting = new Setting(items).setName(name).setDesc(md(readable ? `\`${location}\`` : `\`${location}\` (a folder of repositories: only \`bx\` reads it)`));
+        const setting = new Setting(items).setName(name).setDesc(md(readable ? `\`${location}\`` : `\`${location}\` (a folder of repositories: only \`lx\` reads it)`));
         setting.addExtraButton((b) =>
           b
             .setIcon("search")
@@ -685,7 +685,7 @@ export class ToposSettingsPanel {
       registryList.group.createDiv("setting-items"),
       "Add a registry",
       [{ placeholder: "name", cls: "is-short" }, { placeholder: "https://github.com/owner/repo/releases/download/index/catalog.toml" }],
-      "Its `catalog.toml`'s URL (`bx registry init` prints it), or a file's path relative to `biblix.toml`.",
+      "Its `catalog.toml`'s URL (`lx registry init` prints it), or a file's path relative to `logoxide.toml`.",
       async ([name, location]) => {
         if (!name || !location) throw new Error("give it a name and a URL");
         const count = await manager.addRegistry(name, location);
@@ -712,7 +712,7 @@ export class ToposSettingsPanel {
       empty: "No catalogs: only registries are searched.",
       text: (c) => c.location,
       render: ({ location, isDefault }, items) => {
-        const setting = new Setting(items).setName(md(`\`${location}\``)).setDesc(isDefault ? "One of the defaults (removing it keeps the others)" : md("Added in `biblix.toml`"));
+        const setting = new Setting(items).setName(md(`\`${location}\``)).setDesc(isDefault ? "One of the defaults (removing it keeps the others)" : md("Added in `logoxide.toml`"));
         setting.settingEl.addClass("topos-catalog");
         if (isDefault) badge(setting.nameEl, "default");
         removeButton(setting.controlEl, "Stop searching it", async () => {
@@ -730,7 +730,7 @@ export class ToposSettingsPanel {
       catalogList.group.createDiv("setting-items"),
       "Add a catalog",
       [{ placeholder: "https://example.org/catalog.toml" }],
-      "A `catalog.toml`'s URL (anyone can host one), eBible.org's `translations.csv`, fetch.bible's `manifest.json`, a SWORD repository's `mods.d.tar.gz`, or a file's path relative to `biblix.toml`.",
+      "A `catalog.toml`'s URL (anyone can host one), eBible.org's `translations.csv`, fetch.bible's `manifest.json`, a SWORD repository's `mods.d.tar.gz`, or a file's path relative to `logoxide.toml`.",
       async ([location]) => {
         if (!location) throw new Error("give its URL");
         const count = await manager.addCatalog(location);

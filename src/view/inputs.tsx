@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { CompletionKind, type BookStyle, type Completion, type Topos } from "biblix";
+import { CompletionKind, type BookStyle, type Completion, type Topos } from "logoxide";
 import { applyCompletion, completionsBefore } from "../core/completions.ts";
 import { DEFAULT_FORMAT, written, type FormatSettings } from "../core/format.ts";
 

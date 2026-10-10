@@ -1,9 +1,9 @@
 // A small Bible package with a recording, for trying the player: John 1:1-5 and 3:16-18 (KJV),
 // read by espeak-ng (a tone per verse without it), its WebVTT timings, and the recording listed
-// with `bx media add`. The recording is written where it's served from, never into the package.
+// with `lx media add`. The recording is written where it's served from, never into the package.
 //
 //   node test/audio.ts <package dir> <serve dir> <base URL>
-//   node test/audio.ts test-vault/Biblix/imports/audiotest "$SCRATCH/serve" http://127.0.0.1:8766
+//   node test/audio.ts test-vault/Logoxide/imports/audiotest "$SCRATCH/serve" http://127.0.0.1:8766
 //   (cd "$SCRATCH/serve" && python -m http.server 8766)
 
 import { execFileSync } from "node:child_process";
@@ -91,13 +91,13 @@ const para = (chapter: number) =>
     .join("")}</para>`;
 writeFileSync(join(dir, "usx", "JHN.usx"), `<usx version="3.0"><book code="JHN" style="id"/><para style="h">John</para>${para(1)}${para(3)}</usx>\n`);
 writeFileSync(
-  join(dir, "biblix.toml"),
+  join(dir, "logoxide.toml"),
   `[package]\nid = "audiotest"\nname = "Audio Test"\nabbreviation = "AUD"\nversion = "1.0.0"\nlanguage = "en"\n\n[formats]\nusx = { path = "usx/" }\n`,
 );
-execFileSync("bx", ["media", "add", mp3, "--url", `${base.replace(/\/$/, "")}/JHN.mp3`, "--book", "JHN", "--package", resolve(dir)], { stdio: "inherit" });
-// Where the timings are (bx media add lists the file, not them)
-const manifest = join(dir, "biblix.toml");
+execFileSync("lx", ["media", "add", mp3, "--url", `${base.replace(/\/$/, "")}/JHN.mp3`, "--book", "JHN", "--package", resolve(dir)], { stdio: "inherit" });
+// Where the timings are (lx media add lists the file, not them)
+const manifest = join(dir, "logoxide.toml");
 writeFileSync(manifest, readFileSync(manifest, "utf8").replace("[media]\n", '[media]\ntimings = "timings/"\n'));
-execFileSync("bx", ["media", "check", "--offline"], { cwd: dir, stdio: "inherit" });
+execFileSync("lx", ["media", "check", "--offline"], { cwd: dir, stdio: "inherit" });
 rmSync(work, { recursive: true });
 console.log(`${dir}: John 1:1-5 and 3:16-18, ${at.toFixed(1)} s read (${speak ? "espeak-ng" : "tones"}); serve ${serve} at ${base}`);

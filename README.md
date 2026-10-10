@@ -1,4 +1,4 @@
-# Topos Bible for Obsidian
+# Logoxide for Obsidian
 
 Find, search, filter, and autocomplete Bible references in your vault, and open them in
 [Literal Word](https://app.literalword.com), BibleHub, lets.bible, BibleGateway, YouVersion, or any site with
@@ -113,26 +113,26 @@ search, whether to search EPUBs (below), excluded folders, and the search engine
 
 Install a Bible under *Settings → Add a Bible*: **Search** finds translations by name,
 abbreviation, or language (eBible.org's and fetch.bible's, about 2,900, and any catalogs you add
-under *Catalogs*: a `catalog.toml`'s URL, or a file in the vault) and installs the one you pick; **Git URL** adds a [biblix](https://github.com/MasterTemple/biblix)
-package from its repository. Packages are installed in a hidden folder, `.biblix/` (*Library
-folder*), which isn't synced: each device installs what `Biblix/biblix.lock` pins by itself (from
-the web; local repositories need `bx`). The vault's `Biblix/` folder (*Packages folder*) holds
-`biblix.toml` and `biblix.lock`, saying exactly which text the vault uses, and what you open:
+under *Catalogs*: a `catalog.toml`'s URL, or a file in the vault) and installs the one you pick; **Git URL** adds a [logoxide](https://github.com/MasterTemple/logoxide)
+package from its repository. Packages are installed in a hidden folder, `.logoxide/` (*Library
+folder*), which isn't synced: each device installs what `Logoxide/logoxide.lock` pins by itself (from
+the web; local repositories need `lx`). The vault's `Logoxide/` folder (*Packages folder*) holds
+`logoxide.toml` and `logoxide.lock`, saying exactly which text the vault uses, and what you open:
 each Bible is named by its abbreviation (`BSB`, `KJV`), and the trash button removes it.
-*Hide the packages folder* leaves `Biblix/` out of the file explorer and Obsidian's search.
+*Hide the packages folder* leaves `Logoxide/` out of the file explorer and Obsidian's search.
 
-*Registries* name catalogs (a `catalog.toml`'s URL, which `bx registry init` prints): their
+*Registries* name catalogs (a `catalog.toml`'s URL, which `lx registry init` prints): their
 packages are searched first, and a registry's releases install as single archives, checked by
 their hash.
 
 Books are packages too (`kind = "book"`, an EPUB), and a collection brings in several (listed
 under it in the settings). Each book's EPUB is copied into the packages folder
-(`Biblix/the-dorean-principle/epub/the-dorean-principle.epub`), where EPUB++ opens it, and verse
+(`Logoxide/the-dorean-principle/epub/the-dorean-principle.epub`), where EPUB++ opens it, and verse
 search reads it whether or not *Search EPUB files* is on, so its references show in the book and
 in search results.
 
 Each book of an installed Bible opens through a small stub in the packages folder, named by the
-book's title (`Biblix/bsb/John.bible`; a book's EPUB likewise, `Biblix/the-dorean-principle/The
+book's title (`Logoxide/bsb/John.bible`; a book's EPUB likewise, `Logoxide/the-dorean-principle/The
 Dorean Principle.epub`). Stubs and copies named the older way are renamed, with links and
 annotation files following. Links, highlights, and annotation files point at the stub, which
 names the package and the book but not its version, so they keep working when the Bible is
@@ -157,7 +157,7 @@ named after the folder. Pick the one references use under *Settings → Bible*. 
 
 Links open the book in its own tab at the passage (or, with *Open reference links in: the link
 site*, the site from [Links](#links)); hovering any of them shows the passage, through Obsidian's
-page preview (*Settings → Page preview → Topos Bible: Bible references in notes*). In live preview
+page preview (*Settings → Page preview → Logoxide: Bible references in notes*). In live preview
 the brackets and target are hidden unless the cursor is in them, like Obsidian's own links.
 
 References are also found in other documents built on file-plus-plus: in EPUBs (with *Search
@@ -191,7 +191,7 @@ and SHA-256, and WebVTT timings giving each verse's place in it). A book with on
 
 - The first time a recording is played, the plugin says how big it is and asks before
   downloading it. It's checked against the size and hash the package lists and kept on this
-  device only, in the library folder (`.biblix/media/`, not synced), so it's downloaded once
+  device only, in the library folder (`.logoxide/media/`, not synced), so it's downloaded once
   however many versions of the package list it. *Downloaded recordings* in the settings says how
   much is kept and removes it
 - The verse being read is highlighted and kept in view (*Follow along*, also the target button in
@@ -326,20 +326,20 @@ right away.
 It also needs file-plus-plus (the engine of EPUB++ and Transcript++) checked out at
 `../obsidian-plus-plus/file-plus-plus` (run `bun install` there once).
 
-The plugin uses the `biblix` package (biblix's bindings, with all of
-[topos](https://github.com/MasterTemple/topos-bible)'s) built from a biblix checkout at
-`../../rust/biblix`, which builds against topos at `../../rust/topos` (`~/Development/rust/...` when
-this repository is `~/Development/typescript/obsidian-topos-bible`):
+The plugin uses the `logoxide` package (logoxide's bindings, with all of
+[topos](https://github.com/MasterTemple/topos-bible)'s) built from a logoxide checkout at
+`../../rust/logoxide`, which builds against topos at `../../rust/topos` (`~/Development/rust/...` when
+this repository is `~/Development/typescript/obsidian-logoxide`):
 
 ```sh
 # Once: cargo install boltffi_cli --version 0.31.0, rustup target add wasm32-unknown-unknown
-(cd ../../rust/biblix/crates/biblix-ffi && npm install && npm run pack:wasm)
+(cd ../../rust/logoxide/crates/logoxide-ffi && npm install && npm run pack:wasm)
 
 npm install
 scripts/install.sh ~/path/to/vault   # builds, then copies main.js, manifest.json, styles.css
 ```
 
-Then enable **Topos Bible** under *Settings → Community plugins*. Once `biblix` is released on
+Then enable **Logoxide** under *Settings → Community plugins*. Once `logoxide` is released on
 npm, the dependency can point at it instead (`package.json`).
 
 ## Development

@@ -1,5 +1,5 @@
 import { ButtonComponent, Notice, setIcon } from "obsidian";
-import { PackageKind, type CatalogEntry } from "biblix";
+import { PackageKind, type CatalogEntry } from "logoxide";
 import type ToposPlugin from "../main.ts";
 import { kindName, language, license, SOURCE_NAMES, sourceKey, sourceName } from "../bible/add.ts";
 import { badge, chips, errorText, md, searchField, type Section } from "./kit.ts";
@@ -323,7 +323,7 @@ export function gitForm(items: HTMLElement, plugin: ToposPlugin, onInstalled: ()
   const row = items.createDiv("setting-item topos-add-row");
   const info = row.createDiv("setting-item-info");
   info.createDiv({ cls: "setting-item-name", text: "Repository URL" });
-  info.createDiv("setting-item-description").append(md("A biblix package's git repository: its newest release is installed, and pinned in `biblix.lock`."));
+  info.createDiv("setting-item-description").append(md("A logoxide package's git repository: its newest release is installed, and pinned in `logoxide.lock`."));
   const form = info.createDiv("topos-inline-form");
   const input = form.createEl("input", { attr: { type: "url", placeholder: "https://github.com/owner/package", spellcheck: "false" } });
   const button = form.createEl("button", { cls: "mod-cta", text: "Add" });

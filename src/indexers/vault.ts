@@ -1,5 +1,5 @@
 import { Notice, Platform, type TFile } from "obsidian";
-import { IndexKind, IndexStatus } from "biblix";
+import { IndexKind, IndexStatus } from "logoxide";
 import { cliBatches, cliFailed, OutdatedCliError } from "../core/cli.ts";
 import type ToposPlugin from "../main.ts";
 import { runCli, type CliRun } from "./cli.ts";

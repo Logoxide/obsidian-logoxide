@@ -1,5 +1,5 @@
 import { TFile, type TAbstractFile } from "obsidian";
-import { ToposBook, type Passage } from "biblix";
+import { ToposBook, type Passage } from "logoxide";
 import { BOOK_EXTENSIONS, codeFromUsx, groupBibles, type Bible } from "../core/bibles.ts";
 import type ToposPlugin from "../main.ts";
 
@@ -7,7 +7,7 @@ import type ToposPlugin from "../main.ts";
 const BOOKS_KEPT = 3;
 
 /**
- * The Bibles in the vault: folders of USX (or USFM) files, and biblix packages (installed in the
+ * The Bibles in the vault: folders of USX (or USFM) files, and logoxide packages (installed in the
  * library's folder, or path packages), kept up to date as files change
  */
 export class BibleLibrary {
@@ -34,7 +34,7 @@ export class BibleLibrary {
     this.plugin.registerEvent(vault.on("rename", (file) => changed(file)));
   }
 
-  /** Reads the Bibles again when next asked (biblix's packages changed) */
+  /** Reads the Bibles again when next asked (logoxide's packages changed) */
   reset(): void {
     this.cached = null;
   }
@@ -94,11 +94,11 @@ export class BibleLibrary {
   }
 
   /**
-   * A passage's plain text, from the Bible it names (else the current one; else a biblix
+   * A passage's plain text, from the Bible it names (else the current one; else a logoxide
    * package's), its parts joined by " … "; null without a Bible with the book
    */
   async text(passage: Passage, translation?: string | null): Promise<string | null> {
-    // A biblix package's Bible, when the reference names one the vault has no folder for
+    // A logoxide package's Bible, when the reference names one the vault has no folder for
     const packages = this.plugin.packages;
     if (translation && !this.named(translation) && packages.has(translation)) return packages.text(passage, translation);
     const file = await this.bookFile(passage, this.forText(translation));

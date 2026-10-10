@@ -18,7 +18,7 @@ import {
 import { around } from "file-plus-plus/obsidian";
 import { FilePlusPlusPlugin, type DocumentEmbed, type DocumentView, type EmbedContext } from "file-plus-plus/obsidian";
 import type { FppSettings } from "file-plus-plus/obsidian";
-import { OffsetUnit, type BookTextOptions, type Passage, type Topos, type ToposTranslations } from "biblix";
+import { OffsetUnit, type BookTextOptions, type Passage, type Topos, type ToposTranslations } from "logoxide";
 import type { EditorView } from "@codemirror/view";
 import { DEFAULT_FORMAT } from "./core/format.ts";
 import { migrateQuery, parseQuery, type SavedQuery } from "./core/query.ts";
@@ -47,7 +47,7 @@ import { createBibleFormat } from "./bible/format.ts";
 import { STUB_EXTENSION } from "./core/stubs.ts";
 import { BibleLibrary } from "./bible/library.ts";
 import { VerseCounts } from "./bible/counts.ts";
-import { BiblixBibles } from "./bible/packages.ts";
+import { LogoxideBibles } from "./bible/packages.ts";
 import { BibleManager } from "./bible/manage.ts";
 import { BibleStyles } from "./bible/styles.ts";
 import { addParallelCommands } from "./bible/parallel.ts";
@@ -57,7 +57,7 @@ import { formatVerseLocator, passageParts } from "./core/verse-locator.ts";
 import { wholeReference } from "./core/syntax.ts";
 
 /** The page preview source of references in notes (Settings → Page preview) */
-export const HOVER_SOURCE = "topos-bible-references";
+export const HOVER_SOURCE = "logoxide-references";
 import { SEARCH_VIEW, SearchView } from "./view/SearchView.tsx";
 import { newTabLeaf, SEARCH_PANE_VIEW, SearchPane } from "./view/SearchPane.tsx";
 import { scopeOf, SearchStore, type SearchState } from "./view/store.ts";
@@ -76,12 +76,12 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
   });
   /** Each Bible book's verse counts, for references that name its translation */
   verseCounts = new VerseCounts(this, () => this.resetTranslations(true));
-  /** Bibles from biblix packages: the ones the vault's `biblix.toml` asks for */
-  packages = new BiblixBibles(this, () => {
+  /** Bibles from logoxide packages: the ones the vault's `logoxide.toml` asks for */
+  packages = new LogoxideBibles(this, () => {
     this.bibles.reset();
     this.resetTranslations(true);
   });
-  /** Adds, installs, and removes biblix packages */
+  /** Adds, installs, and removes logoxide packages */
   bibleManager = new BibleManager(this);
   /** Package Bibles' recordings, downloaded when first played */
   media = new BibleMedia(this);
@@ -183,7 +183,7 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
 
     this.registerView(SEARCH_VIEW, (leaf) => new SearchView(leaf, this));
     this.registerView(SEARCH_PANE_VIEW, (leaf) => new SearchPane(leaf, this));
-    this.registerHoverLinkSource(HOVER_SOURCE, { display: "Topos Bible: Bible references in notes", defaultMod: false });
+    this.registerHoverLinkSource(HOVER_SOURCE, { display: "Logoxide: Bible references in notes", defaultMod: false });
     this.patchReferenceLinks();
     this.addRibbonIcon("book-open", "Verse search", () => void this.activateSearch());
     this.registerEditorSuggest(new ReferenceSuggest(this));
@@ -206,16 +206,16 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
       this.bibles.start();
       void this.verseCounts.start();
       void this.packages.load();
-      this.applyBiblixHiding();
-      // The vault's biblix.toml and biblix.lock, at its root or in the packages folder
-      const biblixFiles = (file: TAbstractFile) => {
+      this.applyLogoxideHiding();
+      // The vault's logoxide.toml and logoxide.lock, at its root or in the packages folder
+      const logoxideFiles = (file: TAbstractFile) => {
         const library = this.packages.booksDir();
-        const names = ["biblix.toml", "biblix.lock"];
+        const names = ["logoxide.toml", "logoxide.lock"];
         if (names.some((n) => file.path === n || file.path === `${library}/${n}`)) void this.packages.load();
       };
-      this.registerEvent(this.app.vault.on("modify", biblixFiles));
-      this.registerEvent(this.app.vault.on("create", biblixFiles));
-      this.registerEvent(this.app.vault.on("delete", biblixFiles));
+      this.registerEvent(this.app.vault.on("modify", logoxideFiles));
+      this.registerEvent(this.app.vault.on("create", logoxideFiles));
+      this.registerEvent(this.app.vault.on("delete", logoxideFiles));
       for (const event of ["modify", "create", "delete"] as const) {
         this.registerEvent(this.app.vault.on(event as "modify", (file) => this.bibleStyles.changed(file)));
       }
@@ -255,18 +255,18 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
   private hidingStyle: HTMLStyleElement | null = null;
 
   /**
-   * Hides the packages folder (`Biblix/`) when the setting says: from the file explorer (a style
+   * Hides the packages folder (`Logoxide/`) when the setting says: from the file explorer (a style
    * rule) and from Obsidian's search, quick switcher, and graph (an entry in its excluded files,
    * which this takes out again when it's turned off or the folder changes). Verse search still
    * reads its books
    */
-  applyBiblixHiding(): void {
+  applyLogoxideHiding(): void {
     const dir = this.packages.booksDir();
-    const hide = this.settings.hideBiblixBooks;
+    const hide = this.settings.hideLogoxideBooks;
     this.hidingStyle?.remove();
     this.hidingStyle = null;
     if (hide) {
-      this.hidingStyle = document.head.createEl("style", { attr: { id: "topos-hide-biblix" } });
+      this.hidingStyle = document.head.createEl("style", { attr: { id: "topos-hide-logoxide" } });
       this.hidingStyle.textContent = `.nav-folder:has(> .nav-folder-title[data-path="${CSS.escape(dir)}"]) { display: none; }`;
     }
     const vault = this.app.vault as unknown as { getConfig?(key: string): unknown; setConfig?(key: string, value: unknown): void };
@@ -309,11 +309,11 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
       this.settings.linkTemplate = templateFromTranslation(saved.translation);
     }
     delete (this.settings as { translation?: string }).translation;
-    // Before the library was hidden, one folder held the packages and the vault's biblix.toml: it's
+    // Before the library was hidden, one folder held the packages and the vault's logoxide.toml: it's
     // the packages folder now, and its installed packages move to the hidden library on load
-    if (typeof saved.biblixLibrary === "string" && saved.biblixBooks === undefined) {
-      this.settings.biblixBooks = saved.biblixLibrary || DEFAULT_SETTINGS.biblixBooks;
-      this.settings.biblixLibrary = DEFAULT_SETTINGS.biblixLibrary;
+    if (typeof saved.logoxideLibrary === "string" && saved.logoxideBooks === undefined) {
+      this.settings.logoxideBooks = saved.logoxideLibrary || DEFAULT_SETTINGS.logoxideBooks;
+      this.settings.logoxideLibrary = DEFAULT_SETTINGS.logoxideLibrary;
       await this.saveData(this.settings);
     }
     this.settings.queries = (this.settings.queries ?? []).filter((q) => q && typeof q.name === "string");
@@ -623,7 +623,7 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
 
   /** A random name for this device's index packs, kept in this device's storage for the vault */
   private indexDevice(): string {
-    const key = "topos-bible-device";
+    const key = "logoxide-device";
     const app = this.app as { loadLocalStorage?: (key: string) => unknown; saveLocalStorage?: (key: string, value: unknown) => void };
     const saved = app.loadLocalStorage?.(key);
     if (typeof saved === "string" && /^[a-z0-9]+$/.test(saved)) return saved;
@@ -710,7 +710,7 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
     }
   }
 
-  /** Puts back the files of Bible packages edited in the library (through biblix's installer) */
+  /** Puts back the files of Bible packages edited in the library (through logoxide's installer) */
   async restorePackages(): Promise<void> {
     const notice = new Notice("Restoring Bible packages…", 0);
     try {
@@ -870,23 +870,23 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
       callback: () => openSettings(this, "add"),
     });
     this.addCommand({
-      id: "restore-biblix-packages",
+      id: "restore-logoxide-packages",
       name: "Restore edited Bible packages",
       callback: () => void this.restorePackages(),
     });
     this.addCommand({
-      id: "update-biblix-imports",
+      id: "update-logoxide-imports",
       name: "Update imported Bibles from their publishers",
       callback: () => void this.updateImports(),
     });
     this.addCommand({
-      id: "reload-biblix-packages",
-      name: "Read biblix packages again",
+      id: "reload-logoxide-packages",
+      name: "Read logoxide packages again",
       callback: () =>
         void this.packages.load().then(() => {
           const { problems } = this.packages;
           const names = this.packages.names();
-          new Notice(problems.length > 0 ? problems.join("\n") : names.length > 0 ? `Bibles from biblix: ${names.join(", ")}` : "No biblix packages (biblix.toml)");
+          new Notice(problems.length > 0 ? problems.join("\n") : names.length > 0 ? `Bibles from logoxide: ${names.join(", ")}` : "No logoxide packages (logoxide.toml)");
         }),
     });
     this.addCommand({

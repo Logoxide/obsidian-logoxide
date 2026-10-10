@@ -1,4 +1,4 @@
-import { Biblix, ToposBook } from "biblix";
+import { Logoxide, ToposBook } from "logoxide";
 import type { TranslationCounts } from "../core/translations.ts";
 import type ToposPlugin from "../main.ts";
 
@@ -36,7 +36,7 @@ export class VerseCounts {
   all(): TranslationCounts[] {
     const counts: TranslationCounts[] = [];
     for (const bible of this.plugin.bibles.all()) {
-      // A package's counts come from biblix
+      // A package's counts come from logoxide
       if (bible.package) continue;
       for (const [bookId, path] of bible.books) {
         const saved = this.saved[path];
@@ -88,7 +88,7 @@ export class VerseCounts {
         let text = await vault.cachedRead(file);
         if (file.extension === "usfm") {
           try {
-            text = Biblix.new().usfmToUsx(text);
+            text = Logoxide.new().usfmToUsx(text);
           } catch {
             continue;
           }

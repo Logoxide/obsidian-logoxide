@@ -1,5 +1,5 @@
 // Recordings (src/bible/media.ts), bundled with a stand-in for Obsidian: asked about once, downloaded
-// once, checked against the package's size and SHA-256 (biblix), kept by hash, and reused
+// once, checked against the package's size and SHA-256 (logoxide), kept by hash, and reused
 import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -62,7 +62,7 @@ async function load() {
     bundle: true,
     format: "esm",
     platform: "node",
-    external: ["biblix"],
+    external: ["logoxide"],
     alias: { obsidian: join(dir, "obsidian.js") },
     nodePaths: [new URL("../node_modules", import.meta.url).pathname],
     outfile: out,
@@ -104,12 +104,12 @@ function memoryAdapter() {
 test("a recording is downloaded once, checked, kept by hash, and reused", async () => {
   const { BibleMedia, log, responses } = await load();
   const adapter = memoryAdapter();
-  const plugin = { packages: { libraryDir: () => ".biblix" }, app: { vault: { adapter } } };
+  const plugin = { packages: { libraryDir: () => ".logoxide" }, app: { vault: { adapter } } };
   const media = new BibleMedia(plugin);
-  // "hello", as `bx media add` lists it
+  // "hello", as `lx media add` lists it
   const file = { path: "JHN.mp3", url: "https://example.org/JHN.mp3", mirrors: [], size: 5n, sha256: "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824", book: "JHN" };
   const recording = { file, bible: "AUD", timings: [] };
-  const stored = ".biblix/media/2c/2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824";
+  const stored = ".logoxide/media/2c/2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824";
   responses[file.url] = "hello";
 
   // Declined: nothing is downloaded

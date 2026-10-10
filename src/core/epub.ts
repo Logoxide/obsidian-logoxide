@@ -1,4 +1,4 @@
-import type { EpubReference } from "biblix";
+import type { EpubReference } from "logoxide";
 import type { Hit } from "./search.ts";
 
 /** A section of an EPUB's text (one spine item), as EPUB++ extracts it */

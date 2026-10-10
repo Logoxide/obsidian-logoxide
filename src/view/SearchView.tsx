@@ -6,7 +6,7 @@ import { ErrorBoundary } from "./ErrorBoundary.tsx";
 import { DEFAULT_LOOK, PaneApp, type PaneHost, type PaneLook } from "./PaneApp.tsx";
 import { keepScroll, newTabLeaf, viewHost } from "./SearchPane.tsx";
 
-export const SEARCH_VIEW = "topos-bible-search";
+export const SEARCH_VIEW = "logoxide-search";
 
 /**
  * Verse search in the sidebar: the search tab's app, narrow (the filters and display options fold

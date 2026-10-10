@@ -1,9 +1,9 @@
 import { Platform, type Menu } from "obsidian";
 import type { Annotation, AnnotationProvider } from "file-plus-plus/obsidian";
-import type { Passage } from "biblix";
+import type { Passage } from "logoxide";
 import type ToposPlugin from "../main.ts";
 
-export const PROVIDER_ID = "topos-bible";
+export const PROVIDER_ID = "logoxide";
 
 /**
  * Bible references as annotations of another plugin's documents (EPUB++'s books, Transcript++'s

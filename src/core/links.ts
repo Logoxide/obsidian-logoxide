@@ -1,4 +1,4 @@
-import type { BookInfo, Passage } from "biblix";
+import type { BookInfo, Passage } from "logoxide";
 
 /**
  * Links to Bible websites, from a template like

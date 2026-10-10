@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { BookStyle, Topos } from "biblix";
+import { BookStyle, Topos } from "logoxide";
 import { END, formatVerseLocator, parseVerseLocator, partSegments, passageParts, splitEdition, withEdition } from "../src/core/verse-locator.ts";
 
 test("verse locators round-trip", () => {
