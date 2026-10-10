@@ -274,7 +274,7 @@ export class CatalogBrowser {
     fact("Copyright", entry.copyright?.trim());
     fact("License", entry.license, true);
     if (entry.source.tag === "Git") fact("Repository", entry.source.url, true);
-    if (entry.source.tag === "Sword") fact("Module", entry.source.module, true);
+    if (entry.source.tag === "External") fact("Import", entry.source._import, true);
     main.addEventListener("click", (event) => {
       if ((event.target as HTMLElement).closest("a, button, code")) return;
       card.toggleClass("is-open", !card.hasClass("is-open"));

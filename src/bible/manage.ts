@@ -1,5 +1,5 @@
 import { requestUrl } from "obsidian";
-import { Logoxide, ChangeKind, type LogoxideCatalog, type LogoxideInstaller, type LogoxideProject, type CatalogEntry, type FetchRequest, type InstallStep, type PackageFile, type PackageLocation, type UpdateMode, type Upstream } from "logoxide";
+import { Logoxide, ChangeKind, type LogoxideCatalog, type LogoxideInstaller, type LogoxideProject, type CatalogEntry, type FetchRequest, type ImportDownload, type InstallStep, type PackageFile, type PackageLocation, type UpdateMode, type Upstream } from "logoxide";
 import type ToposPlugin from "../main.ts";
 import { LOCK, MANIFEST, buffer, join, message, mkdirs, readTree } from "./packages.ts";
 
@@ -437,32 +437,32 @@ export class BibleManager {
   }
 }
 
-/** Each of fetch.bible's books (a few at a time), with its code as the path */
-async function downloadBooks(books: { code: string; url: string }[]): Promise<{ path: string; bytes: Uint8Array }[]> {
-  const files: { path: string; bytes: Uint8Array }[] = [];
-  const queue = [...books];
-  const worker = async () => {
-    for (let book = queue.shift(); book; book = queue.shift()) {
-      files.push({ path: book.code, bytes: new Uint8Array(await download(book.url)) });
-    }
-  };
-  await Promise.all(Array.from({ length: 8 }, worker));
-  return files;
-}
-
 /** A change's kind in words (`minor`) */
 function changeName(change: ChangeKind): string {
   return (Object.entries(ChangeKind).find(([, value]) => value === change)?.[0] ?? "").toLowerCase();
 }
 
-/** A catalog entry's import: its publisher's download made into a package's files */
+/**
+ * A catalog entry's import: each download it needs (eBible.org's zip, fetch.bible's books, CCEL's ThML, a SWORD
+ * module's zip), fetched a few at a time from the first of its URLs that answers, made into a package's files
+ */
 async function importFiles(logoxide: Logoxide, entry: CatalogEntry): Promise<PackageFile[]> {
-  const source = entry.source;
-  if (source.tag === "Ebible") return logoxide.importEbible(entry, new Uint8Array(await download(source.zipUrl)));
-  if (source.tag === "Ccel") return logoxide.importCcel(entry, new Uint8Array(await download(source.url)));
-  if (source.tag === "Sword") return logoxide.importSword(entry, new Uint8Array(await downloadFirst(source.zipUrls)));
-  if (source.tag === "FetchBible") return logoxide.importFetchBible(entry, await downloadBooks(source.books));
-  throw new Error(`${entry.id} isn't imported: add it`);
+  if (entry.source.tag !== "External") throw new Error(`${entry.id} isn't imported: add it`);
+  const files = await downloadAll(logoxide.importDownloads(entry));
+  return logoxide.importDownloaded(entry, files);
+}
+
+/** Each download by its name, a few at a time (fetch.bible has one per book) */
+async function downloadAll(downloads: ImportDownload[]): Promise<PackageFile[]> {
+  const files: PackageFile[] = [];
+  const queue = [...downloads];
+  const worker = async () => {
+    for (let next = queue.shift(); next; next = queue.shift()) {
+      files.push({ path: next.name, bytes: new Uint8Array(await downloadFirst(next.urls)) });
+    }
+  };
+  await Promise.all(Array.from({ length: 8 }, worker));
+  return files;
 }
 
 /** The bytes of the first of these URLs that answers (a SWORD module's zip, under its name or in lowercase) */
