@@ -69,6 +69,7 @@ export class BibleEmbed extends DocumentEmbed<BibleBook, BibleReader> {
       attr: { "aria-label": shown ? "Hide the verses around it" : "Show the verses around it" },
     });
     setIcon(button, shown ? "fold-vertical" : "unfold-vertical");
+    keepFromEditor(button);
     header.insertBefore(button, this.title.nextSibling);
     button.addEventListener("click", (e) => {
       // Not the header's click, which opens the book
@@ -95,6 +96,7 @@ export class BibleEmbed extends DocumentEmbed<BibleBook, BibleReader> {
     if (!header) return;
     const button = (this.playButton = header.createDiv({ cls: "clickable-icon topos-embed-play", attr: { "aria-label": `Play ${label} (${recording.bible})` } }));
     setIcon(button, "play");
+    keepFromEditor(button);
     header.insertBefore(button, this.title.nextSibling);
     button.addEventListener("click", (e) => {
       // Not the header's click, which opens the book
@@ -133,4 +135,17 @@ export class BibleEmbed extends DocumentEmbed<BibleBook, BibleReader> {
       })();
     });
   }
+}
+
+/**
+ * Keeps a press on a header button from the editor around an embed: in live preview, a press would
+ * otherwise move the cursor onto the embed's line, which shows its source and closes it
+ */
+function keepFromEditor(button: HTMLElement): void {
+  const keep = (e: Event) => {
+    e.stopPropagation();
+    // Not on touch: that would cancel the tap's click
+    if (e.type === "mousedown") e.preventDefault();
+  };
+  for (const type of ["pointerdown", "mousedown", "touchstart"]) button.addEventListener(type, keep);
 }
