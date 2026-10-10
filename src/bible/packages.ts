@@ -1,5 +1,5 @@
 import { Notice, TFile, TFolder } from "obsidian";
-import { Logoxide, PackageKind, type LogoxidePackage, type LockedEntry, type MediaFile, type PackageFile, type Passage, type ToposBook, type ToposTranslations } from "logoxide";
+import { Logoxide, PackageKind, type LogoxidePackage, type LockedEntry, type MediaFile, type PackageFile, type Passage, type LogoxideBook, type ToposTranslations } from "logoxide";
 import { RESERVED, STUB_EXTENSION, parseStub, staleStubs, stubNames, stubPath, stubText } from "../core/stubs.ts";
 import type ToposPlugin from "../main.ts";
 import type { Timing } from "../core/timings.ts";
@@ -22,7 +22,7 @@ interface PackageBible {
   aliases: string[];
   pkg: LogoxidePackage;
   /** Books read last */
-  books: Map<number, ToposBook>;
+  books: Map<number, LogoxideBook>;
   /** The package's folder, from the vault's root */
   dir: string;
   /** Each book's stub (see `core/stubs.ts`), by book id */
@@ -587,7 +587,7 @@ export class LogoxideBibles {
    * A stub's book read by logoxide, for files the reader can't parse itself (OSIS, ThML, and files of
    * several books); a new book each time, which the reader disposes
    */
-  async stubBook(stub: TFile, code: string | null): Promise<ToposBook | null> {
+  async stubBook(stub: TFile, code: string | null): Promise<LogoxideBook | null> {
     await this.loading;
     const named = parseStub(await this.plugin.app.vault.cachedRead(stub));
     const bible = named && this.bibles.find((b) => b.dependency === named.package);

@@ -107,7 +107,7 @@ test("a recording is downloaded once, checked, kept by hash, and reused", async 
   const plugin = { packages: { libraryDir: () => ".logoxide" }, app: { vault: { adapter } } };
   const media = new BibleMedia(plugin);
   // "hello", as `lx media add` lists it
-  const file = { path: "JHN.mp3", url: "https://example.org/JHN.mp3", mirrors: [], size: 5n, sha256: "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824", book: "JHN" };
+  const file = { path: "JHN.mp3", url: "https://example.org/JHN.mp3", mirrors: [], size: 5n, sha256: "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824", book: "JHN", timings: null };
   const recording = { file, bible: "AUD", timings: [] };
   const stored = ".logoxide/media/2c/2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824";
   responses[file.url] = "hello";

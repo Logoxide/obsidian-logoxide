@@ -1,11 +1,11 @@
 import { DocumentReader, PREFIX, splitTextDirective, textFragmentScheme, withTextDirective, type LocatorScheme, type ParsedLocator, type ReaderOptions, type TocItem } from "file-plus-plus/core";
-import type { BookTextOptions, ToposBook } from "logoxide";
+import type { BookTextOptions, LogoxideBook } from "logoxide";
 import { markNotes, notePopups, NOTES_CSS, type NoteLinks } from "./notes.ts";
 import { END, formatVerseLocator, parseVerseLocator, partSegments, splitEdition, withEdition, type VersePart } from "../core/verse-locator.ts";
 
 /** A Bible book opened from a USX file */
 export interface BibleBook {
-  book: ToposBook;
+  book: LogoxideBook;
   bookId: number;
   /** The book's name: `John` */
   name: string;
@@ -61,8 +61,8 @@ interface Marker {
 }
 
 /**
- * Renders a book as one page, a section per chapter, from topos's `ToposBook` (the HTML of
- * topos-bible-markup, whose verse markers are `span.topos-verse[data-n]`). A preview (hover or
+ * Renders a book as one page, a section per chapter, from logoxide's `LogoxideBook` (the HTML of
+ * logoxide-markup, whose verse markers are `span.topos-verse[data-n]`). A preview (hover or
  * embed) renders only its passage.
  */
 export class BibleReader extends DocumentReader {
@@ -103,7 +103,7 @@ export class BibleReader extends DocumentReader {
   }
 
   /**
-   * The reader's look, and USX's markers (topos-bible-markup gives each its \`data-style\`: \`q2\`,
+   * The reader's look, and USX's markers (logoxide-markup gives each its \`data-style\`: \`q2\`,
    * \`pn\`, \`fr\`), in file-plus-plus's \`document\` layer: the vault's Bible stylesheet isn't in a
    * layer, so its rules win whatever their specificity
    */

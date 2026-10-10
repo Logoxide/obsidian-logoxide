@@ -1,7 +1,7 @@
 import type { FileFormat } from "file-plus-plus/obsidian";
 import { serializeTextFragment, withTextDirective } from "file-plus-plus/core";
 import type { App, TFile } from "obsidian";
-import { Logoxide, ToposBook, type BookVerse, type PassageSegment } from "logoxide";
+import { Logoxide, LogoxideBook, type BookVerse, type PassageSegment } from "logoxide";
 import { formatVerseLocator, parseVerseLocator } from "../core/verse-locator.ts";
 import type ToposPlugin from "../main.ts";
 import { BOOK_EXTENSIONS } from "../core/bibles.ts";
@@ -98,7 +98,7 @@ async function loadBook(plugin: ToposPlugin, app: App, file: TFile): Promise<Bib
   let text: string;
   let extension = file.extension;
   let stubBible: string | null = null;
-  let book: ToposBook | null = null;
+  let book: LogoxideBook | null = null;
   if (file.extension === STUB_EXTENSION) {
     // A package's book: read from the library, where its stub says
     const target = await plugin.packages.stubTarget(file);
@@ -116,7 +116,7 @@ async function loadBook(plugin: ToposPlugin, app: App, file: TFile): Promise<Bib
   }
   if (!book) {
     if (extension === "usfm" || extension === "sfm") text = Logoxide.new().usfmToUsx(text);
-    book = ToposBook.parse(topos, "usx", text);
+    book = LogoxideBook.parse(topos, "usx", text);
   }
   if (!book) throw new Error("not a USX file");
   const bookId = book.bookId() ?? 0;

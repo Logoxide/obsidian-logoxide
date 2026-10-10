@@ -1,5 +1,5 @@
 import { requestUrl } from "obsidian";
-import { Logoxide, ChangeKind, type LogoxideCatalog, type LogoxideInstaller, type LogoxideProject, type CatalogEntry, type FetchRequest, type InstallStep, type PackageFile, type PackageLocation, type UpdateMode } from "logoxide";
+import { Logoxide, ChangeKind, type LogoxideCatalog, type LogoxideInstaller, type LogoxideProject, type CatalogEntry, type FetchRequest, type InstallStep, type PackageFile, type PackageLocation, type UpdateMode, type Upstream } from "logoxide";
 import type ToposPlugin from "../main.ts";
 import { LOCK, MANIFEST, buffer, join, message, mkdirs, readTree } from "./packages.ts";
 
@@ -353,7 +353,7 @@ export class BibleManager {
           lines.push(`${entry.name}: in none of the catalogs searched`);
           continue;
         }
-        if (logoxide.importIsCurrent(from, entry.version)) {
+        if (logoxide.importIsCurrent(from, upstream.version)) {
           lines.push(`${entry.name} ${entry.version}: up to date`);
           continue;
         }
@@ -362,8 +362,8 @@ export class BibleManager {
           lines.push(`${entry.name} ${entry.version}: up to date`);
           continue;
         }
-        const raised = update.bumped ? ", the version raised for it" : "";
-        lines.push(`${entry.name} ${update.from} → ${update.to}: ${update.description} (${changeName(update.change)} change${raised})`);
+        const publisher = update.upstreamFrom !== update.upstreamTo ? `, the publisher's ${update.upstreamFrom ?? "?"} → ${update.upstreamTo ?? "?"}` : "";
+        lines.push(`${entry.name} ${update.from} → ${update.to}: ${update.description} (${changeName(update.change)} change${publisher})`);
         if (checkOnly) continue;
         for (const path of update.removed) {
           if (await this.adapter.exists(`${dir}/${path}`)) await this.adapter.remove(`${dir}/${path}`);
@@ -387,10 +387,11 @@ export class BibleManager {
   }
 
   /** The catalog entry an import was made from, by its upstream: in the catalogs searched, else (a SWORD module) its repository's */
-  private async importEntry(logoxide: Logoxide, catalog: LogoxideCatalog, upstream: string, base: string): Promise<CatalogEntry | null> {
+  private async importEntry(logoxide: Logoxide, catalog: LogoxideCatalog, upstream: Upstream, base: string): Promise<CatalogEntry | null> {
     const found = catalog.findUpstream(upstream);
-    const root = upstream.split("/packages/")[0];
-    if (found || root === upstream || !root) return found ?? null;
+    const url = upstream.url ?? "";
+    const root = url.split("/packages/")[0];
+    if (found || root === url || !root) return found ?? null;
     const location = `${root}/mods.d.tar.gz`;
     const repository = logoxide.parseCatalogBytes(location, await this.catalogBytes(location, base));
     const entry = repository.findUpstream(upstream);

@@ -1,15 +1,15 @@
 # Formatting USX: which tags matter
 
 Notes for whoever next works on how Bible text looks (October 2026). Bible text is USX (USFM is
-converted to USX by logoxide first), rendered to HTML by topos-bible-markup and styled by this
+converted to USX by logoxide first), rendered to HTML by logoxide-markup and styled by this
 plugin.
 
 ## Where each part lives
 
-- **What an element is** (its `Kind`): topos, `crates/topos-markup/src/classify.rs` (`fn usx`).
-- **What HTML it becomes**: topos, `crates/topos-markup/src/html.rs`, specified in
-  `crates/topos-markup/docs/spec/html.md` (change the spec first; `GOLDEN_BLESS=1 cargo test -p
-  topos-bible-markup --test golden` rewrites the golden files, then check the diff).
+- **What an element is** (its `Kind`): logoxide, `crates/logoxide-markup/src/classify.rs` (`fn usx`).
+- **What HTML it becomes**: logoxide, `crates/logoxide-markup/src/html.rs`, specified in
+  `crates/logoxide-markup/docs/spec/html.md` (change the spec first; `GOLDEN_BLESS=1 cargo test -p
+  logoxide-markup --test golden` rewrites the golden files, then check the diff).
 - **How it looks**: here, `src/bible/reader.ts`: the reader's CSS and `USX_CSS`, in
   file-plus-plus's `document` layer. The vault's **Bible stylesheet** (`bibleCss`,
   `src/bible/styles.ts`) is outside any layer, so a user's rules always win.
@@ -19,7 +19,7 @@ plugin.
 Every USX `para`, `char`, `note`, `cell`, and `sidebar` keeps its `style` as `data-style`. So CSS
 can tell apart markers whose kind is shared (`q1` and `q2` are both `topos-l`), and a missing
 style is usually a CSS-only fix here. A missing *attribute* (an alternate number, a gloss, a link
-target) needs a change in topos.
+target) needs a change in logoxide-markup.
 
 ## The tags real Bibles use
 

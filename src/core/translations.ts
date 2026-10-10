@@ -29,7 +29,7 @@ export function parseAliases(text: string): Map<string, string[]> {
   return names;
 }
 
-/** A book's verse counts in a translation (from `ToposBook.usxChapterVerses`) */
+/** A book's verse counts in a translation (from `LogoxideBook.usxChapterVerses`) */
 export interface TranslationCounts {
   translation: string;
   bookId: number;

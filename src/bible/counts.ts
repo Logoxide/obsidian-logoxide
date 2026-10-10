@@ -1,4 +1,4 @@
-import { Logoxide, ToposBook } from "logoxide";
+import { Logoxide, LogoxideBook } from "logoxide";
 import type { TranslationCounts } from "../core/translations.ts";
 import type ToposPlugin from "../main.ts";
 
@@ -11,7 +11,7 @@ interface Saved {
 }
 
 /**
- * Each Bible book's verse counts, from its USX markers (`ToposBook.usxChapterVerses`, without
+ * Each Bible book's verse counts, from its USX markers (`LogoxideBook.usxChapterVerses`, without
  * parsing the book), so a reference naming a translation is checked against that translation (with
  * an ESV, `3 John 1:15 ESV` exists, though the default counts, the KJV's, end at verse 14). They're
  * read in the background and kept in the plugin's folder, so only changed books are read again.
@@ -93,7 +93,7 @@ export class VerseCounts {
             continue;
           }
         }
-        const counts = Array.from(ToposBook.usxChapterVerses(text));
+        const counts = Array.from(LogoxideBook.usxChapterVerses(text));
         this.saved[path] = { mtime: file.stat.mtime, size: file.stat.size, bookId, counts };
         read = true;
         // A Bible is 66 files: let the app breathe between them

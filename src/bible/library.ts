@@ -1,5 +1,5 @@
 import { TFile, type TAbstractFile } from "obsidian";
-import { ToposBook, type Passage } from "logoxide";
+import { LogoxideBook, type Passage } from "logoxide";
 import { BOOK_EXTENSIONS, codeFromUsx, groupBibles, type Bible } from "../core/bibles.ts";
 import type ToposPlugin from "../main.ts";
 
@@ -13,7 +13,7 @@ const BOOKS_KEPT = 3;
 export class BibleLibrary {
   private cached: Bible[] | null = null;
   /** The books `text` read last, by path and modification time (suggestions read the same ones again) */
-  private readonly books = new Map<string, ToposBook>();
+  private readonly books = new Map<string, LogoxideBook>();
 
   constructor(
     private readonly plugin: ToposPlugin,
@@ -104,9 +104,9 @@ export class BibleLibrary {
     const file = await this.bookFile(passage, this.forText(translation));
     if (!file) return packages.text(passage, translation);
     const key = `${file.path}\n${file.stat.mtime}`;
-    let book: ToposBook | null | undefined = this.books.get(key);
+    let book: LogoxideBook | null | undefined = this.books.get(key);
     if (!book) {
-      book = ToposBook.parse(this.plugin.topos, "usx", await this.plugin.app.vault.cachedRead(file));
+      book = LogoxideBook.parse(this.plugin.topos, "usx", await this.plugin.app.vault.cachedRead(file));
       if (!book) return null;
       this.books.set(key, book);
       // A few books: a chapter's verses come from one, and switching books is rare
