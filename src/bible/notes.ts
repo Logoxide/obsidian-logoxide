@@ -66,8 +66,9 @@ function letters(n: number): string {
 }
 
 /**
- * Shows a note in a popup beside its mark: on hover with a mouse, and on a click or tap (which
- * keeps it until a click elsewhere, Escape, or scrolling). Returns what removes its listeners
+ * Shows a note in a popup beside its mark: on hover with a mouse (kept while the pointer is on it,
+ * or on a preview of one of its references), and on a click or tap (which keeps it until a click
+ * elsewhere, Escape, or scrolling). Returns what removes its listeners
  */
 export function notePopups(scroller: HTMLElement, content: HTMLElement, options: NotePopupOptions): () => void {
   const doc = scroller.ownerDocument;
@@ -78,6 +79,17 @@ export function notePopups(scroller: HTMLElement, content: HTMLElement, options:
   let pinned = false;
   let timer = 0;
 
+  const host = (scroller.getRootNode() as ShadowRoot).host as Element | undefined;
+  /** A hover preview opened from the popup (not one this reader is in) */
+  const isPreview = (el: Element) => el.classList.contains("hover-popover") && !(host && el.contains(host));
+  /** Whether the pointer is on the popup, its mark, or a preview of one of its references */
+  const kept = () =>
+    !!popup?.matches(":hover") || !!shown?.matches(":hover") || Array.from(doc.querySelectorAll(".hover-popover")).some((el) => isPreview(el) && el.matches(":hover"));
+  /** Hides the popup once the pointer has been away from it (and its previews) a moment */
+  const leave = () => {
+    const check = () => (kept() ? later(check, HIDE_MS) : hide());
+    later(check, HIDE_MS);
+  };
   const refOf = (target: EventTarget | null) => (target instanceof Element ? target.closest<HTMLElement>(".tpb-note-ref") : null);
   /** Whether a passage is just the verse the note is in */
   const isCurrent = (note: HTMLElement) => {
@@ -148,7 +160,7 @@ export function notePopups(scroller: HTMLElement, content: HTMLElement, options:
       if (passage) options.links?.preview(passage, ref, e);
     });
     popup.addEventListener("pointerleave", () => {
-      if (!pinned) later(hide, HIDE_MS);
+      if (!pinned) leave();
     });
     scroller.append(popup);
     place(popup, note);
@@ -166,7 +178,7 @@ export function notePopups(scroller: HTMLElement, content: HTMLElement, options:
     if (e.pointerType !== "mouse" || pinned) return;
     const note = noteOf(e.target);
     if (!note || note.contains(e.relatedTarget as Node | null)) return;
-    if (shown) later(hide, HIDE_MS);
+    if (shown) leave();
     else win.clearTimeout(timer);
   };
   // A click or tap on a mark keeps its note open (and isn't a click on the text: no highlight menu)
@@ -183,7 +195,7 @@ export function notePopups(scroller: HTMLElement, content: HTMLElement, options:
   const down = (e: PointerEvent) => {
     if (!popup) return;
     const path = e.composedPath();
-    if (path.includes(popup) || path.some((node) => node instanceof Element && node.classList.contains("topos-note"))) return;
+    if (path.includes(popup) || path.some((node) => node instanceof Element && (node.classList.contains("topos-note") || isPreview(node)))) return;
     hide();
   };
   const key = (e: KeyboardEvent) => {
