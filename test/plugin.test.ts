@@ -412,6 +412,8 @@ test("the built plugin loads, indexes, and runs its commands", async (t) => {
 
   // Another device (its files have other times after syncing) confirms the notes by their text
   const phoneApp = Object.create(app, { storage: { value: new Map() } });
+  // Notes' packs are named for their kind: an app that searches no EPUBs never reads EPUBs' packs
+  assert.ok(packs.every((name) => name.startsWith(`${plugin.device}-text-`)), packs.join());
   const realFiles = app.vault.getFiles;
   app.vault.getFiles = () => realFiles().map((f: any) => Object.assign(f, { stat: { mtime: 99, size: f.stat.size } }));
   const phone = counting(new ToposPlugin(phoneApp, manifest));

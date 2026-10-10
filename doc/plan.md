@@ -148,7 +148,8 @@ file and a `v=` locator), and opens them itself.
   hash. At startup the packs are read and each file checked: unchanged files aren't searched, and
   files synced from another device (new times, same size) are matched by hash (notes) or size
   (EPUBs) and confirmed in this device's own packs. Each device writes only its own packs (32 per
-  device, by path hash, written a few seconds after a change), so syncing never conflicts; other
+  device and kind of file, by path hash, written a few seconds after a change; only the kinds
+  searched are read: EPUBs' when EPUBs are, never PDFs'), so syncing never conflicts; other
   devices' packs are read again when Obsidian comes back to the front. EPUB details (CFIs and
   about 200 characters around each reference) are per book and read when a page or book needs
   them. The JSON cache from before (`epub-index.json`) is deleted.

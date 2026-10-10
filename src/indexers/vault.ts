@@ -1,5 +1,5 @@
 import { Notice, Platform, type TFile } from "obsidian";
-import { IndexStatus } from "biblix";
+import { IndexKind, IndexStatus } from "biblix";
 import { cliBatches, cliFailed, OutdatedCliError } from "../core/cli.ts";
 import type ToposPlugin from "../main.ts";
 import { runCli, type CliRun } from "./cli.ts";
@@ -29,6 +29,9 @@ function buffer(bytes: Uint8Array): ArrayBuffer {
  *   else in a background thread; EPUBs the CLI can't read go through EPUB++
  * - Each device writes its own packs, a few seconds after a change; packs from other devices
  *   are read again when Obsidian comes back to the front
+ * - Each kind of file has its own packs (`<device>-<kind>-<number>.bin`): only the kinds searched
+ *   are read (EPUBs' when they're searched; never PDFs', which the plugin doesn't read), and a
+ *   kind's packs are read when it starts being searched
  */
 export class VaultIndexer {
   private readonly plugin: ToposPlugin;
@@ -41,6 +44,8 @@ export class VaultIndexer {
   private saving: Promise<void> = Promise.resolve();
   /** Other devices' packs as last read, by name: their modification times */
   private readonly packTimes = new Map<string, number>();
+  /** The kinds of files whose packs have been read */
+  private readonly loadedKinds = new Set<IndexKind>();
   private readonly detailLoads = new Map<string, Promise<void>>();
   /** Files indexed from an edit during a pass, which the pass must not overwrite */
   private readonly edited = new Set<string>();
@@ -88,18 +93,32 @@ export class VaultIndexer {
     void this.save();
   }
 
+  /** The kinds of files searched now: text always, EPUBs when any is */
+  private wantedKinds(): Set<IndexKind> {
+    const kinds = new Set<IndexKind>([IndexKind.Text]);
+    const epub = (file: TFile) => file.extension.toLowerCase() === "epub" && this.kind(file) === "epub";
+    if (this.plugin.app.vault.getFiles().some(epub)) kinds.add(IndexKind.Epub);
+    return kinds;
+  }
+
   /**
-   * Reads the packs (with `changedOnly`, only other devices' packs that changed since they were
-   * read); returns whether any were read
+   * Reads the packs of the kinds of files searched (with `changedOnly`, only other devices' packs
+   * that changed since they were read; with `kinds`, only those kinds'); returns whether any were
+   * read
    */
-  async loadPacks(changedOnly: boolean): Promise<boolean> {
+  async loadPacks(changedOnly: boolean, kinds: Set<IndexKind> = this.wantedKinds()): Promise<boolean> {
+    if (!changedOnly) for (const kind of kinds) this.loadedKinds.add(kind);
     const dir = this.dir;
     if (!dir || !(await this.adapter.exists(`${dir}/packs`))) return false;
     const own = `${this.plugin.device}-`;
+    const core = this.index.core;
     let loaded = false;
     for (const path of (await this.adapter.list(`${dir}/packs`)).files) {
       const name = path.split("/").pop() ?? path;
       if (!name.endsWith(".bin")) continue;
+      // Packs from before kinds have none: reading one fails below, and it's removed
+      const kind = core.packKind(name);
+      if (kind != null && !(changedOnly ? this.loadedKinds : kinds).has(kind)) continue;
       const mine = name.startsWith(own);
       if (changedOnly && mine) continue;
       const mtime = (await this.adapter.stat(path))?.mtime ?? 0;
@@ -134,6 +153,12 @@ export class VaultIndexer {
   async reconcile(force = false): Promise<void> {
     const pass = ++this.pass;
     const current = () => pass === this.pass;
+    // A kind of file searched since the packs were read (EPUBs turned on): read its packs first
+    const unread = new Set([...this.wantedKinds()].filter((kind) => !this.loadedKinds.has(kind)));
+    if (unread.size > 0) {
+      await this.loadPacks(false, unread);
+      if (!current()) return;
+    }
     this.cliRun?.stop();
     this.edited.clear();
     this.plugin.indexing = true;
@@ -375,10 +400,17 @@ export class VaultIndexer {
     return load;
   }
 
-  /** Deletes details no entry uses (once they're old enough that no pack could still name them) */
+  /**
+   * Deletes details no entry uses (once they're old enough that no pack could still name them),
+   * when every pack that could name one has been read: EPUBs', and no PDFs' (the CLI's)
+   */
   private async pruneDetails(): Promise<void> {
     const dir = this.dir;
-    if (!dir || !(await this.adapter.exists(`${dir}/details`))) return;
+    if (!dir || !this.loadedKinds.has(IndexKind.Epub) || !(await this.adapter.exists(`${dir}/details`))) return;
+    if (await this.adapter.exists(`${dir}/packs`)) {
+      const names = (await this.adapter.list(`${dir}/packs`)).files.map((p) => p.split("/").pop() ?? p);
+      if (names.some((name) => this.index.core.packKind(name) === IndexKind.Pdf)) return;
+    }
     const used = new Set(this.index.core.detailNames());
     for (const path of (await this.adapter.list(`${dir}/details`)).files) {
       const name = (path.split("/").pop() ?? "").replace(/\.bin$/, "");
