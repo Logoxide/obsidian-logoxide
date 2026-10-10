@@ -113,7 +113,7 @@ search, whether to search EPUBs (below), excluded folders, and the search engine
 
 Install a Bible under *Settings → Add a Bible*: **Search** finds translations by name,
 abbreviation, or language (eBible.org's and fetch.bible's, about 2,900, and any catalogs you add
-under *Catalogs*: a `catalog.toml`'s URL, or a file in the vault) and installs the one you pick; **Git URL** adds a [logoxide](https://github.com/MasterTemple/logoxide)
+under *Catalogs*: a `catalog.toml`'s URL, or a file in the vault) and installs the one you pick; **Git URL** adds a [logoxide](https://github.com/Logoxide/logoxide)
 package from its repository. Packages are installed in a hidden folder, `.logoxide/` (*Library
 folder*), which isn't synced: each device installs what `Logoxide/logoxide.lock` pins by itself (from
 the web; local repositories need `lx`). The vault's `Logoxide/` folder (*Packages folder*) holds
