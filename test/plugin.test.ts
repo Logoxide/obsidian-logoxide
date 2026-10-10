@@ -514,10 +514,19 @@ test("the built plugin loads, indexes, and runs its commands", async (t) => {
   // Its tabs
   assert.deepEqual(
     [...tab.containerEl.querySelectorAll(".topos-tab")].map((el: any) => el.textContent),
-    ["Bibles", "Library", "Add Bibles", "References", "Search", "Reader", "Highlights"],
+    ["Bibles", "Display", "Library", "Add Bibles", "References", "Search", "Reader", "Highlights"],
   );
   // Settings still shown (a part of a tab is drawn again when what it shows changes)
   const setting = (name: string): any => FakeSetting.all.find((s: any) => s.name === name && tab.containerEl.contains(s.settingEl));
+  // Display: footnotes and cross references are separate; notes render when either shows
+  assert.equal(plugin.settings.bibleCrossRefs, false);
+  setting("Cross references").controls[0].change(true);
+  assert.equal(plugin.bookTextOptions().notes, true);
+  setting("Cross references").controls[0].change(false);
+  assert.equal(plugin.bookTextOptions().notes, false);
+  setting("Verse numbers").controls[0].change(false);
+  assert.equal(plugin.settings.bibleVerseNumbers, false);
+  setting("Verse numbers").controls[0].change(true);
   assert.equal(setting("Format preview").desc, "John 3:16,17,18; 4:1-5:3   Jude 1:5");
   setting("Join adjacent verses").controls[0].change(true);
   setting("Chapter in single-chapter books").controls[0].change(false);

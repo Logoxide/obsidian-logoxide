@@ -1,13 +1,16 @@
 import { normalizePath, type TAbstractFile } from "obsidian";
 import type ToposPlugin from "../main.ts";
+import { displayCss } from "../core/display.ts";
 
 /**
- * The vault's Bible stylesheet (the `bibleCss` setting): a CSS file applied to every Bible tab,
- * hover preview, and embed, after the reader's own styles. Readers render in shadow roots, which
- * Obsidian's CSS snippets don't reach, so each adopts its window's one constructed sheet, and a
- * change to the file restyles them all at once.
+ * The display settings (`displayCss`: verse numbers, notes, red letters) and the vault's Bible
+ * stylesheet (the `bibleCss` setting: a CSS file), applied to every Bible tab, hover preview, and
+ * embed, after the reader's own styles. Readers render in shadow roots, which Obsidian's CSS
+ * snippets don't reach, so each adopts its window's one constructed sheet, and a change to the
+ * settings or the file restyles them all at once.
  */
 export class BibleStyles {
+  /** The stylesheet file's CSS */
   private css = "";
   /** A sheet per window (a constructed sheet only works in its own document) */
   private readonly sheets = new Map<Document, CSSStyleSheet>();
@@ -32,7 +35,17 @@ export class BibleStyles {
       }
     }
     this.css = css;
-    for (const sheet of this.sheets.values()) replace(sheet, css);
+    this.apply();
+  }
+
+  /** Restyles every reader after the display settings or the file changed */
+  apply(): void {
+    for (const sheet of this.sheets.values()) replace(sheet, this.text());
+  }
+
+  /** The display settings' rules, then the file's */
+  private text(): string {
+    return displayCss(this.plugin.settings) + this.css;
   }
 
   /** Reloads when the stylesheet is written, moved, or deleted */
@@ -52,7 +65,7 @@ export class BibleStyles {
     } catch {
       return null;
     }
-    replace(sheet, this.css);
+    replace(sheet, this.text());
     this.sheets.set(doc, sheet);
     return sheet;
   };

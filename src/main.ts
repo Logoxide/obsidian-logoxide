@@ -16,7 +16,7 @@ import {
   type WorkspaceLeaf,
 } from "obsidian";
 import { around, hoverLink } from "file-plus-plus/obsidian";
-import { FilePlusPlusPlugin, type DocumentEmbed, type DocumentView, type EmbedContext } from "file-plus-plus/obsidian";
+import { DocumentView, FilePlusPlusPlugin, type DocumentEmbed, type EmbedContext } from "file-plus-plus/obsidian";
 import type { FppSettings } from "file-plus-plus/obsidian";
 import { OffsetUnit, type BookTextOptions, type Passage, type Topos, type ToposTranslations } from "logoxide";
 import type { EditorView } from "@codemirror/view";
@@ -316,6 +316,8 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
       this.settings.logoxideLibrary = DEFAULT_SETTINGS.logoxideLibrary;
       await this.saveData(this.settings);
     }
+    // Footnotes and cross references were one setting
+    if (saved.bibleCrossRefs === undefined) this.settings.bibleCrossRefs = this.settings.bibleNotes;
     this.settings.queries = (this.settings.queries ?? []).filter((q) => q && typeof q.name === "string");
     // Saved searches from before 0.4.0 used -o for any overlap
     if ((this.settings.queryFormat ?? 1) < 2) {
@@ -495,7 +497,15 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
 
   /** How passages are written in the Bible tab, previews, and embeds */
   bookTextOptions(): BookTextOptions {
-    return { notes: this.settings.bibleNotes, headings: this.settings.bibleHeadings, classPrefix: "topos-" };
+    // Both kinds of notes are rendered when either shows; the display settings' CSS hides the other
+    return { notes: this.settings.bibleNotes || this.settings.bibleCrossRefs, headings: this.settings.bibleHeadings, classPrefix: "topos-" };
+  }
+
+  /** Renders open Bible tabs again, after a setting changed what's rendered (headings, notes) */
+  rerenderBibles(): void {
+    for (const leaf of this.app.workspace.getLeavesOfType(this.viewType)) {
+      if (leaf.view instanceof DocumentView) void leaf.view.reload();
+    }
   }
 
   /**

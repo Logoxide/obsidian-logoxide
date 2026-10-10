@@ -1,4 +1,4 @@
-import { App, Notice, type DropdownComponent, Platform, Setting, setIcon } from "obsidian";
+import { App, Notice, type ColorComponent, type DropdownComponent, Platform, Setting, setIcon } from "obsidian";
 import { BookStyle, PackageKind } from "logoxide";
 import { DEFAULT_FORMAT, written, type FormatSettings } from "./core/format.ts";
 import { parseQuery } from "./core/query.ts";
@@ -14,10 +14,11 @@ import { CatalogBrowser, gitForm } from "./settings/browse.ts";
 
 export { bookStyle, DEFAULT_SETTINGS, type StyleName, type ToposSettings } from "./core/settings.ts";
 
-export type SettingsTab = "bibles" | "library" | "add" | "references" | "search" | "reader" | "highlights";
+export type SettingsTab = "bibles" | "display" | "library" | "add" | "references" | "search" | "reader" | "highlights";
 
 const TABS: TabSpec<SettingsTab>[] = [
   { id: "bibles", name: "Bibles", icon: "book-open" },
+  { id: "display", name: "Display", icon: "type" },
   { id: "library", name: "Library", icon: "library" },
   { id: "add", name: "Add Bibles", icon: "package-plus" },
   { id: "references", name: "References", icon: "link-2" },
@@ -98,7 +99,7 @@ export class ToposSettingsPanel {
     });
     lead(this.panel("reader"), "How Bible books read in their own tab: the look of the text (for each device), jumping to a passage, and previews.");
     lead(this.panel("highlights"), "Highlighting Bible text, links to passages, copying, menus, and the annotation files beside each book.");
-    for (const tab of ["bibles", "library", "references", "search"] as const) this.draw(tab);
+    for (const tab of ["bibles", "display", "library", "references", "search"] as const) this.draw(tab);
     this.draw(this.tabs.current);
     queueMicrotask(() => this.adoptFilePlusPlus());
   }
@@ -114,6 +115,9 @@ export class ToposSettingsPanel {
     switch (tab) {
       case "bibles":
         this.biblesTab(el);
+        break;
+      case "display":
+        this.displayTab(el);
         break;
       case "library":
         this.libraryTab(el);
@@ -183,13 +187,100 @@ export class ToposSettingsPanel {
     }
   }
 
+  // ─── Display ─────────────────────────────────────────────────────────────
+
+  private displayTab(el: HTMLElement): void {
+    const settings = this.plugin.settings;
+    lead(el, "How Bible text looks in its tab, hover previews, and embeds.");
+    /** A toggle; `rendered` settings change the HTML (open Bible tabs render again), the rest only its look */
+    const toggle = (items: HTMLElement, name: string, desc: string, key: "bibleHeadings" | "bibleVerseNumbers" | "bibleRedLetters" | "bibleNotes" | "bibleCrossRefs", rendered: () => boolean) =>
+      new Setting(items)
+        .setName(name)
+        .setDesc(md(desc))
+        .addToggle((t) =>
+          t.setValue(settings[key]).onChange(async (value) => {
+            const before = rendered();
+            settings[key] = value;
+            this.plugin.bibleStyles.apply();
+            await this.plugin.saveToposSettings();
+            if (rendered() !== before) this.plugin.rerenderBibles();
+          }),
+        );
+    const notesRendered = () => settings.bibleNotes || settings.bibleCrossRefs;
+
+    const text = section(el, "Text").items;
+    toggle(text, "Section headings", "The translation's headings, like *The Word Became Flesh*.", "bibleHeadings", () => settings.bibleHeadings);
+    toggle(text, "Verse numbers", "The small number before each verse.", "bibleVerseNumbers", () => true);
+    this.verseNumberColor(text);
+    toggle(text, "Red letters", "The words of Jesus in red, in Bibles that mark them.", "bibleRedLetters", () => true);
+
+    const notes = section(el, "Notes", "Shown in brackets beside their verse.").items;
+    toggle(notes, "Footnotes", "The translation's footnotes: other readings, literal meanings, and study notes.", "bibleNotes", notesRendered);
+    toggle(notes, "Cross references", "Other passages the translation points to.", "bibleCrossRefs", notesRendered);
+
+    const css = section(el, "Stylesheet").items;
+    new Setting(css)
+      .setName("Bible stylesheet")
+      .setDesc(
+        md(
+          "A CSS file in the vault for Bible text: its tab, previews, and embeds (Obsidian's CSS snippets don't reach them). Every USX marker is a `data-style`: `[data-style=\"q2\"]`, `[data-style=\"pn\"]`, `.topos-note [data-style=\"fr\"]`. Its rules win over the settings above. Changes to the file apply at once.",
+        ),
+      )
+      .addText((t) => {
+        t.inputEl.addClass("topos-code-input");
+        t.setPlaceholder("Bibles/bible.css")
+          .setValue(settings.bibleCss)
+          .onChange((value) => {
+            settings.bibleCss = value.trim();
+            void this.plugin.bibleStyles.load();
+            void this.plugin.saveToposSettings();
+          });
+      });
+  }
+
+  /** Verse numbers' color: the text's, faded, until one is picked */
+  private verseNumberColor(items: HTMLElement): void {
+    const settings = this.plugin.settings;
+    const setting = new Setting(items).setName("Verse number color");
+    let reset: HTMLElement | null = null;
+    let picker: ColorComponent | null = null;
+    const show = () => {
+      setting.setDesc(settings.verseNumberColor ? "The color of verse numbers." : "The color of verse numbers. The text's color, faded, until you pick one.");
+      reset?.toggle(!!settings.verseNumberColor);
+    };
+    const save = () => {
+      show();
+      this.plugin.bibleStyles.apply();
+      void this.plugin.saveToposSettings();
+    };
+    setting
+      .addExtraButton((b) => {
+        reset = b.extraSettingsEl;
+        b.setIcon("rotate-ccw")
+          .setTooltip("Use the text's color")
+          .onClick(() => {
+            picker?.setValue(themeColor(items, "--text-muted"));
+            settings.verseNumberColor = "";
+            save();
+          });
+      })
+      .addColorPicker((c) => {
+        picker = c;
+        c.setValue(settings.verseNumberColor || themeColor(items, "--text-muted")).onChange((value) => {
+          settings.verseNumberColor = value;
+          save();
+        });
+      });
+    show();
+  }
+
   // ─── Bibles ──────────────────────────────────────────────────────────────
 
   private biblesTab(el: HTMLElement): void {
     const settings = this.plugin.settings;
     const save = () => this.plugin.saveToposSettings();
     const bibles = this.plugin.bibles.all();
-    lead(el, "Which Bible references open in, the translations they can name, and how Bible text shows in its tab, previews, and embeds.");
+    lead(el, "Which Bible references open in, the translations they can name, and their embeds and previews.");
 
     const main = section(el, "Default Bible").items;
     if (bibles.length === 0) {
@@ -256,43 +347,6 @@ export class ToposSettingsPanel {
             void save();
           }),
       );
-
-    const text = section(el, "Bible text").items;
-    new Setting(text)
-      .setName("Section headings")
-      .setDesc("Show the translation's headings in Bible text.")
-      .addToggle((t) =>
-        t.setValue(settings.bibleHeadings).onChange((value) => {
-          settings.bibleHeadings = value;
-          void save();
-        }),
-      );
-    new Setting(text)
-      .setName("Footnotes")
-      .setDesc("Show the translation's footnotes and cross references in Bible text.")
-      .addToggle((t) =>
-        t.setValue(settings.bibleNotes).onChange((value) => {
-          settings.bibleNotes = value;
-          void save();
-        }),
-      );
-    new Setting(text)
-      .setName("Bible stylesheet")
-      .setDesc(
-        md(
-          "A CSS file in the vault for Bible text: its tab, previews, and embeds (Obsidian's CSS snippets don't reach them). Every USX marker is a `data-style`: `[data-style=\"q2\"]`, `[data-style=\"pn\"]`, `.topos-note [data-style=\"fr\"]`. Changes to the file apply at once.",
-        ),
-      )
-      .addText((t) => {
-        t.inputEl.addClass("topos-code-input");
-        t.setPlaceholder("Bibles/bible.css")
-          .setValue(settings.bibleCss)
-          .onChange((value) => {
-            settings.bibleCss = value.trim();
-            void this.plugin.bibleStyles.load();
-            void save();
-          });
-      });
 
     const embeds = section(el, "Embeds and previews").items;
     new Setting(embeds)
@@ -1299,9 +1353,14 @@ function codeLiterals(el: HTMLElement): void {
 
 /** The theme's accent color as `#rrggbb` (what the color picker takes) */
 function accentColor(el: HTMLElement): string {
+  return themeColor(el, "--text-accent");
+}
+
+/** A theme color (a CSS variable) as `#rrggbb` */
+function themeColor(el: HTMLElement, variable: string): string {
   try {
     const probe = el.createDiv();
-    probe.style.color = "var(--text-accent)";
+    probe.style.color = `var(${variable})`;
     const color = getComputedStyle(probe).color;
     probe.remove();
     // `rgb(216, 180, 254)`, or `color(srgb 0.85 0.71 1)` with 0-1 channels

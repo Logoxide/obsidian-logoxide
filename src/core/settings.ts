@@ -77,10 +77,18 @@ export interface ToposSettings {
   bibleAliases: string;
   /** Bibles embeds also show, by name, separated by commas: `KJV, NET` */
   compareBibles: string;
-  /** Show footnotes and cross references in Bible text */
+  /** Show footnotes in Bible text (and study notes: every note but cross references) */
   bibleNotes: boolean;
+  /** Show cross references in Bible text (unset: as `bibleNotes`, which covered both before) */
+  bibleCrossRefs: boolean;
   /** Show section headings in Bible text */
   bibleHeadings: boolean;
+  /** Show verse numbers in Bible text */
+  bibleVerseNumbers: boolean;
+  /** Show the words of Jesus in red */
+  bibleRedLetters: boolean;
+  /** Verse numbers' color, like `#7c3aed` ("" for the text's color, faded) */
+  verseNumberColor: string;
   /**
    * A CSS file in the vault for Bible text (its tab, previews, and embeds), which render where
    * Obsidian's CSS snippets don't reach; "" for none
@@ -139,7 +147,11 @@ export const DEFAULT_SETTINGS: ToposSettings = {
   bibleAliases: "",
   compareBibles: "",
   bibleNotes: false,
+  bibleCrossRefs: false,
   bibleHeadings: true,
+  bibleVerseNumbers: true,
+  bibleRedLetters: false,
+  verseNumberColor: "",
   bibleCss: "",
   referenceLinks: "bible",
   previewBare: true,
