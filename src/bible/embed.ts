@@ -16,6 +16,8 @@ import { followVerses } from "./view.ts";
 export class BibleEmbed extends DocumentEmbed<BibleBook, BibleReader> {
   /** A label for the header instead of the book's name (the reference as written in the note) */
   label = "";
+  /** How the header names the Bible instead of its name: a Bible numbered differently, with its own numbers (`KJV (Psalm 51:3)`) */
+  bibleLabel = "";
   private player: MediaPlayer | null = null;
   private playButton: HTMLElement | null = null;
   /** Stops the recording playing here and takes its player away */
@@ -31,7 +33,7 @@ export class BibleEmbed extends DocumentEmbed<BibleBook, BibleReader> {
     const parts = parseVerseLocator(loc.locator ?? "");
     const verses = parts ? formatVerseLocator(parts).slice(2).replaceAll(";", "; ") : "";
     const label = this.label || [book.name, verses].filter(Boolean).join(" ");
-    this.title.setText([label, book.bible].filter(Boolean).join(" · "));
+    this.title.setText([label, this.bibleLabel || book.bible].filter(Boolean).join(" · "));
     if (!range) return;
     this.offerContext(reader, loc);
     void this.offerPlaying(reader, loc, label);
