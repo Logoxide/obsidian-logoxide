@@ -1,4 +1,5 @@
 import { Setting, setIcon } from "obsidian";
+import { describeError } from "../core/errors.ts";
 
 /**
  * Text with `code` in backticks (files, syntax, commands) and *names* of buttons and commands in
@@ -223,5 +224,5 @@ export function chips<V extends string>(
 
 /** An error's message */
 export function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  return describeError(error);
 }

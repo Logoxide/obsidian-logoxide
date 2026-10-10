@@ -1,4 +1,4 @@
-import { PackageKind, type CatalogEntry } from "logoxide";
+import { Logoxide, PackageKind, type CatalogEntry } from "logoxide";
 
 /** What a package kind is called (`book`, `collection`, `commentary`) */
 export function kindName(kind: PackageKind): string {
@@ -37,7 +37,7 @@ export function sourceKey(entry: CatalogEntry): string {
   return source.tag.toLowerCase();
 }
 
-/** The names of the sources that aren't registries, by `sourceKey` */
+/** How the sources that aren't registries are shown, by `sourceKey` (a prefix without a name here is shown as it is) */
 export const SOURCE_NAMES: Record<string, string> = {
   ebible: "eBible.org",
   fetch: "fetch.bible",
@@ -45,6 +45,21 @@ export const SOURCE_NAMES: Record<string, string> = {
   sword: "SWORD",
   git: "Git",
 };
+
+/**
+ * The sources that aren't registries, in the browser's order: each publisher logoxide imports from
+ * (`Logoxide.importPrefixes`: `ebible`, `fetch`, `ccel`, `sword`, and whatever it learns), then git
+ */
+export function sourceKeys(): string[] {
+  let prefixes: string[];
+  try {
+    prefixes = Logoxide.new().importPrefixes();
+  } catch {
+    // The engine isn't loaded yet: the publishers known here
+    prefixes = Object.keys(SOURCE_NAMES).filter((key) => key !== "git");
+  }
+  return [...prefixes, "git"];
+}
 
 /** Where an entry comes from, in words: `eBible.org`, `SWORD (crosswire)`, a registry's name and newest release */
 export function sourceName(entry: CatalogEntry): string {

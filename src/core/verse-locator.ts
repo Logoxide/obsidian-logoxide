@@ -138,7 +138,8 @@ export function formatVerseLocator(parts: VersePart[]): string {
   return `v=${parts.map(formatPart).join(";")}`;
 }
 
-function formatPart(p: VersePart): string {
+/** One part: `3`, `3-4`, `3:16`, `3:16-18`, `3:16-4:2` */
+export function formatPart(p: VersePart): string {
   if (p.verse === 0 && p.endVerse === END) return p.endChapter === p.chapter ? `${p.chapter}` : `${p.chapter}-${p.endChapter}`;
   const start = `${p.chapter}:${p.verse}`;
   if (p.endChapter !== p.chapter) return `${start}-${p.endChapter}:${p.endVerse}`;

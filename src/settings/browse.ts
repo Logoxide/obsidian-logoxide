@@ -1,7 +1,7 @@
 import { ButtonComponent, Notice, setIcon } from "obsidian";
 import { PackageKind, type CatalogEntry } from "logoxide";
 import type ToposPlugin from "../main.ts";
-import { kindName, language, license, SOURCE_NAMES, sourceKey, sourceName } from "../bible/add.ts";
+import { kindName, language, license, SOURCE_NAMES, sourceKey, sourceKeys, sourceName } from "../bible/add.ts";
 import { badge, chips, errorText, md, searchField, type Section } from "./kit.ts";
 
 /** How many results show at first, and how many more are drawn each time the list is scrolled to its end */
@@ -167,7 +167,7 @@ export class CatalogBrowser {
       const key = sourceKey(entry);
       counts.set(key, (counts.get(key) ?? 0) + 1);
     }
-    const keys = [...this.registries.map((name) => `registry:${name}`), ...Object.keys(SOURCE_NAMES)];
+    const keys = [...this.registries.map((name) => `registry:${name}`), ...sourceKeys()];
     for (const key of counts.keys()) if (!keys.includes(key)) keys.push(key);
     if (state.source !== "all" && !keys.includes(state.source)) keys.push(state.source);
     const total = [...counts.values()].reduce((a, b) => a + b, 0);

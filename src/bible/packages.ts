@@ -1,6 +1,9 @@
 import { Notice, TFile, TFolder } from "obsidian";
-import { Logoxide, PackageKind, type LogoxidePackage, type LockedEntry, type MediaFile, type PackageFile, type Passage, type LogoxideBook, type ToposTranslations } from "logoxide";
+import { Logoxide, PackageKind, type LogoxidePackage, type LogoxideVersifications, type LockedEntry, type MappedPassage, type MediaFile, type PackageFile, type Passage, type LogoxideBook, type ToposTranslations } from "logoxide";
 import { RESERVED, STUB_EXTENSION, parseStub, staleStubs, stubNames, stubPath, stubText } from "../core/stubs.ts";
+import { describeError } from "../core/errors.ts";
+import { numberedApart, partsReference } from "../core/mapping.ts";
+import type { VersePart } from "../core/verse-locator.ts";
 import type ToposPlugin from "../main.ts";
 import type { Timing } from "../core/timings.ts";
 import type { BookEdition } from "./reader.ts";
@@ -31,6 +34,8 @@ interface PackageBible {
   stubFiles: Map<string, string>;
   /** The version installed */
   version: string;
+  /** Its numbering (`versification` in its logoxide.toml: `English`, `KJV`; `own` is its alone) */
+  versification: string;
   /** Each book's verse hashes (8 hex digits) by `chapter:verse`, as read */
   hashes: Map<number, Map<string, string>>;
   /** Each book's recording and where it reads each verse, once looked for (null: none) */
@@ -111,6 +116,8 @@ export class LogoxideBibles {
   /** The lock file last installed from on its own (missing packages are installed once per lock) */
   private installedFrom: string | null = null;
   private defaultName: string | null = null;
+  /** The vault's versification maps (its `versification-map` packages), which carry a reference between Bibles numbered differently */
+  private versifications: LogoxideVersifications | null = null;
   /** What couldn't be read, to show */
   problems: string[] = [];
   /** Every package the lock file names, as last read */
@@ -183,6 +190,7 @@ export class LogoxideBibles {
     let defaultName: string | null = null;
     let lock: string | null = null;
     let missing = false;
+    let maps: LogoxideVersifications | null = null;
     if (await adapter.exists(at(MANIFEST))) {
       await this.plugin.engine();
       const logoxide = Logoxide.new();
@@ -222,6 +230,17 @@ export class LogoxideBibles {
             if (opened.bible && ours) bibles.push(opened.bible);
             else opened.bible?.pkg.dispose();
             if (opened.book && ours) books.push(opened.book);
+            // Every map the vault has, whoever asked for it: a route may go through several
+            if (opened.map) {
+              try {
+                const next: LogoxideVersifications = (maps ?? logoxide.versifications()).withMap(opened.map);
+                maps?.dispose();
+                maps = next;
+              } catch (error) {
+                problems.push(`${entry.id} ${entry.version}: its versification map couldn't be read: ${message(error)}`);
+              }
+              opened.map.dispose();
+            }
           } catch (error) {
             listed.problem = message(error);
             problems.push(`${entry.id} ${entry.version}: ${listed.problem}`);
@@ -237,6 +256,8 @@ export class LogoxideBibles {
     for (const old of this.bibles) this.dispose(old);
     this.bibles = bibles;
     this.books = books;
+    this.versifications?.dispose();
+    this.versifications = maps;
     this.defaultName = defaultName;
     this.problems = problems;
     this.installed = installed;
@@ -294,7 +315,7 @@ export class LogoxideBibles {
     base: string,
     problems: string[],
     changed: string[],
-  ): Promise<{ info: NonNullable<InstalledPackage["info"]>; bible: PackageBible | null; book: PackageBook | null }> {
+  ): Promise<{ info: NonNullable<InstalledPackage["info"]>; bible: PackageBible | null; book: PackageBook | null; map: LogoxidePackage | null }> {
     const adapter = this.plugin.app.vault.adapter;
     const dir = this.dirOf(entry, base);
     const files = await readTree(this.plugin, dir);
@@ -309,16 +330,23 @@ export class LogoxideBibles {
     await this.saveCache(pkg);
     const info = pkg.info();
     const summary = { name: info.name, abbreviation: info.abbreviation, license: info.license ?? info.licenseFile ?? null, kind: info.kind };
+    // A versification map is kept open for the maps (the caller disposes it)
+    if (info.kind === PackageKind.VersificationMap) return { info: summary, bible: null, book: null, map: pkg };
     if (info.kind !== PackageKind.Bible) {
       const titles = pkg.titles();
       const files = pkg.epubFiles().map((path) => ({ path, title: titles.find((t) => t.path === path)?.title ?? null }));
       pkg.dispose();
-      return { info: summary, bible: null, book: files.length > 0 ? { dependency: entry.name, dir, files } : null };
+      return { info: summary, bible: null, book: files.length > 0 ? { dependency: entry.name, dir, files } : null, map: null };
     }
     // The vault's own names for it, when its logoxide.toml gives them (a fork's)
     const name = entry.abbreviation ?? info.abbreviation;
     const aliases = entry.aliases ?? info.aliases;
-    return { info: summary, bible: { id: info.id, dependency: entry.name, name, aliases, pkg, books: new Map(), dir, stubs: new Map(), stubFiles: new Map(), version: entry.version, hashes: new Map(), recordings: new Map() }, book: null };
+    return {
+      info: summary,
+      bible: { id: info.id, dependency: entry.name, name, aliases, pkg, books: new Map(), dir, stubs: new Map(), stubFiles: new Map(), version: entry.version, versification: info.versification, hashes: new Map(), recordings: new Map() },
+      book: null,
+      map: null,
+    };
   }
 
   /** Writes what a package's cache wrote into the plugin's folder */
@@ -351,6 +379,36 @@ export class LogoxideBibles {
     try {
       const counts = Array.from(bible.pkg.chapterVerses(bookId));
       return counts.length > 0 ? counts : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * A package Bible's numbering, by its name (ignoring case): its `versification` (`English`,
+   * `KJV`, or `own`); null for a folder Bible, which has none
+   */
+  numbering(name: string): string | null {
+    const lower = name.toLowerCase();
+    return this.bibles.find((b) => b.name.toLowerCase() === lower)?.versification ?? null;
+  }
+
+  /**
+   * Where parts of a book, numbered as the Bible `from` numbers them, are in the Bible `to` (both
+   * by name), when the two are numbered differently and the vault's versification maps lead from
+   * one to the other (`Psalm 51:1` in an English Bible is `51:3` in a Hebrew one): the verses
+   * there, and those it doesn't have. Null when they're numbered the same, either's numbering is
+   * its own, no map connects them, or the mapping fails: the passage is then read as written
+   */
+  mapped(bookId: number, parts: VersePart[], from: string, to: string): MappedPassage | null {
+    const maps = this.versifications;
+    const [source, target] = [this.numbering(from), this.numbering(to)];
+    if (!maps || !source || !target || !numberedApart(source, target) || parts.length === 0) return null;
+    const book = this.plugin.topos.books().find((b) => b.id === bookId)?.name;
+    if (!book) return null;
+    try {
+      const counts = this.chapterVerses(from, bookId);
+      return maps.map(partsReference(book, parts), source, target, counts ? Uint8Array.from(counts) : null);
     } catch {
       return null;
     }
@@ -725,12 +783,14 @@ export class LogoxideBibles {
   unload(): void {
     for (const bible of this.bibles) this.dispose(bible);
     this.bibles = [];
+    this.versifications?.dispose();
+    this.versifications = null;
   }
 }
 
+/** An error in words (a logoxide error's message, with what to do about `Busy` and `Conflict`) */
 export function message(error: unknown): string {
-  const value = (error as { value?: { message?: string } })?.value;
-  return value?.message ?? (error instanceof Error ? error.message : String(error));
+  return describeError(error);
 }
 
 export function join(base: string, path: string): string {
