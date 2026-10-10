@@ -4,7 +4,7 @@ import type ToposPlugin from "../main.ts";
 import { kindName, language, license, SOURCE_NAMES, sourceKey, sourceName } from "../bible/add.ts";
 import { badge, chips, errorText, md, searchField, type Section } from "./kit.ts";
 
-/** How many results show at first, and how many more each "Show more" adds */
+/** How many results show at first, and how many more are drawn each time the list is scrolled to its end */
 const PAGE = 25;
 
 type KindFilter = "all" | "bible" | "commentary" | "book" | "other";
@@ -45,7 +45,11 @@ const installing = new Set<string>();
 export class CatalogBrowser {
   private status!: HTMLElement;
   private results!: HTMLElement;
-  private more!: HTMLElement;
+  /** The row at the list's end saying there are more */
+  private more: HTMLElement | null = null;
+  /** The results the filters allow, and how many of them are drawn */
+  private shown: CatalogEntry[] = [];
+  private drawn = 0;
   private source!: HTMLSelectElement;
   private input!: HTMLInputElement;
   /** The newest search, so an older one finishing late is dropped */
@@ -112,7 +116,8 @@ export class CatalogBrowser {
 
     this.status = search.createDiv("setting-group-search-control topos-browser-status");
     this.results = items;
-    this.more = group.createDiv("topos-browser-more");
+    items.addClass("topos-scroll", "is-tall");
+    items.addEventListener("scroll", () => this.scrolled(), { passive: true });
     void this.plugin.bibleManager
       .registryList()
       .then((list) => {
@@ -142,7 +147,6 @@ export class CatalogBrowser {
       if (id !== this.searchId) return;
       this.found = [];
       this.results.empty();
-      this.more.empty();
       this.setStatus("error", `The catalogs couldn't be read: ${errorText(error)}`);
       new ButtonComponent(this.status).setButtonText("Try again").onClick(() => void this.search());
     }
@@ -181,15 +185,16 @@ export class CatalogBrowser {
     return this.plugin.packages.installed.some((p) => p.id === entry.id);
   }
 
-  /** Draws the results the filters allow, up to `state.shown` */
+  /** Draws the results the filters allow, up to `state.shown`, from the top of the list */
   private draw(): void {
     this.fillSources();
-    const shown = this.found.filter(
+    this.shown = this.found.filter(
       (entry) =>
         kindMatches(entry.kind, state.kind) &&
         (state.source === "all" || sourceKey(entry) === state.source) &&
         !(state.hideInstalled && this.isInstalled(entry)),
     );
+    const shown = this.shown;
     const query = state.query.trim();
     this.setStatus(
       "count",
@@ -200,18 +205,36 @@ export class CatalogBrowser {
         : `${shown.length.toLocaleString()} ${shown.length === 1 ? "package" : "packages"}${query ? ` matching “${query}”` : ""}`,
     );
     this.results.empty();
-    for (const entry of shown.slice(0, state.shown)) this.card(entry);
+    this.results.scrollTop = 0;
+    this.drawn = 0;
+    this.more = null;
     if (shown.length === 0) {
       const empty = this.results.createDiv("setting-item mod-empty-state topos-list-empty");
       empty.setText(state.kind !== "all" || state.source !== "all" || state.hideInstalled ? "Nothing here: try another kind or source." : "Nothing matches: try a language, an abbreviation, or fewer words.");
+      return;
     }
-    this.more.empty();
-    if (shown.length > state.shown) {
-      new ButtonComponent(this.more).setButtonText(`Show ${Math.min(PAGE, shown.length - state.shown)} more`).onClick(() => {
-        state.shown += PAGE;
-        this.draw();
-      });
-    }
+    this.drawMore(state.shown);
+  }
+
+  /** Adds rows to the list, up to `count` in all, with a row at its end while there are more */
+  private drawMore(count: number): void {
+    this.more?.remove();
+    this.more = null;
+    for (const entry of this.shown.slice(this.drawn, count)) this.card(entry);
+    this.drawn = Math.min(count, this.shown.length);
+    state.shown = Math.max(state.shown, this.drawn);
+    if (this.drawn >= this.shown.length) return;
+    this.more = this.results.createDiv({
+      cls: "setting-item mod-empty-state topos-list-empty topos-browser-more",
+      text: `Showing ${this.drawn} of ${this.shown.length.toLocaleString()}: scroll for more`,
+    });
+    this.more.addEventListener("click", () => this.drawMore(this.drawn + PAGE));
+  }
+
+  /** Draws the next page once the list is scrolled near its end */
+  private scrolled(): void {
+    const list = this.results;
+    if (this.more && list.scrollTop + list.clientHeight > list.scrollHeight - 240) this.drawMore(this.drawn + PAGE);
   }
 
   private card(entry: CatalogEntry): void {

@@ -164,6 +164,7 @@ export interface ListOptions<T> {
 /** A section's card as a list, with a filter field at its top once it's long: rows are hidden as you type, not drawn again */
 export function filteredList<T>(section: Section, items: T[], options: ListOptions<T>): void {
   section.group.addClass("mod-list", "topos-list");
+  section.items.addClass("topos-scroll");
   if (items.length === 0) {
     section.items.createDiv("setting-item mod-empty-state topos-list-empty").append(md(options.empty));
     return;

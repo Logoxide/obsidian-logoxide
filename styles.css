@@ -1593,13 +1593,24 @@ body:not(.is-mobile) .topos-pane.is-narrow .topos-pane-card:is(:hover, :focus-wi
 .topos-settings .topos-browser-status.is-error {
   color: var(--text-error);
 }
-.topos-browser-more {
-  display: flex;
-  justify-content: center;
-  margin-top: var(--size-4-3);
+/* Lists scroll inside their card, the search and filters above them staying put */
+.topos-settings .setting-items.topos-scroll {
+  max-height: min(45vh, 420px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
-.topos-browser-more:empty {
-  display: none;
+.topos-settings .setting-items.topos-scroll.is-tall {
+  max-height: min(65vh, 640px);
+}
+/* The search's card: its top square where the list meets it */
+.topos-settings .setting-group-search:not(:empty) + .setting-items.topos-scroll {
+  border-top: var(--border-width) solid var(--background-modifier-border);
+}
+.topos-settings .topos-browser-more {
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+  cursor: var(--cursor);
 }
 .topos-settings .topos-entry {
   align-items: flex-start;

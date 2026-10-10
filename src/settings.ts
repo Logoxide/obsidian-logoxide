@@ -652,7 +652,7 @@ export class ToposSettingsPanel {
       },
     });
     this.addForm(
-      registryList.items,
+      registryList.group.createDiv("setting-items"),
       "Add a registry",
       [{ placeholder: "name", cls: "is-short" }, { placeholder: "https://github.com/owner/repo/releases/download/index/catalog.toml" }],
       "Its `catalog.toml`'s URL (`bx registry init` prints it), or a file's path relative to `biblix.toml`.",
@@ -697,7 +697,7 @@ export class ToposSettingsPanel {
       },
     });
     this.addForm(
-      catalogList.items,
+      catalogList.group.createDiv("setting-items"),
       "Add a catalog",
       [{ placeholder: "https://example.org/catalog.toml" }],
       "A `catalog.toml`'s URL (anyone can host one), eBible.org's `translations.csv`, fetch.bible's `manifest.json`, a SWORD repository's `mods.d.tar.gz`, or a file's path relative to `biblix.toml`.",
