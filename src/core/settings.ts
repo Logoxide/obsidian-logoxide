@@ -105,7 +105,9 @@ export interface ToposSettings {
   bibleCss: string;
   /** Where links to references (`[John 1:1]`, `[text](John 1:1)`) open: the Bible tab or the link site */
   referenceLinks: "bible" | "site";
-  /** How many verses embeds and hover previews show around their passage, faded (a link's `&c=2` says otherwise) */
+  /** Embeds and hover previews show the verses around their passage (else each embed's button does) */
+  showContext: boolean;
+  /** How many verses around a passage its context is (a link's `&c=2` says otherwise) */
   previewContext: number;
   /** How the verses around a preview's passage look: faded, as the passage (`none`), or in a color */
   contextVerses: MarkLook;
@@ -174,7 +176,8 @@ export const DEFAULT_SETTINGS: ToposSettings = {
   wordsOfJesus: "red",
   bibleCss: "",
   referenceLinks: "bible",
-  previewContext: 0,
+  showContext: false,
+  previewContext: 2,
   contextVerses: "faded",
   previewBare: true,
   embedAlone: false,

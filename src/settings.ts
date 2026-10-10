@@ -423,11 +423,20 @@ export class ToposSettingsPanel {
         }),
       );
     new Setting(embeds)
-      .setName("Verses around the passage")
-      .setDesc(md("How many verses before and after its passage an embed or preview shows, faded. A link can say its own: `JHN.usx#v=3:16&c=2`."))
+      .setName("Show context by default")
+      .setDesc(md("Embeds and previews show the verses around their passage, faded. Off, each embed's button shows them; a link can ask for them too: `JHN.usx#v=3:16&c=2`."))
+      .addToggle((t) =>
+        t.setValue(settings.showContext).onChange((value) => {
+          settings.showContext = value;
+          void save();
+        }),
+      );
+    new Setting(embeds)
+      .setName("Verses of context")
+      .setDesc("How many verses before and after the passage its context is.")
       .addDropdown((d) =>
         d
-          .addOptions({ 0: "None", 1: "1 verse", 2: "2 verses", 3: "3 verses", 5: "5 verses", 10: "10 verses" })
+          .addOptions({ 1: "1 verse", 2: "2 verses", 3: "3 verses", 5: "5 verses", 10: "10 verses" })
           .setValue(String(settings.previewContext))
           .onChange((value) => {
             settings.previewContext = Number(value);

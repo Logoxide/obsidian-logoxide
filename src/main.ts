@@ -361,6 +361,8 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
     if (saved.crossRefs === undefined && (old.bibleCrossRefs ?? old.bibleNotes)) this.settings.crossRefs = "accent";
     // Red letters were on or off (off by default): the words of Jesus have a look now, red by default
     for (const key of ["bibleNotes", "bibleCrossRefs", "bibleVerseNumbers", "verseNumberColor", "bibleRedLetters"]) delete (this.settings as unknown as Record<string, unknown>)[key];
+    // Context was shown when it had an amount (0: none): it's an amount to show now, shown by default or not
+    if (!(this.settings.previewContext >= 1)) this.settings.previewContext = DEFAULT_SETTINGS.previewContext;
     this.settings.queries = (this.settings.queries ?? []).filter((q) => q && typeof q.name === "string");
     // Saved searches from before 0.4.0 used -o for any overlap
     if ((this.settings.queryFormat ?? 1) < 2) {
