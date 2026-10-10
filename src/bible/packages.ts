@@ -200,7 +200,7 @@ export class LogoxideBibles {
           if (!entry.enabled) {
             if (await adapter.exists(`${dir}/${MANIFEST}`)) {
               try {
-                const info = logoxide.packageInfo(await adapter.read(`${dir}/${MANIFEST}`));
+                const info = logoxide.readPackageInfo(await adapter.read(`${dir}/${MANIFEST}`));
                 listed.info = { name: info.name, abbreviation: info.abbreviation, license: info.license ?? info.licenseFile ?? null, kind: info.kind };
                 if (entry.dependencyOf === null) kinds.set(entry.name, info.kind);
               } catch {
