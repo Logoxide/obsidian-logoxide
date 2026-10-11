@@ -92,8 +92,11 @@ export function referenceChoices(
   const choices: Choice[] = completions.map((completion) => ({ kind: "complete", completion }));
   if (!passage) return choices;
   // The chip gets the reference written out in the chosen style: `jn 3:16-` adds John 3:16
-  const add: Choice = { kind: "add", reference: written(topos, passage, style, format) };
-  return /[:\-–—,.;]\s*$/.test(value) ? [...choices, add] : [add, ...choices];
+  const reference = written(topos, passage, style, format);
+  const add: Choice = { kind: "add", reference };
+  // Adding it stands for the completion to what's already typed
+  const others = choices.filter((c) => c.kind !== "complete" || c.completion.label !== reference);
+  return /[:\-–—,.;]\s*$/.test(value) ? [...others, add] : [add, ...others];
 }
 
 /** An input for a Bible reference, with the same autocomplete as the editor */

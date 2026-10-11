@@ -374,14 +374,14 @@ test("completions narrow by the number being typed", () => {
     completionsBefore(topos, before, BookStyle.Name, 100, "capitalized", { needsNumber }).map(
       (c) => c.label,
     );
-  // John has 21 chapters; what's already typed isn't offered (see complete.txt for the rest)
-  assert.deepEqual(labels("John 2"), ["John 20", "John 21"]);
-  assert.deepEqual(labels("John 3"), []);
-  assert.deepEqual(labels("John 3:3").slice(0, 2), ["John 3:30", "John 3:31"]);
+  // John has 21 chapters; what's already typed comes first (see complete.txt for the rest)
+  assert.deepEqual(labels("John 2"), ["John 2", "John 20", "John 21"]);
+  assert.deepEqual(labels("John 3"), ["John 3"]);
+  assert.deepEqual(labels("John 3:3").slice(0, 3), ["John 3:3", "John 3:30", "John 3:31"]);
   assert.equal(labels("John 3:").length, 36);
   // In the editor, `John ` alone does not list chapters, but a number or delimiter does
   assert.deepEqual(labels("I asked John ", true), []);
-  assert.deepEqual(labels("see John 2", true), ["John 20", "John 21"]);
+  assert.deepEqual(labels("see John 2", true), ["John 2", "John 20", "John 21"]);
   assert.equal(labels("see John 3:", true).length, 36);
   assert.equal(labels("see John 3:16, ", true)[0], "John 3:16,17");
   assert.ok(labels("see 1 Co", true).includes("1 Corinthians"));
@@ -403,7 +403,7 @@ test("reference inputs list every book, then add or complete what is typed", asy
   const books = describe("");
   assert.equal(books.length, topos.books().length);
   assert.equal(books[0], "Genesis");
-  // A finished reference is added first; completing it to itself is not offered
+  // A finished reference is added first; completing it to itself is the same, so not offered
   assert.deepEqual(describe("Romans 8"), ["add Romans 8"]);
   assert.deepEqual(describe("John 3:16").slice(0, 1), ["add John 3:16"]);
   assert.equal(describe("John 3:16").includes("John 3:16"), false);
