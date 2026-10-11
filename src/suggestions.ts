@@ -26,7 +26,13 @@ const FILE_ICONS: Record<string, string> = {
 export function renderSuggestion(
   plugin: ToposPlugin,
   el: HTMLElement,
-  { label, kind, icon, passage = null }: { label: string; kind: string; icon: string; passage?: Passage | null },
+  {
+    label,
+    kind,
+    icon,
+    passage = null,
+    continued = false,
+  }: { label: string; kind: string; icon: string; passage?: Passage | null; continued?: boolean },
 ): void {
   el.addClass("topos-suggestion");
   setIcon(el.createSpan({ cls: "topos-suggestion-icon" }), icon);
@@ -35,15 +41,22 @@ export function renderSuggestion(
   el.createSpan({ cls: "topos-suggestion-kind", text: kind });
   if (!passage) return;
   void plugin.bibles.text(passage).then((text) => {
-    if (text) main.createDiv({ cls: "topos-suggestion-text", text });
+    if (text) main.createDiv({ cls: "topos-suggestion-text", text: continued ? `… ${text}` : text });
   });
 }
 
-/** A completion as a suggestion; a verse shows its text */
+/**
+ * A completion as a suggestion; a verse shows its text, and a range (`John 1:1-3`) its last verse's,
+ * after an ellipsis, since that's the verse being chosen
+ */
 export function renderCompletion(plugin: ToposPlugin, el: HTMLElement, completion: { label: string; kind: number }): void {
   const kind = KINDS[completion.kind] ?? { name: "", icon: "dot" };
-  const passage = completion.kind === CompletionKind.Verse ? plugin.topos.parse(completion.label, BookStyle.Name) : null;
-  renderSuggestion(plugin, el, { label: completion.label, kind: kind.name, icon: kind.icon, passage });
+  let passage = completion.kind === CompletionKind.Verse ? plugin.topos.parse(completion.label, BookStyle.Name) : null;
+  const verses = passage ? plugin.topos.verses(passage) : [];
+  const last = verses.at(-1);
+  const continued = verses.length > 1 && !!last;
+  if (passage && continued) passage = plugin.topos.parse(`${passage.book} ${last.chapter}:${last.verse}`, BookStyle.Name);
+  renderSuggestion(plugin, el, { label: completion.label, kind: kind.name, icon: kind.icon, passage, continued });
 }
 
 /**
