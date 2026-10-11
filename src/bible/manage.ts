@@ -179,6 +179,13 @@ export class BibleManager {
       installer.provideDownload(request.url, new Uint8Array(bytes));
       return;
     }
+    // An `import` dependency (`ebible:eng-kjv2006`): its catalog entry, which says what to download
+    if (request.tag === "ImportEntry") {
+      const entry = (await this.catalogs()).findImport(request._import);
+      if (!entry) throw new Error(`${request._import} isn't in the catalogs`);
+      installer.provideImportEntry(entry);
+      return;
+    }
     if (request.tag !== "Files" && !/^https?:\/\//.test(request.repository)) {
       throw new Error(`${request.repository} isn't on the web: use lx for it (lx install, lx update, or lx install --repair to restore it)`);
     }
@@ -239,7 +246,7 @@ export class BibleManager {
       step = installer.inspect(url, null, null, null);
     }
     const { info } = step.inspected;
-    const added = project.addDependency(info.id, { git: url, registry: null, path: null, version: info.version, tag: null, branch: null, rev: null, features: [], defaultFeatures: true, packageId: null, abbreviation: null, aliases: null });
+    const added = project.addDependency(info.id, { git: url, registry: null, path: null, _import: null, version: info.version, tag: null, branch: null, rev: null, features: [], defaultFeatures: true, packageId: null, abbreviation: null, aliases: null });
     project.dispose();
     // The same installer: it has the archive already
     await this.install(logoxide, added, base, installer);
@@ -253,7 +260,7 @@ export class BibleManager {
     const logoxide = Logoxide.new();
     const { project, base } = await this.project(logoxide);
     const newest = entry.releases.at(-1)?.version ?? null;
-    const added = project.addDependency(entry.id, { git: null, registry: catalog, path: null, version: newest, tag: null, branch: null, rev: null, features: [], defaultFeatures: true, packageId: null, abbreviation: null, aliases: null });
+    const added = project.addDependency(entry.id, { git: null, registry: catalog, path: null, _import: null, version: newest, tag: null, branch: null, rev: null, features: [], defaultFeatures: true, packageId: null, abbreviation: null, aliases: null });
     project.dispose();
     await this.install(logoxide, added, base);
     added.dispose();
@@ -276,7 +283,7 @@ export class BibleManager {
       await mkdirs(this.plugin, path.slice(0, path.lastIndexOf("/")));
       await this.adapter.writeBinary(path, buffer(file.bytes));
     }
-    const added = project.addDependency(entry.id, { git: null, registry: null, path: relative, version: null, tag: null, branch: null, rev: null, features: [], defaultFeatures: true, packageId: null, abbreviation: null, aliases: null });
+    const added = project.addDependency(entry.id, { git: null, registry: null, path: relative, _import: null, version: null, tag: null, branch: null, rev: null, features: [], defaultFeatures: true, packageId: null, abbreviation: null, aliases: null });
     project.dispose();
     await this.install(logoxide, added, base);
     added.dispose();
