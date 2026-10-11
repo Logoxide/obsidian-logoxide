@@ -4,7 +4,7 @@ import { DEFAULT_FORMAT, written, type FormatSettings } from "./core/format.ts";
 import { parseQuery } from "./core/query.ts";
 import type { BookCompletion } from "./core/completions.ts";
 import { FILTERS, linkUrl, PLACEHOLDERS, SITES, templateError } from "./core/links.ts";
-import { bookStyle, type StyleName } from "./core/settings.ts";
+import { bookStyle, embedAloneWhere, type EmbedAloneIn, type StyleName } from "./core/settings.ts";
 import { notesShown } from "./core/display.ts";
 import type ToposPlugin from "./main.ts";
 import { kindName } from "./bible/add.ts";
@@ -449,16 +449,24 @@ export class ToposSettingsPanel {
       return options;
     };
     const alone: Setting[] = [];
-    const showAlone = () => alone.forEach((s) => s.settingEl.toggleClass("topos-hidden", !settings.embedAlone));
+    const where = () => embedAloneWhere(settings, this.plugin.deviceId);
+    const showAlone = () => alone.forEach((s) => s.settingEl.toggleClass("topos-hidden", where() === "off"));
     new Setting(embeds)
       .setName("Embed references on their own line")
-      .setDesc(md("A reference alone on its line shows its text, like `![John 1:1]`. In the editor, it shows the reference again while the cursor is near it."))
-      .addToggle((t) =>
-        t.setValue(settings.embedAlone).onChange((value) => {
-          settings.embedAlone = value;
-          void save();
-          showAlone();
-        }),
+      .setDesc(
+        md(
+          "A reference alone on its line shows its text, like `![John 1:1]`: in live preview, the reading view, or both. In the editor, it shows the reference again while the cursor is near it. Each device keeps its own choice.",
+        ),
+      )
+      .addDropdown((d) =>
+        d
+          .addOptions({ off: "Off", editor: "Live preview", reading: "Reading view", both: "Both views" })
+          .setValue(where())
+          .onChange((value) => {
+            settings.embedAloneDevices = { ...settings.embedAloneDevices, [this.plugin.deviceId]: value as EmbedAloneIn };
+            void save();
+            showAlone();
+          }),
       );
     alone.push(
       new Setting(embeds)

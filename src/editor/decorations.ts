@@ -10,7 +10,7 @@ import {
 } from "@codemirror/view";
 import { Component, editorLivePreviewField, MarkdownView, type HoverParent } from "obsidian";
 import { BookStyle, type Passage } from "logoxide";
-import { embedAloneCursorLines } from "../core/settings.ts";
+import { embedAloneCursorLines, embedsAloneIn } from "../core/settings.ts";
 import { blankAround, findReferences } from "../core/syntax.ts";
 import type ToposPlugin from "../main.ts";
 
@@ -26,7 +26,7 @@ export const refreshReferences = StateEffect.define<null>();
  *   hidden unless the cursor is in them, a click opens the passage, and hovering previews it
  * - `![John 1:1]` shows the passage's text in live preview, unless the cursor is in it
  * - With `embedAlone`, so does a bare reference alone on its line with `embedAloneBlankLines` blank
- *   lines above and below it, unless the cursor is within `embedAloneCursorLines` lines of it
+ *   lines above and below it (where this device embeds them: `embedsAloneIn`), unless the cursor is within `embedAloneCursorLines` lines of it
  */
 export function referenceDecorations(plugin: ToposPlugin) {
   class References implements PluginValue {
@@ -53,6 +53,7 @@ export function referenceDecorations(plugin: ToposPlugin) {
       const lineText = (n: number) => (n >= 1 && n <= doc.lines ? doc.line(n).text : undefined);
       const site = plugin.linkSite();
       const hasBible = plugin.bibles.all().length > 0;
+      const embedAlone = embedsAloneIn(plugin.settings, plugin.deviceId, "editor");
       // Visible ranges widened to whole lines can overlap
       let lastEnd = -1;
       for (const { from, to } of view.visibleRanges) {
@@ -66,7 +67,7 @@ export function referenceDecorations(plugin: ToposPlugin) {
           if (a < lastEnd) continue;
           const data: Record<string, string> = { "data-topos-osis": r.passage.osis, "data-topos-kind": r.kind };
           if (r.translation) data["data-topos-translation"] = r.translation;
-          if (r.kind === "bare" && plugin.settings.embedAlone && live && hasBible) {
+          if (r.kind === "bare" && embedAlone && live && hasBible) {
             const line = doc.lineAt(a);
             const alone =
               line.text.trim() === text.slice(r.start, r.end) &&

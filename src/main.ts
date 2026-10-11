@@ -382,6 +382,11 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
     // Red letters were on or off (off by default): the words of Jesus have a look now, red by default
     for (const key of ["bibleNotes", "bibleCrossRefs", "bibleVerseNumbers", "verseNumberColor", "bibleRedLetters"]) delete (this.settings as unknown as Record<string, unknown>)[key];
     // Context was shown when it had an amount (0: none): it's an amount to show now, shown by default or not
+    // Embedding references alone on their line was on or off everywhere: it's where, for each device
+    const embedAlone = this.settings.embedAlone as unknown;
+    if (typeof embedAlone === "boolean") this.settings.embedAlone = embedAlone ? "both" : "off";
+    if (!["off", "editor", "reading", "both"].includes(this.settings.embedAlone)) this.settings.embedAlone = DEFAULT_SETTINGS.embedAlone;
+    this.settings.embedAloneDevices ??= {};
     if (!(this.settings.previewContext >= 1)) this.settings.previewContext = DEFAULT_SETTINGS.previewContext;
     this.settings.queries = (this.settings.queries ?? []).filter((q) => q && typeof q.name === "string");
     // Saved searches from before 0.4.0 used -o for any overlap

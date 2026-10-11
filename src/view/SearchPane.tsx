@@ -130,7 +130,7 @@ export function viewHost(view: ItemView, plugin: () => ToposPlugin, open: (hit: 
       const owner = view.addChild(new Component());
       const done = MarkdownRenderer.render(view.app, markdown, el, sourcePath, owner).then(() => {
         // References are linked even with linking in reading view turned off
-        linkElement(plugin(), el, owner, sourcePath);
+        linkElement(plugin(), el, owner, sourcePath, undefined, "reading");
       });
       return { done, unload: () => view.removeChild(owner) };
     },

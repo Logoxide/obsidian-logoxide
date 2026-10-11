@@ -175,7 +175,7 @@ test("with embedAlone, a reference alone on its line shows its text unless the c
   const { EditorView, referenceDecorations, refreshReferences, relinkEditor, DEFAULT_SETTINGS, livePreview, editorLivePreviewField } = await load();
   const { Topos } = await import("logoxide");
   const { EditorSelection } = await import("@codemirror/state");
-  const settings = { ...DEFAULT_SETTINGS, embedAlone: true };
+  const settings = { ...DEFAULT_SETTINGS, embedAlone: "both" };
   const plugin = {
     topos: Topos.new(),
     settings,
@@ -227,12 +227,12 @@ test("with embedAlone, a reference alone on its line shows its text unless the c
   settings.embedAloneBlankLines = 1;
   relinkEditor(plugin, editorEl);
   assert.deepEqual(text(), ["Intro\nJn 3:16\nSee Rom 8:28", "<Psalm 23:1>"]);
-  settings.embedAlone = false;
+  settings.embedAlone = "reading";
   relinkEditor(plugin, editorEl);
   assert.deepEqual(text(), ["Intro\nJn 3:16\nSee Rom 8:28", "Ps 23:1"]);
   // A callout's title is a title, even one that's only a reference (`> > [!bible] Ezra 1:7-11`),
   // while a line of its own in the callout is embedded
-  settings.embedAlone = true;
+  settings.embedAlone = "editor";
   settings.embedAloneBlankLines = 0;
   const calloutEl = document.createElement("div");
   calloutEl.innerHTML =
@@ -242,4 +242,9 @@ test("with embedAlone, a reference alone on its line shows its text unless the c
   assert.deepEqual(titles.map((t: any) => t.textContent), ["Ezra 1:7-11", "Ezra 1:7-11"]);
   assert.ok(titles.every((t: any) => t.querySelector(".topos-reference") && !t.querySelector(".topos-embed")));
   assert.equal(calloutEl.querySelector(".callout-content p")!.textContent, "<Psalm 23:1>");
+  // Each device chooses for itself: this one only in the reading view, so not in the editor
+  Object.assign(plugin, { deviceId: "phone" });
+  settings.embedAloneDevices = { phone: "reading", computer: "editor" };
+  relinkEditor(plugin, calloutEl);
+  assert.equal(calloutEl.querySelector(".callout-content p")!.textContent, "Ps 23:1");
 });

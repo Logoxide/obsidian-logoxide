@@ -2,6 +2,7 @@ import { Component, MarkdownRenderChild, type MarkdownPostProcessor } from "obsi
 import type { Passage } from "logoxide";
 import { blankAround, findReferences, wholeReference } from "./core/syntax.ts";
 import { hoverParent, named } from "./editor/decorations.ts";
+import { embedsAloneIn } from "./core/settings.ts";
 import type ToposPlugin from "./main.ts";
 
 /** The class of references this file links (the editor's own highlights are CodeMirror's) */
@@ -20,15 +21,23 @@ const RENDERED_IN_EDITOR = ".cm-content .cm-embed-block, .cm-content .markdown-e
  * References in reading view (see `core/syntax.ts`): bare references are highlighted (opening their
  * link with Ctrl/Cmd-click, like the editor), `[text](John 1:1)` and `[John 1:1]` become links to
  * the passage, `![John 1:1]` shows its text (and so does a bare reference alone on its line, with
- * `embedAlone` and the blank lines around it), and all of them preview the passage on hover
+ * `embedAlone` where this device embeds them, and the blank lines around it), and all of them preview the passage on hover
  */
 export function linkReferences(plugin: ToposPlugin): MarkdownPostProcessor {
   return (el, ctx) => {
     if (!plugin.settings.linkInReading) return;
     const owner = new MarkdownRenderChild(el);
     ctx.addChild(owner);
-    linkElement(plugin, el, owner, ctx.sourcePath, () => ctx.getSectionInfo(el));
+    linkElement(plugin, el, owner, ctx.sourcePath, () => ctx.getSectionInfo(el), inEditor(el, ctx) ? "editor" : "reading");
   };
+}
+
+/** Whether Markdown is being rendered in a live preview editor (a callout or table there), not the reading view */
+function inEditor(el: HTMLElement, ctx: object): boolean {
+  // Obsidian's context names its container (in live preview, the block, not yet in the editor), though its types don't say so
+  const { containerEl } = ctx as { containerEl?: unknown };
+  const container = containerEl instanceof HTMLElement ? containerEl : el;
+  return container.closest(".markdown-source-view, .cm-editor, .cm-embed-block") !== null;
 }
 
 /** The embeds in blocks relinked in live preview, unloaded when the block is relinked again */
@@ -40,9 +49,17 @@ type SectionInfo = () => { text: string; lineStart: number; lineEnd: number } | 
 /**
  * Links the references in an element's text, leaving links and linked ones alone. `section` is
  * where the element is in its note's Markdown, to count the blank lines around a reference
- * alone in its paragraph (without it, any number of blank lines is assumed)
+ * alone in its paragraph (without it, any number of blank lines is assumed); `view`, where it's
+ * shown, for whether this device embeds such references there (none: never)
  */
-export function linkElement(plugin: ToposPlugin, el: HTMLElement, owner: Component, sourcePath = "", section?: SectionInfo): void {
+export function linkElement(
+  plugin: ToposPlugin,
+  el: HTMLElement,
+  owner: Component,
+  sourcePath = "",
+  section?: SectionInfo,
+  view?: "editor" | "reading",
+): void {
   const doc = el.ownerDocument;
   linkUnresolved(plugin, el, sourcePath);
   const walker = doc.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
@@ -60,6 +77,7 @@ export function linkElement(plugin: ToposPlugin, el: HTMLElement, owner: Compone
   while (walker.nextNode()) nodes.push(walker.currentNode as Text);
 
   const hasBible = plugin.bibles.all().length > 0;
+  const embedAlone = view !== undefined && embedsAloneIn(plugin.settings, plugin.deviceId, view);
   for (const node of nodes) {
     const text = node.data;
     const found = findReferences(plugin.topos, text, plugin.translations());
@@ -68,7 +86,7 @@ export function linkElement(plugin: ToposPlugin, el: HTMLElement, owner: Compone
     let last = 0;
     for (const r of found) {
       let element: HTMLElement;
-      if (r.kind === "bare" && plugin.settings.embedAlone && hasBible && embedsAlone(plugin, node, text, r.start, r.end, section)) {
+      if (r.kind === "bare" && embedAlone && hasBible && embedsAlone(plugin, node, text, r.start, r.end, section)) {
         element = doc.createElement("div");
         element.classList.add(RENDERED);
         // Unlinking puts the reference back
@@ -194,7 +212,7 @@ export function relinkEditor(plugin: ToposPlugin, editorEl: HTMLElement): void {
     const owner = new Component();
     owner.load();
     blockOwners.set(block, owner);
-    linkElement(plugin, block, owner);
+    linkElement(plugin, block, owner, "", undefined, "editor");
   }
 }
 

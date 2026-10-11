@@ -114,10 +114,12 @@ export interface ToposSettings {
   /** Show bare references' text on hover (links and explicit links always preview) */
   previewBare: boolean;
   /**
-   * Show the text of a bare reference alone on its line, like `![John 1:1]` (in the editor, unless
-   * the cursor is near it)
+   * Where to show the text of a bare reference alone on its line, like `![John 1:1]` (in the
+   * editor, unless the cursor is near it), on devices that haven't chosen (`embedAloneDevices`)
    */
-  embedAlone: boolean;
+  embedAlone: EmbedAloneIn;
+  /** Each device's own `embedAlone`, by file-plus-plus's device id (a phone and a computer can differ) */
+  embedAloneDevices: Record<string, EmbedAloneIn>;
   /** Blank lines that must be above and below such a reference (0: it only needs a line of its own) */
   embedAloneBlankLines: number;
   /** In the editor, how many lines away the cursor shows the reference again (null: `embedAloneBlankLines`) */
@@ -186,7 +188,8 @@ export const DEFAULT_SETTINGS: ToposSettings = {
   previewContext: 2,
   contextVerses: "faded",
   previewBare: true,
-  embedAlone: false,
+  embedAlone: "off",
+  embedAloneDevices: {},
   embedAloneBlankLines: 0,
   embedAloneCursorLines: null,
   pickerTestament: false,
@@ -200,6 +203,20 @@ export const DEFAULT_SETTINGS: ToposSettings = {
 
 export function bookStyle(name: StyleName): BookStyle {
   return { name: BookStyle.Name, abbreviation: BookStyle.Abbreviation, osis: BookStyle.Osis }[name];
+}
+
+/** Where references alone on their line are embedded: live preview, reading view, both, or neither */
+export type EmbedAloneIn = "off" | "editor" | "reading" | "both";
+
+/** Where this device embeds references alone on their line (`embedAlone` until it chooses) */
+export function embedAloneWhere(settings: ToposSettings, device: string | undefined): EmbedAloneIn {
+  return (device && settings.embedAloneDevices?.[device]) || settings.embedAlone;
+}
+
+/** Whether this device embeds references alone on their line in the editor's live preview or the reading view */
+export function embedsAloneIn(settings: ToposSettings, device: string | undefined, view: "editor" | "reading"): boolean {
+  const where = embedAloneWhere(settings, device);
+  return where === "both" || where === view;
 }
 
 /** How many lines away from an embedded reference the cursor shows it again */
