@@ -1,6 +1,6 @@
 import { Component, MarkdownRenderChild, type MarkdownPostProcessor } from "obsidian";
 import type { Passage } from "logoxide";
-import { blankAround, findReferences, wholeReference } from "./core/syntax.ts";
+import { blankAround, findReferences, wholeNamedReference, wholeReference, withHighlight } from "./core/syntax.ts";
 import { hoverParent, named } from "./editor/decorations.ts";
 import { embedsAloneIn } from "./core/settings.ts";
 import type ToposPlugin from "./main.ts";
@@ -62,6 +62,7 @@ export function linkElement(
 ): void {
   const doc = el.ownerDocument;
   linkUnresolved(plugin, el, sourcePath);
+  embedHighlighted(plugin, el, owner, sourcePath, section);
   const walker = doc.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
       for (let parent = node.parentElement; parent && parent !== el; parent = parent.parentElement) {
@@ -91,7 +92,7 @@ export function linkElement(
         element.classList.add(RENDERED);
         // Unlinking puts the reference back
         element.dataset.toposText = text.slice(r.start, r.end);
-        void plugin.embedPassage(element, r.passage, r.passage.reference, owner, r.translation);
+        void plugin.embedPassage(element, r.passage, r.passage.reference, owner, r.translation, { onHighlight: rewriter(plugin, sourcePath, section, r.passage) });
       } else if (r.kind === "bare") {
         const url = plugin.referenceUrl(r.passage, r.translation);
         if (!url && !hasBible) continue;
@@ -104,7 +105,8 @@ export function linkElement(
       } else if (r.kind === "embed") {
         element = doc.createElement("div");
         element.classList.add(RENDERED);
-        void plugin.embedPassage(element, r.passage, text.slice(r.labelStart, r.labelEnd) || r.passage.reference, owner, r.translation);
+        const highlight = { fragment: r.fragment, onHighlight: rewriter(plugin, sourcePath, section, r.passage) };
+        void plugin.embedPassage(element, r.passage, text.slice(r.labelStart, r.labelEnd) || r.passage.reference, owner, r.translation, highlight);
       } else {
         element = doc.createElement("a");
         element.className = `topos-link ${RENDERED}`;
@@ -144,6 +146,54 @@ function embedsAlone(plugin: ToposPlugin, node: Text, text: string, start: numbe
   if (!info) return true;
   const lines = info.text.split("\n");
   return blankAround((n) => lines[n - 1], info.lineStart + 1, info.lineEnd + 1, blank);
+}
+
+/**
+ * `![John 3:16](#:~:text=so%20loved&color=yellow)`, an embed with a highlight, which Obsidian draws
+ * as an image whose address is the highlight: the passage, highlighted
+ */
+function embedHighlighted(plugin: ToposPlugin, el: HTMLElement, owner: Component, sourcePath: string, section?: SectionInfo): void {
+  for (const img of Array.from(el.querySelectorAll<HTMLImageElement>("img[src^='#']"))) {
+    const src = img.getAttribute("src") ?? "";
+    const named = /^#(:~:|%3A~%3A)/i.test(src) ? wholeNamedReference(plugin.topos, img.alt, plugin.translations()) : null;
+    if (!named) continue;
+    const element = el.ownerDocument.createElement("div");
+    element.classList.add(RENDERED);
+    element.dataset.toposOsis = named.passage.osis;
+    element.dataset.toposKind = "embed";
+    img.replaceWith(element);
+    const highlight = { fragment: src.slice(1), onHighlight: rewriter(plugin, sourcePath, section, named.passage) };
+    void plugin.embedPassage(element, named.passage, img.alt, owner, named.translation, highlight);
+  }
+}
+
+/**
+ * How an embed in a rendered note is written again with a highlight (see `withHighlight`): the
+ * first embed of its passage in its section's lines, else a reference of it alone on its line
+ */
+function rewriter(plugin: ToposPlugin, sourcePath: string, section: SectionInfo | undefined, passage: Passage): ((fragment: string | null) => void) | undefined {
+  if (!sourcePath || !section) return undefined;
+  return (fragment) => {
+    const file = plugin.app.vault.getFileByPath(sourcePath);
+    const info = section();
+    if (!file || !info) return;
+    void plugin.app.vault.process(file, (data) => {
+      const lines = data.split("\n");
+      const last = Math.min(info.lineEnd, lines.length - 1);
+      for (const alone of [false, true]) {
+        for (let n = info.lineStart; n <= last; n++) {
+          const line = lines[n]!;
+          const r = findReferences(plugin.topos, line, plugin.translations()).find(
+            (r) => r.passage.osis === passage.osis && (alone ? r.kind === "bare" && line.trim() === line.slice(r.start, r.end) : r.kind === "embed"),
+          );
+          if (!r) continue;
+          lines[n] = line.slice(0, r.start) + withHighlight(line, r, fragment) + line.slice(r.end);
+          return lines.join("\n");
+        }
+      }
+      return data;
+    });
+  };
 }
 
 /**

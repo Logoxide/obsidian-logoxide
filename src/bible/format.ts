@@ -86,9 +86,11 @@ export function createBibleFormat(plugin: ToposPlugin): FileFormat<BibleBook, Bi
     templateVars: (info, doc) => {
       const parts = parseVerseLocator(info.locator) ?? [];
       const verses = parts.length > 0 ? formatVerseLocator(parts).slice(2).replaceAll(";", "; ") : "";
-      return { reference: [doc?.name, verses].filter(Boolean).join(" "), verses, bible: doc?.bible ?? "" };
+      // The words, as an embed's highlight follows its reference: `:~:text=so%20loved`
+      const highlight = info.textFragment() ?? "";
+      return { reference: [doc?.name, verses].filter(Boolean).join(" "), verses, bible: doc?.bible ?? "", highlight };
     },
-    extraTemplateVars: "{{reference}} (John 3:16-18), {{verses}} (3:16-18), {{bible}} (the translation)",
+    extraTemplateVars: "{{reference}} (John 3:16-18), {{verses}} (3:16-18), {{bible}} (the translation), {{highlight}} (the words, `:~:text=so%20loved`)",
     appearance: { hidden: ["dimImages"], publisherName: null },
   };
 }

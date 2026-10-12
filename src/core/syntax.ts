@@ -6,7 +6,8 @@ import { BookStyle, OffsetUnit, ToposQuery, type Passage, type Topos, type Topos
  * - `link`: `[some text](John 1:1)`, a Markdown link whose target is a reference in any form topos
  *   reads (`Jn 1:1`, OSIS `John.1.1`, USFM `JHN 1:1`; `<John 1:1>` too)
  * - `explicit`: `[John 1:1]`, a reference in brackets
- * - `embed`: `![John 1:1]` (or `![text](John 1:1)`), the passage's text shown in place
+ * - `embed`: `![John 1:1]` (or `![text](John 1:1)`), the passage's text shown in place; with a
+ *   highlight in it after `#`: `![John 3:16](#:~:text=so%20loved&color=yellow)`, `![text](John 3:16#:~:…)`
  * - `bare`: `John 1:1` in the text, which is found and marked but isn't a link
  *
  * Each can name a translation after the reference (`[John 1:1 KJV]`, `John 1:1 (KJV)`), when
@@ -25,6 +26,8 @@ export interface ReferenceSyntax {
   labelEnd: number;
   /** The translation named after the reference (`KJV`), as the translations list it */
   translation?: string;
+  /** An embed's highlight, after `#` in its target: `:~:text=so%20loved&color=yellow` */
+  fragment?: string;
 }
 
 /** A reference and the translation named after it, if any */
@@ -111,11 +114,14 @@ export function findReferences(topos: Topos, text: string, translations?: ToposT
   for (const m of text.matchAll(LINK)) {
     const start = m.index;
     if (text[start - 1] === "[" || text[start + m[1].length + 1] === "[") continue;
-    const named = wholeNamedReference(topos, m[3], translations);
+    // An embed's highlight after `#`: `![John 3:16](#:~:text=…)`, its text the reference
+    const { reference, fragment } = m[1] ? splitFragment(m[3]) : { reference: m[3], fragment: undefined };
+    const named = wholeNamedReference(topos, reference || m[2], translations);
     if (!named) continue;
     const labelStart = start + m[1].length + 1;
     const kind = m[1] ? "embed" : "link";
-    add({ kind, ...withTranslation(named), start, end: start + m[0].length, labelStart, labelEnd: labelStart + m[2].length });
+    const highlight = fragment ? { fragment } : {};
+    add({ kind, ...withTranslation(named), start, end: start + m[0].length, labelStart, labelEnd: labelStart + m[2].length, ...highlight });
   }
   for (const m of text.matchAll(BRACKETS)) {
     const start = m.index;
@@ -146,6 +152,29 @@ export function findReferences(topos: Topos, text: string, translations?: ToposT
     found.push({ kind: "bare", passage: m.passage, start: m.start, end: m.end, labelStart: m.start, labelEnd: m.end });
   }
   return found.sort((a, b) => a.start - b.start);
+}
+
+/** An embed's target and the highlight after its `#` (`John 3:16#:~:text=…`, `#:~:text=…`), if it has one */
+function splitFragment(target: string): { reference: string; fragment: string | undefined } {
+  const s = target.replace(/^<(.*)>$/, "$1");
+  const hash = s.search(/#:~:/);
+  return hash === -1 ? { reference: target, fragment: undefined } : { reference: s.slice(0, hash).trim(), fragment: s.slice(hash + 1) };
+}
+
+/**
+ * An embed written again with a highlight (`fragment`: `:~:text=so%20loved&color=yellow`), or
+ * without one (null): `![John 3:16]` is `![John 3:16](#:~:…)`, `![text](John 3:16)`
+ * `![text](John 3:16#:~:…)`, and a bare reference embedded alone `![John 3:16](#:~:…)`
+ */
+export function withHighlight(text: string, r: ReferenceSyntax, fragment: string | null): string {
+  const written = text.slice(r.start, r.end);
+  const hash = fragment ? `#${fragment}` : "";
+  if (r.kind === "bare") return fragment ? `![${written}](${hash})` : written;
+  const label = text.slice(r.labelStart, r.labelEnd);
+  const link = /^!\[[^\]]*\]\((.*)\)$/.exec(written);
+  const reference = link ? splitFragment(link[1]!).reference.replace(/^<(.*)>$/, "$1") : "";
+  if (reference) return `![${label}](${reference}${hash})`;
+  return fragment ? `![${label}](${hash})` : `![${label}]`;
 }
 
 /** A named passage's fields for a {@link ReferenceSyntax} */

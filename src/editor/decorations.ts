@@ -11,7 +11,7 @@ import {
 import { Component, editorLivePreviewField, MarkdownView, type HoverParent } from "obsidian";
 import { BookStyle, type Passage } from "logoxide";
 import { embedAloneCursorLines, embedsAloneIn } from "../core/settings.ts";
-import { blankAround, findReferences } from "../core/syntax.ts";
+import { blankAround, findReferences, withHighlight } from "../core/syntax.ts";
 import type ToposPlugin from "../main.ts";
 
 /** Rebuilds the references in an editor, after the settings change what they link to */
@@ -87,7 +87,7 @@ export function referenceDecorations(plugin: ToposPlugin) {
             if (url) attributes["data-topos-url"] = url;
             decorations.push(Decoration.mark({ class: "topos-reference", attributes }).range(a, b));
           } else if (r.kind === "embed" && live && !editing(a, b)) {
-            decorations.push(Decoration.replace({ widget: new EmbedWidget(plugin, r.passage, text.slice(r.labelStart, r.labelEnd), r.translation) }).range(a, b));
+            decorations.push(Decoration.replace({ widget: new EmbedWidget(plugin, r.passage, text.slice(r.labelStart, r.labelEnd), r.translation, r.fragment) }).range(a, b));
           } else {
             const hide = live && !editing(a, b);
             if (hide && labelA > a) decorations.push(Decoration.replace({}).range(a, labelA));
@@ -273,20 +273,31 @@ class EmbedWidget extends WidgetType {
     private readonly passage: Passage,
     private readonly label: string,
     private readonly translation?: string,
+    private readonly fragment?: string,
   ) {
     super();
   }
 
   eq(other: EmbedWidget): boolean {
-    return other.passage.osis === this.passage.osis && other.label === this.label && other.translation === this.translation;
+    return (
+      other.passage.osis === this.passage.osis && other.label === this.label && other.translation === this.translation && other.fragment === this.fragment
+    );
   }
 
-  toDOM(): HTMLElement {
+  toDOM(view: EditorView): HTMLElement {
     const el = document.createElement("div");
     const owner = new Component();
     owner.load();
     EmbedWidget.owners.set(el, owner);
-    void this.plugin.embedPassage(el, this.passage, this.label || this.passage.reference, owner, this.translation);
+    // A highlight made in it writes the embed again, where it is now
+    const onHighlight = (fragment: string | null) => {
+      const pos = view.posAtDOM(el);
+      const line = view.state.doc.lineAt(pos);
+      const found = findReferences(this.plugin.topos, line.text, this.plugin.translations()).filter((r) => r.passage.osis === this.passage.osis);
+      const r = found.find((r) => line.from + r.start <= pos && pos <= line.from + r.end) ?? found[0];
+      if (r) view.dispatch({ changes: { from: line.from + r.start, to: line.from + r.end, insert: withHighlight(line.text, r, fragment) } });
+    };
+    void this.plugin.embedPassage(el, this.passage, this.label || this.passage.reference, owner, this.translation, { fragment: this.fragment, onHighlight });
     return el;
   }
 

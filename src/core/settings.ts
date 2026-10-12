@@ -149,6 +149,8 @@ export interface ToposSettings {
   strongsHover: boolean;
   /** Once file-plus-plus's default link label has become `{{reference}}` */
   bibleAliasDefault?: boolean;
+  /** Whether file-plus-plus's copy formats have had *Embed* added (once: it can be deleted) */
+  embedCopyFormat?: boolean;
   /** The entry this plugin added to Obsidian's excluded files to hide the packages folder (`Logoxide/`), to take out again */
   hiddenFilter?: string;
 }

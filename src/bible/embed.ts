@@ -1,6 +1,6 @@
-import { setIcon } from "obsidian";
-import type { ParsedLocator } from "file-plus-plus/core";
-import { DocumentEmbed, MediaPlayer } from "file-plus-plus/obsidian";
+import { Menu, Platform, setIcon, type TFile } from "obsidian";
+import type { HighlightSpec, ParsedLocator, SelectionInfo } from "file-plus-plus/core";
+import { DocumentEmbed, MediaPlayer, type EmbedContext, type FilePlusPlusPlugin } from "file-plus-plus/obsidian";
 import { clipOf } from "../core/timings.ts";
 import { END, formatVerseLocator, parseVerseLocator, splitContext, withContext } from "../core/verse-locator.ts";
 import { STUB_EXTENSION } from "../core/stubs.ts";
@@ -24,10 +24,24 @@ export class BibleEmbed extends DocumentEmbed<BibleBook, BibleReader> {
   private stopPlayer: (() => void) | null = null;
   /** The context shown last, to show again when it's turned back on */
   private lastContext: number | null = null;
+  /**
+   * Writes the embed again in its note with a highlight (`:~:text=so%20loved&color=yellow`), or
+   * none (null); null where it can't be (a hover preview)
+   */
+  onHighlight: ((fragment: string | null) => void) | null = null;
+
+  constructor(plugin: FilePlusPlusPlugin<BibleBook, BibleReader>, ctx: EmbedContext, file: TFile, subpath: string) {
+    super(plugin, ctx, file, subpath);
+    // `![[John.bible#v=3:16-18]]`: its link in its note
+    const { linktext, sourcePath } = ctx;
+    if (linktext && sourcePath) this.onHighlight = (fragment) => void rewriteWikiEmbed(plugin, sourcePath, linktext, fragment);
+  }
 
   protected override onReaderReady(reader: BibleReader, loc: ParsedLocator, range: Range | null): void {
     if (!reader.isPreview) return;
-    reader.setHighlights([]);
+    // A link's verses aren't highlighted in its embed, but a highlight in them is (`:~:text=`)
+    if (!TEXT_DIRECTIVE.test(loc.locator ?? "")) reader.setHighlights([]);
+    this.offerHighlighting(reader);
     const book = reader.bible;
     // A hover preview from Obsidian has no label: the book and the locator's verses
     const parts = parseVerseLocator(loc.locator ?? "");
@@ -50,6 +64,49 @@ export class BibleEmbed extends DocumentEmbed<BibleBook, BibleReader> {
     if (!range) return;
     this.offerContext(reader, loc);
     void this.offerPlaying(reader, loc, label);
+  }
+
+  /**
+   * Highlighting in the embed, which writes it again in its note with its highlight (one: a new one
+   * replaces it): a menu of colors for a selection (on a right-click, or after selecting on a touch
+   * screen), and for its highlight (on a click)
+   */
+  private offerHighlighting(reader: BibleReader): void {
+    const write = this.onHighlight;
+    if (!write) return;
+    const plugin = this.plugin as unknown as ToposPlugin;
+    const show = (at: { x: number; y: number }, selection: SelectionInfo | null, highlights: HighlightSpec[]) => {
+      const fragment = selection?.textFragment();
+      if (!fragment && highlights.length === 0) return false;
+      const menu = new Menu();
+      for (const { name } of plugin.settings.palette) {
+        const title = fragment ? `Highlight ${name}` : `Make it ${name}`;
+        // A new color for its highlight keeps its words
+        const words = fragment ?? this.subpath.match(TEXT_DIRECTIVE)?.[0].replace(/&color=[^&]*/, "") ?? null;
+        if (words) menu.addItem((i) => i.setTitle(title).setIcon("highlighter").onClick(() => write(`${directive(words)}&color=${name}`)));
+      }
+      if (highlights.length > 0) menu.addItem((i) => i.setTitle("Remove highlight").setIcon("eraser").onClick(() => write(null)));
+      menu.showAtPosition(at);
+      return true;
+    };
+    reader.on("contextmenu", (e, { selection, highlights }) => {
+      if (show({ x: e.clientX, y: e.clientY }, selection, highlights)) e.preventDefault();
+    });
+    reader.on("highlight-click", (e, highlights) => void show({ x: e.clientX, y: e.clientY }, null, highlights));
+    // On a touch screen, the menu once the selection stays put a moment
+    if (Platform.isDesktop) return;
+    let timer = 0;
+    reader.on("selectionchange", (selection) => {
+      window.clearTimeout(timer);
+      if (!selection) return;
+      timer = window.setTimeout(() => {
+        const now = reader.getSelection();
+        if (!now) return;
+        const r = now.range.getBoundingClientRect();
+        show({ x: r.left + r.width / 2, y: r.bottom + 8 }, now, []);
+      }, 600);
+    });
+    this.register(() => window.clearTimeout(timer));
   }
 
   /**
@@ -150,4 +207,34 @@ function keepFromEditor(button: HTMLElement): void {
     if (e.type === "mousedown") e.preventDefault();
   };
   for (const type of ["pointerdown", "mousedown", "touchstart"]) button.addEventListener(type, keep);
+}
+
+/** A highlight's words in a locator, and its color after them: `:~:text=so%20loved&color=yellow` */
+const TEXT_DIRECTIVE = /(:~:|%3A~%3A)text=.*$/i;
+
+/**
+ * Writes a wikilink embed (`![[John.bible#v=3:16-18]]`) again in its note with a highlight, or
+ * none: its verses keep their locator, and the highlight follows them (the first such embed)
+ */
+async function rewriteWikiEmbed(plugin: FilePlusPlusPlugin<BibleBook, BibleReader>, sourcePath: string, linktext: string, fragment: string | null): Promise<void> {
+  const file = plugin.app.vault.getFileByPath(sourcePath);
+  if (!file) return;
+  const hash = linktext.indexOf("#");
+  const [path, subpath] = hash === -1 ? [linktext, ""] : [linktext.slice(0, hash), linktext.slice(hash + 1)];
+  const verses = subpath.replace(TEXT_DIRECTIVE, "");
+  const next = `${path}#${verses}${fragment ?? ""}`;
+  await plugin.app.vault.process(file, (data) => {
+    const at = data.search(new RegExp(`!\\[\\[${escapeRegExp(linktext)}(?=[|\\]])`));
+    return at === -1 ? data : data.slice(0, at + 3) + next + data.slice(at + 3 + linktext.length);
+  });
+}
+
+/** A text fragment as it follows an embed's verses: `:~:text=…` */
+function directive(fragment: string): string {
+  const s = fragment.replace(/^%3A~%3A/i, ":~:");
+  return s.startsWith(":~:") ? s : `:~:${s}`;
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

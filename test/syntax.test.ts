@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { BookStyle, Topos } from "logoxide";
-import { findReferences, partAt, passageStops, wholeReference } from "../src/core/syntax.ts";
+import { findReferences, partAt, passageStops, wholeReference, withHighlight } from "../src/core/syntax.ts";
 
 const topos = Topos.new();
 const found = (text: string) =>
@@ -77,4 +77,22 @@ test("a passage's stops are where each part starts and ends, each once", () => {
   assert.deepEqual(stops("John 3:16; 3:16-18"), ["John 3:16", "John 3:18"]);
   assert.deepEqual(stops("John 3-4"), ["John 3", "John 4"]);
   assert.deepEqual(stops("John 3:16"), ["John 3:16"]);
+});
+
+test("an embed carries a highlight after #, and is written again with another", () => {
+  const embeds = (text: string) => findReferences(topos, text).map((r) => `${r.kind} ${r.passage.reference} ${r.fragment ?? "-"} ${JSON.stringify(text.slice(r.labelStart, r.labelEnd))}`);
+  assert.deepEqual(embeds("![John 3:16](#:~:text=so%20loved&color=yellow)"), ['embed John 3:16 :~:text=so%20loved&color=yellow "John 3:16"']);
+  assert.deepEqual(embeds("![the verse](John 3:16#:~:text=so)"), ['embed John 3:16 :~:text=so "the verse"']);
+  // Not an embed's highlight: a heading, and a link
+  assert.deepEqual(embeds("![John 3:16](#heading)"), ["bare John 3:16 - \"John 3:16\""]);
+  assert.deepEqual(embeds("[John 3:16](#:~:text=so)"), ["bare John 3:16 - \"John 3:16\""]);
+
+  const again = (text: string, fragment: string | null) => withHighlight(text, findReferences(topos, text)[0]!, fragment);
+  const f = ":~:text=so%20loved&color=yellow";
+  assert.equal(again("![John 3:16]", f), `![John 3:16](#${f})`);
+  assert.equal(again(`![John 3:16](#:~:text=x&color=red)`, f), `![John 3:16](#${f})`);
+  assert.equal(again(`![John 3:16](#:~:text=x&color=red)`, null), "![John 3:16]");
+  assert.equal(again("![the verse](John 3:16)", f), `![the verse](John 3:16#${f})`);
+  assert.equal(again(`![the verse](John 3:16#${f})`, null), "![the verse](John 3:16)");
+  assert.equal(again("John 3:16", f), `![John 3:16](#${f})`);
 });

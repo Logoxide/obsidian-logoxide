@@ -159,6 +159,7 @@ named after the folder. Pick the one references use under *Settings → Bible*. 
 | `[some text](John 1:1)` | A link to the passage. The target is any reference topos reads: `Jn 1:1`, OSIS `John.1.1`, USFM `JHN 1:1`, or `<John 1:1>` |
 | `[John 1:1]` | A link too, showing the reference |
 | `![John 1:1]` (or `![text](John 1:1)`) | The passage's text, embedded in the note |
+| `![John 3:16](#:~:text=so%20loved&color=yellow)` | The same, with its words highlighted (`![text](John 3:16#:~:…)`) |
 | `John 1:1` | Still found and marked, with its text on hover, but not a link |
 
 Links open the book in its own tab at the passage (or, with *Open reference links in: the link
@@ -225,7 +226,12 @@ parts), which work in any translation's file; selecting part of a verse keeps th
 (`v=3:16:~:text=so%20loved`), so only they are highlighted. A link copied from a Bible names it
 (`v=3:16&bible=BSB`), so when its file isn't there any more (moved, or another device keeps its
 Bibles elsewhere), the link opens the book in that Bible. Comments on highlights work as in EPUB++; they show as highlights in the tab, and
-`![[JHN.usx#v=3:16-18]]` embeds the verses. The tab's reading and highlight settings follow the
+`![[JHN.usx#v=3:16-18]]` embeds the verses. An embed shows the note's text size, and with
+verses around it (its header's button) keeps its passage at the top, those before it a scroll up.
+Highlight words in an embed (right-click a selection, or select on a touch screen) and its line in
+the note carries the highlight (`#…:~:text=so%20loved&color=yellow`), one per embed; click it to
+change its color or remove it. In the Bible tab, *As Embed* (a copy format, in the selection menu) copies a selection as an embed
+of it, highlighted, naming its Bible: `![John 3:16 BSB](#:~:text=so%20loved&color=yellow)`. The tab's reading and highlight settings follow the
 plugin's own, under *Reading*, *Highlights*, and *Links* in the settings.
 
 Bible text keeps every USX marker as a `data-style` (`<span class="topos-l" data-style="q2">`,

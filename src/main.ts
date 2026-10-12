@@ -86,6 +86,19 @@ export interface Placement {
   mapped: MappedPassage | null;
 }
 
+/**
+ * A copy format for an embed of the selection, highlighted, that names its Bible rather than its
+ * file: `![John 3:16 BSB](#:~:text=so%20loved&color=yellow)`
+ */
+const EMBED_FORMAT = { id: "embed", name: "Embed", template: "![{{reference}} {{bible}}](#{{highlight}}&color={{color}})" };
+
+/** An embed's highlight (`:~:text=so%20loved&color=yellow`), and how a new one is written in the note */
+export interface EmbedHighlight {
+  fragment?: string;
+  /** Writes the embed again with another highlight, or none (null) */
+  onHighlight?: (fragment: string | null) => void;
+}
+
 export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleReader> {
   readonly format = createBibleFormat(this);
   declare settings: PluginSettings;
@@ -348,6 +361,14 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
   private async migrateToposSettings(): Promise<void> {
     const saved = this.savedData ?? {};
     // Saved before Bible links had their own default label
+    // A copy format for an embed of a selection, with its highlight (`![John 3:16 BSB](#:~:text=…&color=yellow)`)
+    if (!this.settings.embedCopyFormat) {
+      if (!this.settings.copyFormats.some((f) => f.id === EMBED_FORMAT.id)) this.settings.copyFormats.push({ ...EMBED_FORMAT });
+      // In the selection menu now (file-plus-plus adds new formats to it as it loads, before this)
+      const entry = `format:${EMBED_FORMAT.id}`;
+      if (!this.settings.selectionMenu.some((e) => e.id === entry)) this.settings.selectionMenu.push({ id: entry, show: true });
+      this.settings.embedCopyFormat = true;
+    }
     if (!this.settings.bibleAliasDefault) {
       if (this.settings.aliasTemplate === "{{book}}, {{chapter}}") this.settings.aliasTemplate = "{{reference}}";
       this.settings.bibleAliasDefault = true;
@@ -551,7 +572,14 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
    * one), then each Bible to compare with (the setting); each embed is a child of `owner`, so it is
    * unloaded with it. Without a Bible with the book, says so
    */
-  async embedPassage(containerEl: HTMLElement, passage: Passage, label: string, owner: Component, translation?: string | null): Promise<void> {
+  async embedPassage(
+    containerEl: HTMLElement,
+    passage: Passage,
+    label: string,
+    owner: Component,
+    translation?: string | null,
+    highlight: EmbedHighlight = {},
+  ): Promise<void> {
     containerEl.addClass("topos-embed");
     const bibles = [this.bibles.forText(translation), ...this.compareBibles()].filter((b, i, all): b is Bible => !!b && all.findIndex((o) => o?.folder === b.folder) === i);
     // Each Bible's file and where the passage is in it (a compare Bible numbered differently: its own numbers)
@@ -566,7 +594,7 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
       containerEl.addClass("topos-embed-missing");
       return;
     }
-    for (const { file, bible, placed } of shown) {
+    for (const [index, { file, bible, placed }] of shown.entries()) {
       const el = shown.length > 1 ? containerEl.createDiv({ cls: "topos-embed-part" }) : containerEl;
       if (!file) {
         // Mapped to nothing: the other numbering has none of it
@@ -574,8 +602,11 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
         el.addClass("topos-embed-missing");
         continue;
       }
-      const embed = this.createEmbed({ app: this.app, containerEl: el }, file, formatVerseLocator(placed.parts)) as BibleEmbed;
+      // The highlight is in the first Bible's words, which the others don't have
+      const marked = index === 0 && highlight.fragment ? highlight.fragment : "";
+      const embed = this.createEmbed({ app: this.app, containerEl: el }, file, formatVerseLocator(placed.parts) + marked) as BibleEmbed;
       embed.label = passage.reference;
+      if (index === 0 && highlight.onHighlight) embed.onHighlight = highlight.onHighlight;
       if (placed.mapped) embed.bibleLabel = mappedLabel(bible.name, placed.mapped);
       owner.addChild(embed);
       await embed.loadFile();
