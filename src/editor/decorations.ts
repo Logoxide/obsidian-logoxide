@@ -54,6 +54,7 @@ export function referenceDecorations(plugin: ToposPlugin) {
       const site = plugin.linkSite();
       const hasBible = plugin.bibles.all().length > 0;
       const embedAlone = embedsAloneIn(plugin.settings, plugin.deviceId, "editor");
+      const inline = live && hasBible && plugin.settings.inlineText;
       // Visible ranges widened to whole lines can overlap
       let lastEnd = -1;
       for (const { from, to } of view.visibleRanges) {
@@ -77,6 +78,10 @@ export function referenceDecorations(plugin: ToposPlugin) {
               lastEnd = line.to;
               continue;
             }
+          }
+          // Its text after it, faded, unless it's being edited
+          if (inline && r.kind !== "embed" && !editing(a, b)) {
+            decorations.push(Decoration.widget({ widget: new InlineTextWidget(plugin, r.passage, r.translation), side: 1 }).range(b));
           }
           if (r.kind === "bare") {
             if (!plugin.settings.linkInEditor) continue;
@@ -262,6 +267,38 @@ export function hoverParent(plugin: ToposPlugin, el: HTMLElement): HoverParent {
     if (!parent && (view instanceof MarkdownView || "hoverPopover" in view) && view.containerEl.contains(el)) parent = view as unknown as HoverParent;
   });
   return parent ?? { hoverPopover: null };
+}
+
+/** A reference's text after it in live preview (the `inlineText` settings), faded */
+class InlineTextWidget extends WidgetType {
+  private readonly generation: number;
+
+  constructor(
+    private readonly plugin: ToposPlugin,
+    private readonly passage: Passage,
+    private readonly translation?: string,
+  ) {
+    super();
+    this.generation = plugin.inlineGeneration;
+  }
+
+  eq(other: InlineTextWidget): boolean {
+    return other.passage.osis === this.passage.osis && other.translation === this.translation && other.generation === this.generation;
+  }
+
+  toDOM(): HTMLElement {
+    const el = document.createElement("span");
+    el.className = "topos-inline-text";
+    void this.plugin.inlineVerseText(this.passage, this.translation).then((text) => {
+      if (text) el.textContent = text;
+    });
+    return el;
+  }
+
+  /** A click on it places the cursor, as on the text around it */
+  ignoreEvent(): boolean {
+    return false;
+  }
 }
 
 /** `![John 1:1]` in live preview: the passage's text */

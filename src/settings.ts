@@ -443,6 +443,51 @@ export class ToposSettingsPanel {
             void save();
           }),
       );
+    const inline: Setting[] = [];
+    const showInline = () => inline.forEach((s) => s.settingEl.toggleClass("topos-hidden", !settings.inlineText));
+    new Setting(embeds)
+      .setName("Show verse text after references")
+      .setDesc("In live preview, a reference that isn't embedded shows its text after it, faded (not while the cursor is in it).")
+      .addToggle((t) =>
+        t.setValue(settings.inlineText).onChange((value) => {
+          settings.inlineText = value;
+          void save();
+          showInline();
+        }),
+      );
+    inline.push(
+      new Setting(embeds)
+        .setClass("topos-subsetting")
+        .setName("What it shows")
+        .setDesc(
+          md(
+            "`{first}` the first verse's text, `{last}` the last verse's, `{text}` all of it, `{reference}` the reference, `{bible}` the Bible it's from: `{first}`, `— {first} … {last}`, `{bible}: {text}`.",
+          ),
+        )
+        .addText((t) =>
+          t
+            .setPlaceholder("{first}")
+            .setValue(settings.inlineTextTemplate)
+            .onChange((value) => {
+              settings.inlineTextTemplate = value || "{first}";
+              void save();
+            }),
+        ),
+      new Setting(embeds)
+        .setClass("topos-subsetting")
+        .setName("Longest text")
+        .setDesc("Longer text is cut at a word, with an ellipsis.")
+        .addDropdown((d) =>
+          d
+            .addOptions({ 60: "60 characters", 120: "120 characters", 200: "200 characters", 400: "400 characters", 0: "All of it" })
+            .setValue(String(settings.inlineTextLength))
+            .onChange((value) => {
+              settings.inlineTextLength = Number(value);
+              void save();
+            }),
+        ),
+    );
+    showInline();
     const counts = (none: string) => {
       const options: Record<string, string> = { 0: none };
       for (let n = 1; n <= 5; n++) options[n] = `${n} line${n > 1 ? "s" : ""}`;

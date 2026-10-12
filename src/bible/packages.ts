@@ -812,6 +812,7 @@ export class LogoxideBibles {
     const bible = this.named(name);
     if (!bible || !bible.pkg.books().includes(passage.bookId)) return null;
     let book = bible.books.get(passage.bookId);
+    const opened = !book;
     if (!book) {
       book = bible.pkg.book(passage.bookId);
       bible.books.set(passage.bookId, book);
@@ -819,10 +820,11 @@ export class LogoxideBibles {
         old.dispose();
         bible.books.delete(id);
       }
-      await this.saveCache(bible.pkg);
     }
+    // Read before waiting on anything: meanwhile, other books opened would put this one away
     const parts = book.text(passage, { notes: false, headings: false, classPrefix: "topos-" });
     const text = parts.map((part) => part.replace(/\s+/g, " ").trim()).filter(Boolean).join(" … ");
+    if (opened) await this.saveCache(bible.pkg);
     return text || null;
   }
 

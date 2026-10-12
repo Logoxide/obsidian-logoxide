@@ -28,7 +28,7 @@ import { applyReplacements, normalizeReferences, referenceAt } from "./core/refe
 import { ReferenceIndex } from "./core/index.ts";
 import { searchText, type Hit } from "./core/search.ts";
 import { hoverParent, interceptLinkClicks, referenceDecorations, refreshReferences } from "./editor/decorations.ts";
-import { ReferenceSuggest } from "./editor/suggest.ts";
+import { ReferenceSuggest, suggestFirst } from "./editor/suggest.ts";
 import { engineWasm, loadTopos } from "./engine.ts";
 import { BackgroundSearcher } from "./indexers/background.ts";
 import { defaultCliPath } from "./indexers/cli.ts";
@@ -61,6 +61,7 @@ import { notesShown } from "./core/display.ts";
 import { formatVerseLocator, passageParts, splitBible, type VersePart } from "./core/verse-locator.ts";
 import { mappedLabel, versesParts } from "./core/mapping.ts";
 import { partAt, passageStops, wholeReference } from "./core/syntax.ts";
+import { inlineNeeds, inlineText } from "./core/inline-text.ts";
 import { COMMENTARY_VIEW, CommentaryView } from "./bible/commentary.ts";
 import type { StrongsPopupOptions } from "./bible/strongs.ts";
 import { strongsHover } from "./editor/strongs.ts";
@@ -225,7 +226,11 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
     this.patchReferenceLinks();
     this.addRibbonIcon("book-open", "Verse search", () => void this.activateSearch());
     this.addRibbonIcon("book-marked", "Read the Bible", () => openPassagePicker(this));
-    this.registerEditorSuggest(new ReferenceSuggest(this));
+    // Before other plugins' suggestions: now, and once they've all loaded (each adds its own last)
+    const suggest = new ReferenceSuggest(this);
+    this.registerEditorSuggest(suggest);
+    suggestFirst(this.app, suggest);
+    this.app.workspace.onLayoutReady(() => suggestFirst(this.app, suggest));
     this.registerEditorExtension(referenceDecorations(this));
     this.registerEditorExtension(strongsHover(this));
     // The commentary view follows the Bible tab in front
@@ -719,7 +724,38 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
    * Redraws references everywhere they are shown, after a setting changes how they look or
    * where they link: open editors, reading views, and the sidebar
    */
+  /** A reference's text as shown after it in live preview, by the `inlineText` settings (null: none) */
+  inlineVerseText(passage: Passage, translation?: string | null): Promise<string | null> {
+    const { inlineTextTemplate: template, inlineTextLength: max } = this.settings;
+    const key = `${passage.osis}\n${translation ?? ""}`;
+    let text = this.inlineTexts.get(key);
+    if (!text) {
+      text = (async () => {
+        const needs = inlineNeeds(template);
+        const parts = needs.has("first") || needs.has("last") ? this.topos.parts(passage.reference, OffsetUnit.Utf16) : [];
+        const of = async (name: "first" | "last" | "text", p: Passage | undefined) => (needs.has(name) && p ? ((await this.bibles.text(p, translation)) ?? "") : "");
+        const values = {
+          first: await of("first", parts[0]?.first ?? passage),
+          last: await of("last", parts.at(-1)?.last ?? passage),
+          text: await of("text", passage),
+          reference: passage.reference,
+          bible: this.bibles.forText(translation)?.name ?? "",
+        };
+        return inlineText(template, values, max);
+      })().catch(() => null);
+      this.inlineTexts.set(key, text);
+    }
+    return text;
+  }
+
+  /** Each reference's text after it in live preview, until the settings or Bibles change */
+  private readonly inlineTexts = new Map<string, Promise<string | null>>();
+  /** Counts those changes, so the editors' widgets of that text are drawn again */
+  inlineGeneration = 0;
+
   refreshLinks(): void {
+    this.inlineTexts.clear();
+    this.inlineGeneration++;
     this.applyColor();
     this.app.workspace.updateOptions();
     for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {

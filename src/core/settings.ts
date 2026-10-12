@@ -122,6 +122,12 @@ export interface ToposSettings {
   contextVerses: MarkLook;
   /** Show bare references' text on hover (links and explicit links always preview) */
   previewBare: boolean;
+  /** In live preview, a reference's text after it (not where it's embedded): `inlineTextTemplate`, up to `inlineTextLength` characters */
+  inlineText: boolean;
+  /** What that text is: `{first}`, `{last}`, `{text}`, `{reference}`, `{bible}` (see `core/inline-text.ts`) */
+  inlineTextTemplate: string;
+  /** Its most characters (0: all of it) */
+  inlineTextLength: number;
   /**
    * Where to show the text of a bare reference alone on its line, like `![John 1:1]` (in the
    * editor, unless the cursor is near it), on devices that haven't chosen (`embedAloneDevices`)
@@ -200,6 +206,9 @@ export const DEFAULT_SETTINGS: ToposSettings = {
   previewContext: 2,
   contextVerses: "faded",
   previewBare: true,
+  inlineText: false,
+  inlineTextTemplate: "{first}",
+  inlineTextLength: 120,
   embedAlone: "off",
   embedAloneDevices: {},
   embedAloneBlankLines: 0,

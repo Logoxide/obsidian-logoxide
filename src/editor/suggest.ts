@@ -1,4 +1,5 @@
 import {
+  type App,
   Editor,
   EditorSuggest,
   type EditorPosition,
@@ -41,9 +42,14 @@ export class ReferenceSuggest extends EditorSuggest<Completion> {
 
   onTrigger(cursor: EditorPosition, editor: Editor): EditorSuggestTriggerInfo | null {
     if (!this.plugin.settings.autocomplete) return null;
+    // This suggester comes first (`suggestFirst`), but a note link being typed (`[[John 3`) is
+    // Obsidian's, and so is a tag (`#John`)
+    const before = editor.getLine(cursor.line).slice(0, cursor.ch);
+    if (/\[\[[^\]]*$/.test(before)) return null;
     const completions = this.completions(editor, cursor);
     if (completions.length === 0) return null;
     const start = Math.min(...completions.map((c) => c.start));
+    if (before[start - 1] === "#") return null;
     return {
       start: { line: cursor.line, ch: start },
       end: cursor,
@@ -59,10 +65,18 @@ export class ReferenceSuggest extends EditorSuggest<Completion> {
     renderCompletion(this.plugin, el, completion);
   }
 
-  selectSuggestion(completion: Completion): void {
+  selectSuggestion(completion: Completion, event: MouseEvent | KeyboardEvent): void {
     const context = this.context;
     if (!context) return;
     const line = context.end.line;
+    // Enter on what's typed already is a new line, as it would be without suggestions (a space is
+    // still a space): passed on to the editor, which continues a list
+    const typed = context.editor.getRange({ line, ch: completion.start }, { line, ch: completion.end });
+    if ((event as KeyboardEvent | undefined)?.key === "Enter" && typed === completion.text) {
+      this.close();
+      newLine(context.editor);
+      return;
+    }
     context.editor.replaceRange(
       completion.text,
       { line, ch: completion.start },
@@ -70,4 +84,27 @@ export class ReferenceSuggest extends EditorSuggest<Completion> {
     );
     context.editor.setCursor({ line, ch: completion.start + completion.text.length });
   }
+}
+
+/**
+ * A new line in an editor as Enter makes it (continuing a list or quote), by sending the editor
+ * an Enter; Obsidian's plain new line where it can't be sent
+ */
+function newLine(editor: Editor): void {
+  const content = (editor as { cm?: { contentDOM?: HTMLElement } }).cm?.contentDOM;
+  const view = content?.ownerDocument.defaultView;
+  const enter = view && new view.KeyboardEvent("keydown", { key: "Enter", code: "Enter", keyCode: 13, bubbles: true, cancelable: true });
+  if (content && enter) content.dispatchEvent(enter);
+  if (!enter?.defaultPrevented) editor.exec("newlineAndIndent");
+}
+
+/**
+ * Puts a suggester before every other plugin's (Obsidian asks them in order, and shows the first
+ * that has suggestions)
+ */
+export function suggestFirst(app: App, suggest: EditorSuggest<unknown>): void {
+  const suggests = (app.workspace as { editorSuggest?: { suggests?: EditorSuggest<unknown>[] } }).editorSuggest?.suggests;
+  if (!suggests) return;
+  const at = suggests.indexOf(suggest);
+  if (at > 0) suggests.unshift(...suggests.splice(at, 1));
 }

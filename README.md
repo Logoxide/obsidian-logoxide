@@ -77,7 +77,12 @@ the sidebar, which takes the sidebar's search along) has room to read results:
 - Autocomplete while typing: chapters after a book (`John ` → `John 1`…), verses after a colon,
   range ends after a dash, and book names (`1 Co` → `1 Corinthians`). Book names only complete
   for capitalized words by default, so ordinary prose isn't interrupted. With a Bible in the
-  vault, each verse suggestion shows the verse
+  vault, each verse suggestion shows the verse. Enter on a suggestion that's what you typed
+  already starts a new line. These suggestions come before other plugins' (not inside a note
+  link being typed, `[[John 3`, which stays Obsidian's)
+- *Show verse text after references* (*Embeds and previews*): in live preview, a reference that
+  isn't embedded shows its text after it, faded: its first verse by default, or what *What it
+  shows* says (`{first}`, `{last}`, `{text}`, `{reference}`, `{bible}`), up to *Longest text*
 - References glow faintly with a dashed underline in your accent color (or one you pick), and
   highlight on hover; Ctrl/Cmd-click or a middle click opens their links (a setting allows plain
   clicks, and another lets a tap open them on mobile when you aren't typing). With links turned off, they aren't marked

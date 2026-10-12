@@ -133,6 +133,9 @@ class EditorSuggest {
     this.app = app;
   }
   setInstructions() {}
+  close() {
+    this.context = null;
+  }
 }
 /** The vault on disk, for the CLI engine and the index's files */
 class FileSystemAdapter {
@@ -263,6 +266,10 @@ function fakeEditor(text: string, ch = text.length) {
     },
     replaceRange(text: string, from: any, to: any) {
       value = value.slice(0, from.ch) + text + value.slice(to.ch);
+    },
+    getRange: (from: any, to: any) => value.slice(from.ch, to.ch),
+    exec(command: string) {
+      if (command === "newlineAndIndent") value += "\n";
     },
     setCursor() {},
     get value() {
@@ -614,7 +621,19 @@ test("the built plugin loads, indexes, and runs its commands", async (t) => {
   assert.equal(suggestions[0].label, "John 3:1");
   suggest.selectSuggestion(suggestions[15]);
   assert.equal(typing.value, "Read John 3:16");
+  // Enter on a suggestion that's what's typed already: a new line
+  const typed = fakeEditor("Read John 3:16");
+  const again = suggest.onTrigger({ line: 0, ch: 14 }, typed);
+  suggest.context = { editor: typed, start: again.start, end: again.end, query: again.query };
+  const same = suggest.getSuggestions(suggest.context)[0];
+  assert.equal(same.text, "John 3:16");
+  suggest.selectSuggestion(same, { key: "Enter" });
+  assert.equal(typed.value, "Read John 3:16\n");
   assert.equal(suggest.onTrigger({ line: 0, ch: 9 }, fakeEditor("The quick")), null);
+  // A note link and a tag being typed are Obsidian's to complete
+  assert.equal(suggest.onTrigger({ line: 0, ch: 8 }, fakeEditor("[[John 3")), null);
+  assert.equal(suggest.onTrigger({ line: 0, ch: 7 }, fakeEditor("#John 3")), null);
+  assert.notEqual(suggest.onTrigger({ line: 0, ch: 15 }, fakeEditor("[[Note]] John 3")), null);
 
   // EPUBs: off by default; on, their references come from EPUB++'s text and go back as annotations
   assert.ok(epub.provider, "registered as an annotation provider");

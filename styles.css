@@ -12,6 +12,15 @@
   cursor: pointer;
 }
 
+/* A reference's text after it in live preview (the inlineText settings) */
+.topos-inline-text:not(:empty) {
+  margin-left: 0.4em;
+  color: var(--text-faint);
+  font-style: italic;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 .is-mobile .topos-reference,
 .topos-reference:hover {
   text-shadow: 1px 1px 6px color-mix(in srgb, var(--topos-color) 100%, transparent);
