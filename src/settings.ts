@@ -504,6 +504,19 @@ export class ToposSettingsPanel {
       }).setClass("topos-subsetting"),
       new Setting(embeds)
         .setClass("topos-subsetting")
+        .setName("Space before it")
+        .setDesc(md("Between the line's text and it, as a CSS length: `1em`, `2em`, `12px`."))
+        .addText((t) =>
+          t
+            .setPlaceholder("1em")
+            .setValue(settings.inlineTextPadding)
+            .onChange((value) => {
+              settings.inlineTextPadding = value.trim() || "1em";
+              void save();
+            }),
+        ),
+      new Setting(embeds)
+        .setClass("topos-subsetting")
         .setName("Style")
         .addDropdown((d) =>
           d

@@ -14,7 +14,7 @@
 
 /* A reference's text after it in live preview (the inlineText settings) */
 .topos-inline-text:not(:empty) {
-  margin-left: 0.4em;
+  padding-left: var(--topos-inline-padding, 1em);
   color: var(--topos-inline-color, var(--text-faint));
   font-style: var(--topos-inline-font-style, italic);
   font-weight: var(--topos-inline-font-weight, inherit);

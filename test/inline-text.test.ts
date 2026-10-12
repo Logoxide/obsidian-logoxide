@@ -28,7 +28,13 @@ test("its look is CSS variables: a named color or one picked, and a style", () =
     "--topos-inline-color": "var(--text-faint)",
     "--topos-inline-font-style": "italic",
     "--topos-inline-font-weight": "inherit",
+    "--topos-inline-padding": "1em",
   });
+  // The space before it: a CSS length, else 1em
+  assert.equal(inlineTextVars("faded", "italic", "12px")["--topos-inline-padding"], "12px");
+  assert.equal(inlineTextVars("faded", "italic", " 0.5em ")["--topos-inline-padding"], "0.5em");
+  assert.equal(inlineTextVars("faded", "italic", "0")["--topos-inline-padding"], "0");
+  assert.equal(inlineTextVars("faded", "italic", "1em; color: red")["--topos-inline-padding"], "1em");
   assert.equal(inlineTextVars("#aabbcc", "bold")["--topos-inline-color"], "#aabbcc");
   assert.equal(inlineTextVars("#aabbcc", "bold")["--topos-inline-font-weight"], "var(--bold-weight, 600)");
   assert.equal(inlineTextVars("red; x: y", "normal")["--topos-inline-color"], "var(--text-faint)");

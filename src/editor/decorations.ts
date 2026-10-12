@@ -345,7 +345,7 @@ class InlineTextWidget extends WidgetType {
           if (!end) return null;
           const style = getComputedStyle(line);
           const right = line.getBoundingClientRect().right - (parseFloat(style.paddingRight) || 0);
-          return Math.max(0, Math.floor(right - end.right - (parseFloat(getComputedStyle(el).marginLeft) || 0)));
+          return Math.max(0, Math.floor(right - end.right - (parseFloat(getComputedStyle(el).paddingLeft) || 0)));
         },
         write: (room) => {
           if (room !== null && el.style.maxWidth !== `${room}px`) el.style.maxWidth = `${room}px`;

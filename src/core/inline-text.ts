@@ -34,12 +34,19 @@ export function inlineText(template: string, values: InlineValues, max: number):
   return `${(space > max / 2 ? cut.slice(0, space) : cut).replace(/[\s,;:.—–-]+$/, "")}…`;
 }
 
+/** A CSS length for the space before that text (`1em`, `12px`, `0`), else the default `1em` */
+export function inlinePadding(padding: string): string {
+  const s = padding.trim();
+  return /^(0|\d*\.?\d+(em|rem|px|ch|ex|%))$/i.test(s) ? s : "1em";
+}
+
 /** The CSS variables for that text's look (styles.css's `.topos-inline-text` uses them) */
-export function inlineTextVars(color: string, style: string): Record<string, string> {
+export function inlineTextVars(color: string, style: string, padding = "1em"): Record<string, string> {
   const named: Record<string, string> = { faded: "var(--text-faint)", muted: "var(--text-muted)", accent: "var(--text-accent)" };
   return {
     "--topos-inline-color": named[color] ?? (/^#[0-9a-f]{3,8}$/i.test(color.trim()) ? color.trim() : "var(--text-faint)"),
     "--topos-inline-font-style": style.includes("italic") ? "italic" : "normal",
     "--topos-inline-font-weight": style.startsWith("bold") ? "var(--bold-weight, 600)" : "inherit",
+    "--topos-inline-padding": inlinePadding(padding),
   };
 }

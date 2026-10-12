@@ -84,7 +84,7 @@ the sidebar, which takes the sidebar's search along) has room to read results:
   that aren't embedded show their text at the line's end, faded: their first verse by default, or
   what *What it shows* says (`{first}`, `{last}`, `{text}`, `{reference}`, `{bible}`), up to
   *Longest text*. It wraps onto more lines, or (*Wrap onto more lines* off) is cut at the edge;
-  *Color* and *Style* set its look. Tapping it puts the cursor at the end of the line
+  *Color*, *Style*, and *Space before it* (`1em`) set its look. Tapping it puts the cursor at the end of the line
 - References glow faintly with a dashed underline in your accent color (or one you pick), and
   highlight on hover; Ctrl/Cmd-click or a middle click opens their links (a setting allows plain
   clicks, and another lets a tap open them on mobile when you aren't typing). With links turned off, they aren't marked

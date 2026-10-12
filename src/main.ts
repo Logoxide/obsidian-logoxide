@@ -1099,7 +1099,7 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
 
   /** Sets the references' color in these windows (all of them by default) */
   applyColor(docs: Iterable<Document> = this.windowDocuments()): void {
-    const inline = inlineTextVars(this.settings.inlineTextColor, this.settings.inlineTextStyle);
+    const inline = inlineTextVars(this.settings.inlineTextColor, this.settings.inlineTextStyle, this.settings.inlineTextPadding);
     for (const doc of docs) {
       if (this.settings.referenceColor) doc.body.style.setProperty("--topos-reference-color", this.settings.referenceColor);
       else doc.body.style.removeProperty("--topos-reference-color");

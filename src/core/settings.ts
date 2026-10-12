@@ -137,6 +137,8 @@ export interface ToposSettings {
   inlineTextColor: MarkLook;
   /** Its style */
   inlineTextStyle: InlineTextStyle;
+  /** The space before it (its `padding-left`, a CSS length: `1em`, `12px`) */
+  inlineTextPadding: string;
   /**
    * Where to show the text of a bare reference alone on its line, like `![John 1:1]` (in the
    * editor, unless the cursor is near it), on devices that haven't chosen (`embedAloneDevices`)
@@ -221,6 +223,7 @@ export const DEFAULT_SETTINGS: ToposSettings = {
   inlineTextWrap: true,
   inlineTextColor: "faded",
   inlineTextStyle: "italic",
+  inlineTextPadding: "1em",
   embedAlone: "off",
   embedAloneDevices: {},
   embedAloneBlankLines: 0,
