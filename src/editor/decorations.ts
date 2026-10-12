@@ -165,36 +165,45 @@ export function referenceDecorations(plugin: ToposPlugin) {
  * Obsidian would open it: by a Ctrl/Cmd-click or a middle click
  */
 export function interceptLinkClicks(plugin: ToposPlugin, doc: Document): void {
-  let focusedAtPress = false;
-  const link = (event: Event) => {
-    const el = (event.target as HTMLElement | null)?.closest?.<HTMLElement>(
-      ".cm-editor .topos-link[data-topos-osis], .cm-editor .topos-link-target[data-topos-osis]",
-    );
-    const editor = el?.closest<HTMLElement>(".cm-editor");
-    const view = editor ? EditorView.findFromDOM(editor) : null;
-    return el && view ? { el, view } : null;
-  };
-  const opens = (event: MouseEvent, view: EditorView, el: HTMLElement) => {
-    if (event.button === 1) return true;
-    if (event.button !== 0) return false;
-    if (el.classList.contains("topos-link-target")) return event.ctrlKey || event.metaKey;
-    return (view.state.field(editorLivePreviewField, false) ?? false) || plugin.clickOpens(event, true, focusedAtPress);
-  };
   plugin.registerDomEvent(doc, "pointerdown", (event) => {
-    const found = link(event);
+    const found = clickedLink(event);
     focusedAtPress = found?.view.hasFocus ?? false;
   }, { capture: true });
-  const handle = (event: MouseEvent) => {
-    const found = link(event);
-    if (!found || !opens(event, found.view, found.el)) return;
-    event.preventDefault();
-    event.stopPropagation();
-    if (event.type === "mousedown") return;
-    const passage = clickedPart(plugin, found.view, event) ?? plugin.topos.parse(found.el.dataset.toposOsis ?? "", BookStyle.Name);
-    const newLeaf = event.button === 1 || event.ctrlKey || event.metaKey ? "tab" : false;
-    if (passage) void plugin.openPassage(passage, newLeaf, found.el.dataset.toposTranslation);
-  };
+  const handle = (event: MouseEvent) => void openClickedLink(plugin, event);
   for (const type of ["mousedown", "click", "auxclick"] as const) plugin.registerDomEvent(doc, type, handle, { capture: true });
+}
+
+/** Whether the editor had focus when the pointer went down on a link, before a tap focused it */
+let focusedAtPress = false;
+
+/** The reference link (or link target) an event is on, and its editor */
+function clickedLink(event: Event): { el: HTMLElement; view: EditorView } | null {
+  const el = (event.target as HTMLElement | null)?.closest?.<HTMLElement>(
+    ".cm-editor .topos-link[data-topos-osis], .cm-editor .topos-link-target[data-topos-osis]",
+  );
+  const editor = el?.closest<HTMLElement>(".cm-editor");
+  const view = editor ? EditorView.findFromDOM(editor) : null;
+  return el && view ? { el, view } : null;
+}
+
+/** Opens the passage of a reference link clicked, if the click opens it; whether it was a link's */
+export function openClickedLink(plugin: ToposPlugin, event: MouseEvent): boolean {
+  const found = clickedLink(event);
+  if (!found || !linkClickOpens(plugin, event, found.view, found.el)) return false;
+  event.preventDefault();
+  event.stopPropagation();
+  if (event.type === "mousedown") return true;
+  const passage = clickedPart(plugin, found.view, event) ?? plugin.topos.parse(found.el.dataset.toposOsis ?? "", BookStyle.Name);
+  const newLeaf = event.button === 1 || event.ctrlKey || event.metaKey ? "tab" : false;
+  if (passage) void plugin.openPassage(passage, newLeaf, found.el.dataset.toposTranslation);
+  return true;
+}
+
+function linkClickOpens(plugin: ToposPlugin, event: MouseEvent, view: EditorView, el: HTMLElement): boolean {
+  if (event.button === 1) return true;
+  if (event.button !== 0) return false;
+  if (el.classList.contains("topos-link-target")) return event.ctrlKey || event.metaKey;
+  return (view.state.field(editorLivePreviewField, false) ?? false) || plugin.clickOpens(event, true, focusedAtPress);
 }
 
 /**
