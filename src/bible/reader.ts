@@ -151,10 +151,9 @@ export class BibleReader extends DocumentReader {
 }
 /* A passage (preview or embed) is short: lay it out now, so it can be measured */
 .tpb-passage > .${PREFIX}-section { content-visibility: visible; contain-intrinsic-size: none; }
-.tpb-passage { padding-top: 0.25em; padding-bottom: 1em; }
 .tpb-passage .topos-title:first-child { margin-top: 0.5em; }
 .tpb-chapter { font-size: 1.6em; font-weight: 600; margin: 1.2em 0 0.4em; }
-.tpb-gap { text-align: center; opacity: 0.5; margin: 0.6em 0; -webkit-user-select: none; user-select: none; }
+.tpb-gap { text-align: center; opacity: 0.5; line-height: 1; margin: 0 0 0.3em; -webkit-user-select: none; user-select: none; }
 .topos-title { font-weight: 600; margin: 1em 0 0.3em; }
 .topos-title.topos-d, .topos-title.topos-sp { font-weight: normal; font-style: italic; margin-top: 0.3em; }
 .topos-title.topos-r, .topos-title.topos-mr { font-weight: normal; font-style: italic; font-size: 0.9em; }
@@ -167,7 +166,12 @@ p.topos-p { margin: 0 0 0.6em; }
 ${NOTES_CSS}
 ${STRONGS_CSS}
 ${USX_CSS}
-}`;
+}
+/* A passage (preview or embed) is as big as the note's text, and as tall as its own: not a book's
+   room to scroll past its end. Outside the layer, as file-plus-plus's padding is */
+.${PREFIX}-content.tpb-passage { padding-top: 0.25em; padding-bottom: 0.5em; --${PREFIX}-font-size: var(--font-text-size, 16px); }
+.tpb-passage > .${PREFIX}-section + .${PREFIX}-section { margin-top: 0; }
+.tpb-passage p.topos-p:last-child { margin-bottom: 0; }`;
   }
 
   protected async renderContent(): Promise<void> {
@@ -297,14 +301,31 @@ ${USX_CSS}
   }
 
   /**
-   * A preview with verses around its passage: all of them from the top when they fit, else the
-   * passage in the middle
+   * A preview with verses around its passage: the passage at the top, where it is without them, so
+   * the verses before it are a scroll up, and those after it below it
    */
   override scrollToRange(range: Range, opts: Parameters<DocumentReader["scrollToRange"]>[1] = {}): void {
-    const whole = this.shown && this.hasContext ? this.spanning(this.shown) : null;
-    if (!whole || !this.preview) return super.scrollToRange(range, opts);
-    if (whole.getBoundingClientRect().height <= this.scroller.clientHeight) return super.scrollToRange(whole, { ...opts, position: "top" });
-    super.scrollToRange(this.spanning(this.preview) ?? range, { ...opts, position: "center" });
+    if (!this.scrollToPassage()) super.scrollToRange(range, opts);
+  }
+
+  /** A preview with verses around its passage: scrolls its passage's first line to the very top; whether it has one */
+  scrollToPassage(): boolean {
+    const passage = this.preview && this.hasContext ? this.spanning(this.preview) : null;
+    if (!passage) return false;
+    this.scroller.scrollTop += passage.getBoundingClientRect().top - this.scroller.getBoundingClientRect().top;
+    return true;
+  }
+
+  /**
+   * How tall a preview's text is, with its padding: all of it, or with verses around it, from its
+   * passage down (those before it are scrolled past)
+   */
+  passageHeight(): number {
+    const style = getComputedStyle(this.content);
+    const last = this.content.lastElementChild ?? this.content;
+    const passage = this.preview && this.hasContext ? this.spanning(this.preview) : null;
+    const top = passage ? passage.getBoundingClientRect().top : this.content.getBoundingClientRect().top;
+    return last.getBoundingClientRect().bottom - top + parseFloat(style.paddingBottom);
   }
 
   /** The text of verses (a bridge's whole verses), as a range */

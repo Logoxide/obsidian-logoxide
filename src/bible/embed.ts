@@ -34,22 +34,22 @@ export class BibleEmbed extends DocumentEmbed<BibleBook, BibleReader> {
     const verses = parts ? formatVerseLocator(parts).slice(2).replaceAll(";", "; ") : "";
     const label = this.label || [book.name, verses].filter(Boolean).join(" ");
     this.title.setText([label, this.bibleLabel || book.bible].filter(Boolean).join(" · "));
-    if (!range) return;
-    this.offerContext(reader, loc);
-    void this.offerPlaying(reader, loc, label);
     // Fit short passages (the host keeps the preview height as its maximum), also once an editor
-    // puts the embed on the page, or the width changes
+    // puts the embed on the page, or the width changes; and one without text (`… has no text`)
     const max = this.plugin.settings.previewHeight;
     const fit = () => {
-      // To the end of the last section: the content has room to scroll past its end
-      const last = reader.content.lastElementChild ?? reader.content;
-      const height = last.getBoundingClientRect().bottom - reader.content.getBoundingClientRect().top;
-      if (height > 0) this.host.style.height = `${Math.min(max, Math.ceil(height) + 24)}px`;
+      const height = reader.passageHeight();
+      if (height > 0) this.host.style.height = `${Math.min(max, Math.ceil(height))}px`;
     };
     fit();
+    // Scrolled to while the embed was taller than its text, which kept it at the top
+    reader.scrollToPassage();
     const observer = new ResizeObserver(fit);
     observer.observe(reader.content);
     this.register(() => observer.disconnect());
+    if (!range) return;
+    this.offerContext(reader, loc);
+    void this.offerPlaying(reader, loc, label);
   }
 
   /**
