@@ -80,9 +80,11 @@ the sidebar, which takes the sidebar's search along) has room to read results:
   vault, each verse suggestion shows the verse. Enter on a suggestion that's what you typed
   already starts a new line. These suggestions come before other plugins' (not inside a note
   link being typed, `[[John 3`, which stays Obsidian's)
-- *Show verse text after references* (*Embeds and previews*): in live preview, a reference that
-  isn't embedded shows its text after it, faded: its first verse by default, or what *What it
-  shows* says (`{first}`, `{last}`, `{text}`, `{reference}`, `{bible}`), up to *Longest text*
+- *Show verse text after references* (*Embeds and previews*): in live preview, a line's references
+  that aren't embedded show their text at the line's end, faded: their first verse by default, or
+  what *What it shows* says (`{first}`, `{last}`, `{text}`, `{reference}`, `{bible}`), up to
+  *Longest text*. It wraps onto more lines, or (*Wrap onto more lines* off) is cut at the edge;
+  *Color* and *Style* set its look. Tapping it puts the cursor at the end of the line
 - References glow faintly with a dashed underline in your accent color (or one you pick), and
   highlight on hover; Ctrl/Cmd-click or a middle click opens their links (a setting allows plain
   clicks, and another lets a tap open them on mobile when you aren't typing). With links turned off, they aren't marked

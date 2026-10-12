@@ -14,6 +14,9 @@ export type StyleName = "name" | "abbreviation" | "osis";
  */
 export type MarkLook = "none" | "faded" | "accent" | "red" | (string & {});
 
+/** How a reference's text after it is written (see `ToposSettings.inlineText`) */
+export type InlineTextStyle = "italic" | "normal" | "bold" | "bold-italic";
+
 /** What clicking or tapping a reference opens (see `ToposSettings.referenceTap`) */
 export type ReferenceTap = "whole" | "part" | "menu";
 
@@ -128,6 +131,12 @@ export interface ToposSettings {
   inlineTextTemplate: string;
   /** Its most characters (0: all of it) */
   inlineTextLength: number;
+  /** Whether it wraps onto more lines (else it's cut at the line's end, with an ellipsis) */
+  inlineTextWrap: boolean;
+  /** Its color: `faded` (the theme's faint text), `muted`, `accent`, or a color */
+  inlineTextColor: MarkLook;
+  /** Its style */
+  inlineTextStyle: InlineTextStyle;
   /**
    * Where to show the text of a bare reference alone on its line, like `![John 1:1]` (in the
    * editor, unless the cursor is near it), on devices that haven't chosen (`embedAloneDevices`)
@@ -209,6 +218,9 @@ export const DEFAULT_SETTINGS: ToposSettings = {
   inlineText: false,
   inlineTextTemplate: "{first}",
   inlineTextLength: 120,
+  inlineTextWrap: true,
+  inlineTextColor: "faded",
+  inlineTextStyle: "italic",
   embedAlone: "off",
   embedAloneDevices: {},
   embedAloneBlankLines: 0,

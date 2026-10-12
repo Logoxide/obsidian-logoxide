@@ -4,7 +4,7 @@ import { DEFAULT_FORMAT, written, type FormatSettings } from "./core/format.ts";
 import { parseQuery } from "./core/query.ts";
 import type { BookCompletion } from "./core/completions.ts";
 import { FILTERS, linkUrl, PLACEHOLDERS, SITES, templateError } from "./core/links.ts";
-import { bookStyle, embedAloneWhere, type EmbedAloneIn, type ReferenceTap, type StyleName } from "./core/settings.ts";
+import { bookStyle, embedAloneWhere, type EmbedAloneIn, type InlineTextStyle, type ReferenceTap, type StyleName } from "./core/settings.ts";
 import { notesShown } from "./core/display.ts";
 import type ToposPlugin from "./main.ts";
 import { kindName } from "./bible/add.ts";
@@ -246,10 +246,10 @@ export class ToposSettingsPanel {
     items: HTMLElement,
     name: string,
     desc: string,
-    key: "verseNumbers" | "footnotes" | "crossRefs" | "wordsOfJesus" | "contextVerses",
+    key: "verseNumbers" | "footnotes" | "crossRefs" | "wordsOfJesus" | "contextVerses" | "inlineTextColor",
     changed: (change: () => void) => Promise<void>,
     looks: Record<string, string> = { none: "None", faded: "Faded text", accent: "Accent color" },
-  ): void {
+  ): Setting {
     const settings = this.plugin.settings;
     const choice = () => (settings[key] in looks ? settings[key] : "custom");
     const setting = new Setting(items).setName(name).setDesc(md(desc));
@@ -273,6 +273,7 @@ export class ToposSettingsPanel {
         c.setValue(choice() === "custom" ? settings[key] : themeColor(items, "--text-accent")).onChange((value) => changed(() => (settings[key] = value)));
       });
     showPicker();
+    return setting;
   }
 
   // ─── Bibles ──────────────────────────────────────────────────────────────
@@ -483,6 +484,33 @@ export class ToposSettingsPanel {
             .setValue(String(settings.inlineTextLength))
             .onChange((value) => {
               settings.inlineTextLength = Number(value);
+              void save();
+            }),
+        ),
+      new Setting(embeds)
+        .setClass("topos-subsetting")
+        .setName("Wrap onto more lines")
+        .setDesc("Off, it stays on the line's last row and is cut at the edge.")
+        .addToggle((t) =>
+          t.setValue(settings.inlineTextWrap).onChange((value) => {
+            settings.inlineTextWrap = value;
+            void save();
+          }),
+        ),
+      this.markLook(embeds, "Color", "Its color.", "inlineTextColor", (change) => (change(), save()), {
+        faded: "Faint text",
+        muted: "Muted text",
+        accent: "Accent color",
+      }).setClass("topos-subsetting"),
+      new Setting(embeds)
+        .setClass("topos-subsetting")
+        .setName("Style")
+        .addDropdown((d) =>
+          d
+            .addOptions({ italic: "Italic", normal: "Normal", bold: "Bold", "bold-italic": "Bold italic" })
+            .setValue(settings.inlineTextStyle)
+            .onChange((value) => {
+              settings.inlineTextStyle = value as InlineTextStyle;
               void save();
             }),
         ),

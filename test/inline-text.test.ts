@@ -1,7 +1,7 @@
 // The text shown after a reference in live preview, from its template
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { inlineNeeds, inlineText } from "../src/core/inline-text.ts";
+import { inlineNeeds, inlineText, inlineTextVars } from "../src/core/inline-text.ts";
 
 const values = { first: "For God so loved the world,", last: "whoever does not believe…", text: "For God so loved the world, … condemned.", reference: "John 3:16-18", bible: "BSB" };
 
@@ -21,4 +21,15 @@ test("it's cut at a word, and nothing when its text is empty", () => {
 
 test("only the values a template uses are looked up", () => {
   assert.deepEqual([...inlineNeeds("{first} … {last}")], ["first", "last"]);
+});
+
+test("its look is CSS variables: a named color or one picked, and a style", () => {
+  assert.deepEqual(inlineTextVars("faded", "italic"), {
+    "--topos-inline-color": "var(--text-faint)",
+    "--topos-inline-font-style": "italic",
+    "--topos-inline-font-weight": "inherit",
+  });
+  assert.equal(inlineTextVars("#aabbcc", "bold")["--topos-inline-color"], "#aabbcc");
+  assert.equal(inlineTextVars("#aabbcc", "bold")["--topos-inline-font-weight"], "var(--bold-weight, 600)");
+  assert.equal(inlineTextVars("red; x: y", "normal")["--topos-inline-color"], "var(--text-faint)");
 });

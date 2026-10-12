@@ -61,7 +61,7 @@ import { notesShown } from "./core/display.ts";
 import { formatVerseLocator, passageParts, splitBible, type VersePart } from "./core/verse-locator.ts";
 import { mappedLabel, versesParts } from "./core/mapping.ts";
 import { partAt, passageStops, wholeReference } from "./core/syntax.ts";
-import { inlineNeeds, inlineText } from "./core/inline-text.ts";
+import { inlineNeeds, inlineText, inlineTextVars } from "./core/inline-text.ts";
 import { COMMENTARY_VIEW, CommentaryView } from "./bible/commentary.ts";
 import type { StrongsPopupOptions } from "./bible/strongs.ts";
 import { strongsHover } from "./editor/strongs.ts";
@@ -1079,9 +1079,12 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
 
   /** Sets the references' color in these windows (all of them by default) */
   applyColor(docs: Iterable<Document> = this.windowDocuments()): void {
+    const inline = inlineTextVars(this.settings.inlineTextColor, this.settings.inlineTextStyle);
     for (const doc of docs) {
       if (this.settings.referenceColor) doc.body.style.setProperty("--topos-reference-color", this.settings.referenceColor);
       else doc.body.style.removeProperty("--topos-reference-color");
+      // The look of a reference's text after it in live preview
+      for (const [name, value] of Object.entries(inline)) doc.body.style.setProperty(name, value);
     }
   }
 

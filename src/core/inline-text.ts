@@ -33,3 +33,13 @@ export function inlineText(template: string, values: InlineValues, max: number):
   const space = cut.lastIndexOf(" ");
   return `${(space > max / 2 ? cut.slice(0, space) : cut).replace(/[\s,;:.—–-]+$/, "")}…`;
 }
+
+/** The CSS variables for that text's look (styles.css's `.topos-inline-text` uses them) */
+export function inlineTextVars(color: string, style: string): Record<string, string> {
+  const named: Record<string, string> = { faded: "var(--text-faint)", muted: "var(--text-muted)", accent: "var(--text-accent)" };
+  return {
+    "--topos-inline-color": named[color] ?? (/^#[0-9a-f]{3,8}$/i.test(color.trim()) ? color.trim() : "var(--text-faint)"),
+    "--topos-inline-font-style": style.includes("italic") ? "italic" : "normal",
+    "--topos-inline-font-weight": style.startsWith("bold") ? "var(--bold-weight, 600)" : "inherit",
+  };
+}
