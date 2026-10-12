@@ -6,6 +6,7 @@ import {
   type EditorSuggestContext,
   type EditorSuggestTriggerInfo,
 } from "obsidian";
+import { keymap, type EditorView } from "@codemirror/view";
 import type { Completion } from "logoxide";
 import { completionsBefore } from "../core/completions.ts";
 import { renderCompletion } from "../suggestions.ts";
@@ -87,15 +88,19 @@ export class ReferenceSuggest extends EditorSuggest<Completion> {
 }
 
 /**
- * A new line in an editor as Enter makes it (continuing a list or quote), by sending the editor
- * an Enter; Obsidian's plain new line where it can't be sent
+ * A new line in an editor as Enter makes it (continuing a list or quote): the editor's own Enter
+ * command, the first of its key bindings for Enter that applies; Obsidian's plain new line without
+ * one. Not by sending it an Enter: on iOS, CodeMirror runs a key it's sent a moment later, after
+ * this has gone on to make the line itself
  */
 function newLine(editor: Editor): void {
-  const content = (editor as { cm?: { contentDOM?: HTMLElement } }).cm?.contentDOM;
-  const view = content?.ownerDocument.defaultView;
-  const enter = view && new view.KeyboardEvent("keydown", { key: "Enter", code: "Enter", keyCode: 13, bubbles: true, cancelable: true });
-  if (content && enter) content.dispatchEvent(enter);
-  if (!enter?.defaultPrevented) editor.exec("newlineAndIndent");
+  const view = (editor as { cm?: EditorView }).cm;
+  if (view) {
+    for (const bindings of view.state.facet(keymap)) {
+      for (const binding of bindings) if (binding.key === "Enter" && binding.run?.(view)) return;
+    }
+  }
+  editor.exec("newlineAndIndent");
 }
 
 /**
