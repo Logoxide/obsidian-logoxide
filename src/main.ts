@@ -27,7 +27,7 @@ import { linkUrl, OLD_SITE_TEMPLATES, siteName, templateFromTranslation, type Li
 import { applyReplacements, normalizeReferences, referenceAt } from "./core/references.ts";
 import { ReferenceIndex } from "./core/index.ts";
 import { searchText, type Hit } from "./core/search.ts";
-import { hoverParent, interceptLinkClicks, openClickedLink, referenceDecorations, refreshReferences } from "./editor/decorations.ts";
+import { hoverParent, interceptLinkClicks, referenceDecorations, refreshReferences } from "./editor/decorations.ts";
 import { ReferenceSuggest } from "./editor/suggest.ts";
 import { engineWasm, loadTopos } from "./engine.ts";
 import { BackgroundSearcher } from "./indexers/background.ts";
@@ -229,7 +229,6 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
     );
     this.registerEvent(this.app.workspace.on("window-close", (_win, win) => this.bibleStyles.forget(win.document)));
     interceptLinkClicks(this, document);
-    this.patchEditorClicks();
     this.addCommands();
 
     this.app.workspace.onLayoutReady(() => {
@@ -590,45 +589,6 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
       .map((name) => name.trim())
       .filter(Boolean)
       .flatMap((name) => this.bibles.named(name) ?? []);
-  }
-
-  /**
-   * Taps on reference links on iOS, which Obsidian doesn't send through the page: its own touch
-   * handler makes a click and hands it to the editor's `onEditorClick`, which would open a note
-   * named after the target's first word (`1` for `[Grumble](1 Corinthians 10:10)`). Patched on the
-   * editors' class, found once a note is open
-   */
-  private patchEditorClicks(): void {
-    const patch = (): boolean => {
-      type Clicks = { onEditorClick: (event: MouseEvent, target?: Node) => unknown };
-      const found: Clicks[] = [];
-      this.app.workspace.iterateAllLeaves((leaf) => {
-        let p = (leaf.view as { editMode?: object }).editMode ?? null;
-        while (p && !Object.prototype.hasOwnProperty.call(p, "onEditorClick")) p = Object.getPrototypeOf(p) as object | null;
-        if (p) found.push(p as Clicks);
-      });
-      const proto = found[0];
-      if (!proto) return false;
-      const plugin = this;
-      this.register(
-        around(proto, {
-          onEditorClick(old) {
-            return function (this: unknown, event: MouseEvent, target?: Node) {
-              if (openClickedLink(plugin, event)) return;
-              return old.call(this, event, target);
-            };
-          },
-        }),
-      );
-      return true;
-    };
-    this.app.workspace.onLayoutReady(() => {
-      if (patch()) return;
-      const ref = this.app.workspace.on("layout-change", () => {
-        if (patch()) this.app.workspace.offref(ref);
-      });
-      this.registerEvent(ref);
-    });
   }
 
   /**

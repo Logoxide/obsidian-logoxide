@@ -170,6 +170,28 @@ export function interceptLinkClicks(plugin: ToposPlugin, doc: Document): void {
   }, { capture: true });
   const handle = (event: MouseEvent) => void openClickedLink(plugin, event);
   for (const type of ["mousedown", "click", "auxclick"] as const) plugin.registerDomEvent(doc, type, handle, { capture: true });
+
+  // On iOS, Obsidian doesn't wait for the click: a listener on the window takes a tap's touchend,
+  // makes a click of its own, and hands it to the editor, which would open a note named after the
+  // target's first word (`1` for `[Grumble](1 Corinthians 10:10)`). A tap on a link is taken first
+  // here, and neither that listener nor the browser's click sees it
+  let touch: { id: number; x: number; y: number; time: number } | null = null;
+  plugin.registerDomEvent(doc, "touchstart", (event) => {
+    const t = event.touches.length === 1 ? event.touches[0] : undefined;
+    touch = t && clickedLink(event) ? { id: t.identifier, x: t.clientX, y: t.clientY, time: Date.now() } : null;
+  }, { capture: true });
+  plugin.registerDomEvent(doc, "touchend", (event) => {
+    const start = touch;
+    touch = null;
+    const t = start && Array.from(event.changedTouches).find((c) => c.identifier === start.id);
+    // A tap, as Obsidian counts one: short, and without moving
+    if (!start || !t || Date.now() - start.time >= 600 || Math.abs(t.clientX - start.x) >= 5 || Math.abs(t.clientY - start.y) >= 5) return;
+    const click = new MouseEvent("click", { clientX: t.clientX, clientY: t.clientY, button: 0, bubbles: true, cancelable: true });
+    Object.defineProperty(click, "target", { value: event.target });
+    if (!openClickedLink(plugin, click)) return;
+    event.preventDefault();
+    event.stopPropagation();
+  }, { capture: true });
 }
 
 /** Whether the editor had focus when the pointer went down on a link, before a tap focused it */
@@ -186,7 +208,7 @@ function clickedLink(event: Event): { el: HTMLElement; view: EditorView } | null
 }
 
 /** Opens the passage of a reference link clicked, if the click opens it; whether it was a link's */
-export function openClickedLink(plugin: ToposPlugin, event: MouseEvent): boolean {
+function openClickedLink(plugin: ToposPlugin, event: MouseEvent): boolean {
   const found = clickedLink(event);
   if (!found || !linkClickOpens(plugin, event, found.view, found.el)) return false;
   event.preventDefault();
