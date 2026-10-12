@@ -157,7 +157,15 @@ test("reference links and embeds in live preview hide their syntax unless the cu
   livePreview.on = false;
   let view = make();
   assert.equal(shown(view), "See [the verse](John 3:16) and [Ps 23] and Rom 8:28.![John 1:1-5]End");
-  assert.deepEqual(kinds(view), ["link the verse John.3.16", "explicit Ps 23 Ps.23", "bare Rom 8:28 Rom.8.28", "embed John 1:1-5 John.1.1-John.1.5"]);
+  // A link's shown target too, so a Ctrl/Cmd-click on it doesn't open a note `John`
+  assert.deepEqual(kinds(view), [
+    "link the verse John.3.16",
+    "link John 3:16 John.3.16",
+    "explicit Ps 23 Ps.23",
+    "bare Rom 8:28 Rom.8.28",
+    "embed John 1:1-5 John.1.1-John.1.5",
+  ]);
+  assert.equal(view.contentDOM.querySelector(".topos-link-target")?.textContent, "John 3:16");
   view.destroy();
 
   // Live preview: link syntax is hidden and the embed shows the passage

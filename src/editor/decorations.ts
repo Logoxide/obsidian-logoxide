@@ -97,6 +97,8 @@ export function referenceDecorations(plugin: ToposPlugin) {
             }
             // Inclusive, to cover the external link icon Obsidian puts after `[text](John 3:16)`
             if (hide && b > labelB) decorations.push(Decoration.replace({ inclusiveEnd: true }).range(labelB, b));
+            // The shown target of `[text](John 3:16)`, whose Ctrl/Cmd-click Obsidian would take to a note `John`
+            else if (b - labelB > 3) decorations.push(Decoration.mark({ class: "topos-link-target", attributes: data }).range(labelB + 2, b - 1));
           }
           lastEnd = b;
         }
@@ -113,7 +115,7 @@ export function referenceDecorations(plugin: ToposPlugin) {
   const open = (event: MouseEvent, view: EditorView) => {
     const el = target(event);
     // Links are opened by `interceptLinkClicks`, before Obsidian sees them
-    if (!el || el.classList.contains("topos-link")) return false;
+    if (!el || el.matches(".topos-link, .topos-link-target")) return false;
     const url = el.dataset.toposUrl;
     if (!url || !plugin.settings.linkInEditor || !plugin.clickOpens(event, true, focusedAtPress)) return false;
     event.preventDefault();
@@ -156,26 +158,32 @@ export function referenceDecorations(plugin: ToposPlugin) {
  * Clicks on reference links in editors, caught before Obsidian's: its live preview sees
  * `[text](John 3:16)` as a link to a note named `John`, and would create that note. A plain click
  * opens the passage in live preview (like Obsidian's links), a Ctrl/Cmd-click (or a tap, by the
- * settings) in source mode, and a middle click anywhere
+ * settings) in source mode, and a middle click anywhere. A link's target, shown while editing it, opens as
+ * Obsidian would open it: by a Ctrl/Cmd-click or a middle click
  */
 export function interceptLinkClicks(plugin: ToposPlugin, doc: Document): void {
   let focusedAtPress = false;
   const link = (event: Event) => {
-    const el = (event.target as HTMLElement | null)?.closest?.<HTMLElement>(".cm-editor .topos-link[data-topos-osis]");
+    const el = (event.target as HTMLElement | null)?.closest?.<HTMLElement>(
+      ".cm-editor .topos-link[data-topos-osis], .cm-editor .topos-link-target[data-topos-osis]",
+    );
     const editor = el?.closest<HTMLElement>(".cm-editor");
     const view = editor ? EditorView.findFromDOM(editor) : null;
     return el && view ? { el, view } : null;
   };
-  const opens = (event: MouseEvent, view: EditorView) =>
-    event.button === 1 ||
-    (event.button === 0 && ((view.state.field(editorLivePreviewField, false) ?? false) || plugin.clickOpens(event, true, focusedAtPress)));
+  const opens = (event: MouseEvent, view: EditorView, el: HTMLElement) => {
+    if (event.button === 1) return true;
+    if (event.button !== 0) return false;
+    if (el.classList.contains("topos-link-target")) return event.ctrlKey || event.metaKey;
+    return (view.state.field(editorLivePreviewField, false) ?? false) || plugin.clickOpens(event, true, focusedAtPress);
+  };
   plugin.registerDomEvent(doc, "pointerdown", (event) => {
     const found = link(event);
     focusedAtPress = found?.view.hasFocus ?? false;
   }, { capture: true });
   const handle = (event: MouseEvent) => {
     const found = link(event);
-    if (!found || !opens(event, found.view)) return;
+    if (!found || !opens(event, found.view, found.el)) return;
     event.preventDefault();
     event.stopPropagation();
     if (event.type === "mousedown") return;
