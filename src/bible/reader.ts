@@ -2,7 +2,7 @@ import { DocumentReader, PREFIX, splitTextDirective, textFragmentScheme, withTex
 import type { BookTextOptions, LogoxideBook } from "logoxide";
 import { markNotes, notePopups, NOTES_CSS, type NoteLinks } from "./notes.ts";
 import { STRONGS_CSS, strongsPopups, type StrongsPopupOptions } from "./strongs.ts";
-import { END, formatVerseLocator, parseVerseLocator, partSegments, splitContext, splitEdition, withContext, withContextVerses, withEdition, type VersePart } from "../core/verse-locator.ts";
+import { END, formatVerseLocator, parseVerseLocator, partSegments, splitBible, splitContext, splitEdition, withBible, withContext, withContextVerses, withEdition, type VersePart } from "../core/verse-locator.ts";
 
 /** A Bible book opened from a USX file */
 export interface BibleBook {
@@ -31,15 +31,18 @@ export interface BookEdition {
 export const verseScheme: LocatorScheme = {
   id: "verse",
   match(s) {
-    // The verses, then the edition the link was made with (`&ver=…&vh=…`) and the context it asks for (`&c=2`), then the exact words
-    const m = /^v=[^&]*(?:&(?:ver|vh|c)=[^&]*)*/.exec(s);
+    // The verses, then the edition the link was made with (`&ver=…&vh=…`), the context it asks for
+    // (`&c=2`), and the Bible it names (`&bible=BSB`), then the exact words
+    const m = /^v=[^&]*(?:&(?:ver|vh|c|bible)=[^&]*)*/.exec(s);
     if (!m) return null;
     const parts = parseVerseLocator(m[0]);
     const { text } = splitTextDirective(m[0]);
     const { edition } = splitEdition(m[0]);
     const { context } = splitContext(m[0]);
+    const { bible } = splitBible(m[0]);
     const base = formatVerseLocator(parts ?? []);
-    return parts ? { locator: withTextDirective(withContext(edition ? withEdition(base, edition) : base, context), text), rest: s.slice(m[0].length) } : null;
+    const locator = withBible(withContext(edition ? withEdition(base, edition) : base, context), bible);
+    return parts ? { locator: withTextDirective(locator, text), rest: s.slice(m[0].length) } : null;
   },
   // A whole chapter (`v=3`) is a place to go, not a passage to flash
   isRange: (locator) => !!splitTextDirective(locator).text || (parseVerseLocator(locator)?.some((p) => !(p.verse === 0 && p.endVerse === END)) ?? true),
@@ -391,11 +394,13 @@ ${USX_CSS}
     const a = this.markers[units.first]!;
     const b = this.markers[units.last]!;
     const part = { chapter: a.chapter, verse: a.verse, endChapter: b.chapter, endVerse: range.collapsed ? a.verse : b.last };
-    // A package's Bible: the version, and the first verse's words, so the link can find them again
+    // A package's Bible: the version, and the first verse's words, so the link can find them again;
+    // and the Bible's name, so the link says which it means without its path
     const edition = this.bible.edition;
     const hash = edition?.hashOf(a.chapter, a.verse);
     const base = formatVerseLocator([part]);
-    return withTextDirective(edition ? withEdition(base, { version: edition.version, hash: hash ?? null }) : base, units.text);
+    const locator = withBible(edition ? withEdition(base, { version: edition.version, hash: hash ?? null }) : base, this.bible.bible || null);
+    return withTextDirective(locator, units.text);
   }
 
   /** Verse markers are the units of locators, so selections of part of a verse keep their words */

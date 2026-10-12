@@ -218,7 +218,9 @@ A USX file opens in a reading tab built on file-plus-plus (the engine of EPUB++)
 as one page with a chapter list, search, verse numbers, headings (footnotes optional), and
 highlights. Links into a book are `[[JHN.usx#v=3:16-18]]` (verses, `v=3` for a chapter, `;` between
 parts), which work in any translation's file; selecting part of a verse keeps the exact words
-(`v=3:16:~:text=so%20loved`), so only they are highlighted. Comments on highlights work as in EPUB++; they show as highlights in the tab, and
+(`v=3:16:~:text=so%20loved`), so only they are highlighted. A link copied from a Bible names it
+(`v=3:16&bible=BSB`), so when its file isn't there any more (moved, or another device keeps its
+Bibles elsewhere), the link opens the book in that Bible. Comments on highlights work as in EPUB++; they show as highlights in the tab, and
 `![[JHN.usx#v=3:16-18]]` embeds the verses. The tab's reading and highlight settings follow the
 plugin's own, under *Reading*, *Highlights*, and *Links* in the settings.
 
@@ -320,14 +322,18 @@ BibleGateway, and YouVersion, no links at all, or a link template of your own, w
 
 | Site | Template |
 |---|---|
-| Literal Word | `https://app.literalword.com/{book.id}/{chapter}[/{verse}]` |
-| BibleHub | `https://biblehub.com/{book.biblehub}/{chapter}[-{verse}].htm` |
+| Literal Word | `https://app.literalword.com/[{translation.literalword}/]{book.id}/{chapter}[/{verse}]` |
+| BibleHub | `https://biblehub.com/[{translation.biblehub}/]{book.biblehub}/{chapter}[-{verse}].htm` |
 | lets.bible | `https://lets.bible/bible/{book\|lower\|kebab}/{chapter}[?v={verse}]` |
-| BibleGateway | `https://www.biblegateway.com/passage/?search={reference}` |
-| YouVersion | `https://www.bible.com/bible/59/{book.usfm}.{chapter}[.{verse}][-{end_verse}]` |
+| BibleGateway | `https://www.biblegateway.com/passage/?search={reference}[&version={translation}]` |
+| YouVersion | `https://www.bible.com/bible/{translation.youversion}/{book.usfm}.{chapter}[.{verse}][-{end_verse}]` |
 
-Edit one to choose a translation: `https://app.literalword.com/esv/...`, `...?search={reference}&version=NIV`,
-or YouVersion's number for it (59 is the ESV, 111 the NIV, 1 the KJV).
+A reference that names a translation (`John 3:16 KJV`) opens in it where the site has it: Literal
+Word's NASB, LSB, ESV, NKJV, and KJV; BibleHub's KJV, ESV, NIV, NLT, NASB, NKJV, and ASV;
+any BibleGateway knows; YouVersion's KJV, ESV, NIV, NLT, NKJV, NASB (1995 and 2020), LSB, CSB,
+BSB, NET, ASV, AMP, MSG, and WEB (the ESV otherwise). Edit a template to always use one:
+`https://app.literalword.com/esv/...`, `...?search={reference}&version=NIV`, or YouVersion's number
+for it (59 is the ESV, 111 the NIV, 1 the KJV).
 
 Placeholders, for 1 Corinthians 13:4-7 (values are URL-encoded):
 
@@ -345,6 +351,8 @@ Placeholders, for 1 Corinthians 13:4-7 (values are URL-encoded):
 | `{reference}` | `1 Corinthians 13:4-7`, the whole reference |
 | `{osis}` | `1Cor.13.4-1Cor.13.7`, the whole reference |
 | `{translation}` | The translation the reference names (`1 Cor 13:4-7 ESV` → `ESV`), none otherwise: `[&version={translation}]` |
+| `{translation.literalword}`, `{translation.biblehub}` | That site's name for it (`esv`), none when it has none |
+| `{translation.youversion}` | YouVersion's number for it (`1` for the KJV), else the ESV's: `59` |
 
 Filters change a value before it goes in: `{book|lower|kebab}` is `1-corinthians`. They are
 `lower`, `upper`, `snake` (spaces to `_`), `kebab` (spaces to `-`), and `compact` (no spaces).

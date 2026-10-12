@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { BookStyle, Topos } from "logoxide";
 import { completionsBefore } from "../src/core/completions.ts";
-import { linkUrl } from "../src/core/links.ts";
+import { linkUrl, OLD_SITE_TEMPLATES, SITES } from "../src/core/links.ts";
 import { findReferences, wholeNamedReference } from "../src/core/syntax.ts";
 import { buildTranslations, parseAliases } from "../src/core/translations.ts";
 import { toposDir } from "./topos.ts";
@@ -88,4 +88,23 @@ test("{translation} in link templates", () => {
   const template = "https://www.biblegateway.com/passage/?search={reference}[&version={translation}]";
   assert.equal(linkUrl(template, passage, undefined, "ESV"), "https://www.biblegateway.com/passage/?search=John%203%3A16&version=ESV");
   assert.equal(linkUrl(template, passage), "https://www.biblegateway.com/passage/?search=John%203%3A16");
+});
+
+test("the built-in sites open the translation a reference names, when they have it", () => {
+  const passage = topos.parse("John 3:16", BookStyle.Name)!;
+  const site = (id: string) => SITES.find((s) => s.id === id)!.template;
+  const url = (id: string, translation?: string) => linkUrl(site(id), passage, undefined, translation);
+  assert.equal(url("literalword", "ESV"), "https://app.literalword.com/esv/43/3/16");
+  assert.equal(url("literalword", "BSB"), "https://app.literalword.com/43/3/16");
+  assert.equal(url("literalword"), "https://app.literalword.com/43/3/16");
+  assert.equal(url("biblehub", "kjv"), "https://biblehub.com/kjv/john/3-16.htm");
+  assert.equal(url("biblehub", "BSB"), "https://biblehub.com/john/3-16.htm");
+  assert.equal(url("biblegateway", "NKJV"), "https://www.biblegateway.com/passage/?search=John%203%3A16&version=NKJV");
+  assert.equal(url("youversion", "KJV"), "https://www.bible.com/bible/1/JHN.3.16");
+  assert.equal(url("youversion", "NASB 1995"), "https://www.bible.com/bible/100/JHN.3.16");
+  // A translation it doesn't know, or none: the ESV, as before
+  assert.equal(url("youversion", "XYZ"), "https://www.bible.com/bible/59/JHN.3.16");
+  assert.equal(url("youversion"), "https://www.bible.com/bible/59/JHN.3.16");
+  // Settings saved with the old templates get the new ones
+  for (const [old, now] of Object.entries(OLD_SITE_TEMPLATES)) assert.ok(SITES.some((s) => s.template === now), old);
 });

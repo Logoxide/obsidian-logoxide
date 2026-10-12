@@ -18,18 +18,44 @@ export interface LinkSite {
   template: string;
 }
 
-/** Sites with their templates ready to use */
+/** Sites with their templates ready to use, in the translation a reference names when the site has it */
 export const SITES: LinkSite[] = [
-  { id: "literalword", name: "Literal Word", template: "https://app.literalword.com/{book.id}/{chapter}[/{verse}]" },
-  { id: "biblehub", name: "BibleHub", template: "https://biblehub.com/{book.biblehub}/{chapter}[-{verse}].htm" },
+  { id: "literalword", name: "Literal Word", template: "https://app.literalword.com/[{translation.literalword}/]{book.id}/{chapter}[/{verse}]" },
+  { id: "biblehub", name: "BibleHub", template: "https://biblehub.com/[{translation.biblehub}/]{book.biblehub}/{chapter}[-{verse}].htm" },
   { id: "letsbible", name: "lets.bible", template: "https://lets.bible/bible/{book|lower|kebab}/{chapter}[?v={verse}]" },
-  { id: "biblegateway", name: "BibleGateway", template: "https://www.biblegateway.com/passage/?search={reference}" },
+  { id: "biblegateway", name: "BibleGateway", template: "https://www.biblegateway.com/passage/?search={reference}[&version={translation}]" },
   {
     id: "youversion",
     name: "YouVersion",
-    template: "https://www.bible.com/bible/59/{book.usfm}.{chapter}[.{verse}][-{end_verse}]",
+    template: "https://www.bible.com/bible/{translation.youversion}/{book.usfm}.{chapter}[.{verse}][-{end_verse}]",
   },
 ];
+
+/** The built-in sites' templates before they used translations, and what they are now */
+export const OLD_SITE_TEMPLATES: Record<string, string> = {
+  "https://app.literalword.com/{book.id}/{chapter}[/{verse}]": SITES[0]!.template,
+  "https://biblehub.com/{book.biblehub}/{chapter}[-{verse}].htm": SITES[1]!.template,
+  "https://www.biblegateway.com/passage/?search={reference}": SITES[3]!.template,
+  "https://www.bible.com/bible/59/{book.usfm}.{chapter}[.{verse}][-{end_verse}]": SITES[4]!.template,
+};
+
+/** Literal Word's translations (`app.literalword.com/esv/43/3/16`), by the names references use */
+const LITERAL_WORD: Record<string, string> = { NASB: "nasb", NASB95: "nasb", NASB1995: "nasb", LSB: "lsb", ESV: "esv", NKJV: "nkjv", KJV: "kjv" };
+
+/** BibleHub's translations with pages of their own (`biblehub.com/esv/john/3-16.htm`) */
+const BIBLEHUB_TRANSLATIONS: Record<string, string> = {
+  KJV: "kjv", ESV: "esv", NIV: "niv", NLT: "nlt", NASB: "nasb", NASB95: "nasb", NASB1995: "nasb", NKJV: "nkjv", ASV: "asv",
+};
+
+/** YouVersion's numbers for translations (`bible.com/bible/1/JHN.3.16` is the KJV) */
+const YOUVERSION: Record<string, string> = {
+  KJV: "1", ESV: "59", NIV: "111", NLT: "116", NKJV: "114", NASB: "100", NASB95: "100", NASB1995: "100",
+  NASB2020: "2692", NASB20: "2692", LSB: "3345", CSB: "1713", BSB: "3034", NET: "107", ASV: "12",
+  AMP: "1588", MSG: "97", WEB: "206",
+};
+
+/** A translation's name as the tables above list it: `nasb-1995` is `NASB1995` */
+const tableKey = (translation: string) => translation.toUpperCase().replace(/[^A-Z0-9]/g, "");
 
 /** What each placeholder is, for the settings */
 export const PLACEHOLDERS: Record<string, string> = {
@@ -47,6 +73,9 @@ export const PLACEHOLDERS: Record<string, string> = {
   reference: "the whole reference: 1 Corinthians 13:4-7",
   osis: "the whole reference in OSIS: 1Cor.13.4-1Cor.13.7",
   translation: "the translation named after the reference (John 3:16 ESV), none otherwise: ESV",
+  "translation.literalword": "Literal Word's name for that translation, none when it has none: esv",
+  "translation.biblehub": "BibleHub's name for that translation, none when it has none: esv",
+  "translation.youversion": "YouVersion's number for that translation (KJV: 1), else the ESV's: 59",
 };
 
 /** Changes to a value: `{book|lower}` */
@@ -101,6 +130,9 @@ function values(passage: Passage, book: LinkBook | undefined, translation?: stri
     reference: passage.reference,
     osis: passage.osis,
     translation,
+    "translation.literalword": translation ? LITERAL_WORD[tableKey(translation)] : undefined,
+    "translation.biblehub": translation ? BIBLEHUB_TRANSLATIONS[tableKey(translation)] : undefined,
+    "translation.youversion": (translation ? YOUVERSION[tableKey(translation)] : undefined) ?? YOUVERSION.ESV,
   };
   if (first?.tag === "Verses") {
     result.chapter = String(first.start.chapter);

@@ -45,6 +45,32 @@ export function withEdition(locator: string, edition: Edition): string {
   return at === -1 ? locator + params : locator.slice(0, at) + params + locator.slice(at);
 }
 
+const BIBLE = /&bible=([^&:]+)/i;
+
+/**
+ * A locator without the translation it names, and that translation (`v=3:16&bible=BSB`): a link
+ * copied from a Bible names it, so the link still says which Bible it means when its path doesn't
+ */
+export function splitBible(locator: string): { locator: string; bible: string | null } {
+  const m = BIBLE.exec(locator);
+  if (!m) return { locator, bible: null };
+  let bible = m[1]!;
+  try {
+    bible = decodeURIComponent(bible);
+  } catch {
+    // Not encoded
+  }
+  return { locator: locator.replace(m[0], ""), bible };
+}
+
+/** A locator naming a translation, before its exact words (`v=3:16&bible=BSB:~:text=…`) */
+export function withBible(locator: string, bible: string | null): string {
+  if (!bible) return locator;
+  const param = `&bible=${encodeURIComponent(bible)}`;
+  const at = locator.search(/(:~:|%3A~%3A)/i);
+  return at === -1 ? locator + param : locator.slice(0, at) + param + locator.slice(at);
+}
+
 const CONTEXT = /&c=(\d+)/i;
 
 /**
@@ -108,8 +134,8 @@ export function withContextVerses(parts: VersePart[], context: number, counts: R
 
 export function parseVerseLocator(locator: string): VersePart[] | null {
   // Without the exact words a locator may end with (`v=3:16:~:text=…`, see file-plus-plus's
-  // units), and without the edition it was made with or the context it asks for
-  const m = /^v=(.+)$/.exec(decode(splitContext(splitEdition(locator.trim()).locator).locator.replace(/(:~:|%3A~%3A).*$/i, "")));
+  // units), and without the edition it was made with, the context it asks for, or the Bible it names
+  const m = /^v=(.+)$/.exec(decode(splitBible(splitContext(splitEdition(locator.trim()).locator).locator).locator.replace(/(:~:|%3A~%3A).*$/i, "")));
   if (!m) return null;
   const parts: VersePart[] = [];
   for (const text of m[1].split(";")) {

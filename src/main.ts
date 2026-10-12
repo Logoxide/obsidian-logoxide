@@ -23,7 +23,7 @@ import type { EditorView } from "@codemirror/view";
 import { DEFAULT_FORMAT, written } from "./core/format.ts";
 import { migrateQuery, parseQuery, type SavedQuery } from "./core/query.ts";
 import { NO_FILTERS } from "./core/filters.ts";
-import { linkUrl, siteName, templateFromTranslation, type LinkBook } from "./core/links.ts";
+import { linkUrl, OLD_SITE_TEMPLATES, siteName, templateFromTranslation, type LinkBook } from "./core/links.ts";
 import { applyReplacements, normalizeReferences, referenceAt } from "./core/references.ts";
 import { ReferenceIndex } from "./core/index.ts";
 import { searchText, type Hit } from "./core/search.ts";
@@ -58,7 +58,7 @@ import { buildTranslations, parseAliases } from "./core/translations.ts";
 import type { BibleBook, BibleReader } from "./bible/reader.ts";
 import type { NoteLinks } from "./bible/notes.ts";
 import { notesShown } from "./core/display.ts";
-import { formatVerseLocator, passageParts, type VersePart } from "./core/verse-locator.ts";
+import { formatVerseLocator, passageParts, splitBible, type VersePart } from "./core/verse-locator.ts";
 import { mappedLabel, versesParts } from "./core/mapping.ts";
 import { wholeReference } from "./core/syntax.ts";
 import { COMMENTARY_VIEW, CommentaryView } from "./bible/commentary.ts";
@@ -364,6 +364,8 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
       this.settings.linkTemplate = templateFromTranslation(saved.translation);
     }
     delete (this.settings as { translation?: string }).translation;
+    // The built-in sites' templates from before they used the translation a reference names
+    this.settings.linkTemplate = OLD_SITE_TEMPLATES[this.settings.linkTemplate] ?? this.settings.linkTemplate;
     // Before the library was hidden, one folder held the packages and the vault's logoxide.toml: it's
     // the packages folder now, and its installed packages move to the hidden library on load
     if (typeof saved.logoxideLibrary === "string" && saved.logoxideBooks === undefined) {
@@ -591,7 +593,9 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
 
   /**
    * Clicking a link whose target is a reference and no note (`[osis](John.3.16)` is an unresolved
-   * internal link to Obsidian) opens the passage instead of creating a note
+   * internal link to Obsidian) opens the passage instead of creating a note. A link to a Bible's
+   * book that isn't there any more, but names its Bible (`[[Bibles/ESV/John.bible#v=3:16&bible=ESV]]`),
+   * opens the book in that Bible
    */
   private patchReferenceLinks(): void {
     const plugin = this;
@@ -599,8 +603,10 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
       around(this.app.workspace, {
         openLinkText(old) {
           return async function (this: Workspace, linktext: string, sourcePath: string, newLeaf?: PaneType | boolean, state?: OpenViewState) {
-            const { path } = parseLinktext(linktext);
+            const { path, subpath } = parseLinktext(linktext);
             if (path && !plugin.app.metadataCache.getFirstLinkpathDest(path, sourcePath)) {
+              const file = await plugin.namedBibleBook(path, subpath);
+              if (file) return plugin.openDocument(file, subpath.replace(/^#/, ""), newLeaf, state);
               const passage = wholeReference(plugin.topos, decodeURI(path));
               if (passage) return plugin.openPassage(passage, newLeaf);
             }
@@ -609,6 +615,19 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
         },
       }),
     );
+  }
+
+  /**
+   * The book a link names by its file's name (`Bibles/ESV/John.bible`, `JHN.usx`), in the Bible its
+   * locator names (`v=3:16&bible=ESV`), if the vault has it
+   */
+  private async namedBibleBook(path: string, subpath: string): Promise<TFile | null> {
+    const { bible: name } = splitBible(subpath.replace(/^#/, ""));
+    const bible = name ? this.bibles.named(name) : null;
+    if (!bible) return null;
+    const base = decodeURI(path).split("/").pop()!.replace(/\.(bible|usx|usfm|sfm)$/i, "");
+    const bookId = this.topos.findBook(base);
+    return bookId ? this.bibles.bookFile(bookId, bible) : null;
   }
 
   // Saved searches

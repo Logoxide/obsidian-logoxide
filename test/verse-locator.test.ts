@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { BookStyle, Topos } from "logoxide";
-import { END, formatVerseLocator, parseVerseLocator, partSegments, passageParts, splitContext, splitEdition, withContext, withContextVerses, withEdition } from "../src/core/verse-locator.ts";
+import { END, formatVerseLocator, parseVerseLocator, partSegments, passageParts, splitBible, splitContext, splitEdition, withBible, withContext, withContextVerses, withEdition } from "../src/core/verse-locator.ts";
 
 test("verse locators round-trip", () => {
   for (const s of ["v=3:16", "v=3:16-18", "v=3:16-4:2", "v=3", "v=3-4", "v=3:16;4:1-5;5"]) {
@@ -37,6 +37,15 @@ test("a link to a package's Bible keeps the edition it was made with", () => {
   assert.deepEqual(splitEdition("v=3:16"), { locator: "v=3:16", edition: null });
   // The verses read the same with or without it
   assert.deepEqual(parseVerseLocator("v=3:16-18&ver=1.0.2&vh=9f86d081:~:text=so"), parseVerseLocator("v=3:16-18"));
+});
+
+test("a link copied from a Bible names it", () => {
+  assert.equal(withBible("v=3:16&ver=1.0.2:~:text=so", "BSB"), "v=3:16&ver=1.0.2&bible=BSB:~:text=so");
+  assert.equal(withBible("v=3:16", "World English"), "v=3:16&bible=World%20English");
+  assert.equal(withBible("v=3:16", null), "v=3:16");
+  assert.deepEqual(splitBible("v=3:16&bible=World%20English:~:text=x"), { locator: "v=3:16:~:text=x", bible: "World English" });
+  assert.deepEqual(splitBible("v=3:16"), { locator: "v=3:16", bible: null });
+  assert.deepEqual(parseVerseLocator("v=3:16-18&bible=BSB&c=2"), parseVerseLocator("v=3:16-18"));
 });
 
 test("a locator's context: verses around its passage, across chapters", () => {
