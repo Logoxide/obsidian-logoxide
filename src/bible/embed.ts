@@ -39,8 +39,9 @@ export class BibleEmbed extends DocumentEmbed<BibleBook, BibleReader> {
 
   protected override onReaderReady(reader: BibleReader, loc: ParsedLocator, range: Range | null): void {
     if (!reader.isPreview) return;
-    // A link's verses aren't highlighted in its embed, but a highlight in them is (`:~:text=`)
-    if (!TEXT_DIRECTIVE.test(loc.locator ?? "")) reader.setHighlights([]);
+    // A link's verses aren't highlighted in its embed, but a highlight in them is (`:~:text=`),
+    // if its words are there (else it would be all of them)
+    if (!TEXT_DIRECTIVE.test(loc.locator ?? "") || !reader.hasWords(loc.locator ?? "")) reader.setHighlights([]);
     this.offerHighlighting(reader);
     const book = reader.bible;
     // A hover preview from Obsidian has no label: the book and the locator's verses

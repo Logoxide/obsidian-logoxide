@@ -253,14 +253,27 @@ ${USX_CSS}
     if (loc.scheme !== verseScheme.id || !loc.locator) return null;
     const parts = this.followed(loc.locator, parseVerseLocator(loc.locator));
     if (!parts) return null;
-    // The exact words of one part: searched within its verses (the whole verses when they aren't there)
+    // The exact words: searched within each part's verses in turn (the verses when they aren't there)
     const { text } = splitTextDirective(loc.locator);
-    if (text && parts.length === 1) {
-      const range = this.partRange(parts[0]!);
-      return range && (this.resolveTextFragment(text, range) ?? range);
+    if (text) {
+      for (const part of parts) {
+        const range = this.partRange(part);
+        const words = range && this.resolveTextFragment(text, range);
+        if (words) return words;
+      }
     }
     // A preview shows only its parts, so it highlights all of them; the book, the first
     return this.preview ? this.spanning(parts) : this.partRange(parts[0]!);
+  }
+
+  /** Whether a locator's exact words (`v=1:1-3;6-9:~:text=Word`) are in its verses */
+  hasWords(locator: string): boolean {
+    const { text } = splitTextDirective(locator);
+    const parts = text ? parseVerseLocator(locator) : null;
+    return !!parts?.some((part) => {
+      const range = this.partRange(part);
+      return !!range && !!this.resolveTextFragment(text!, range);
+    });
   }
 
   /** From the first part's start to the last one's end */
