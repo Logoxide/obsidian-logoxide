@@ -84,6 +84,8 @@ the sidebar, which takes the sidebar's search along) has room to read results:
 - Right-click a reference: open its link, find references to those verses, copy as OSIS
 - In reading view, callouts, tables, and embedded notes, references are marked the same way, not
   as ordinary links: Ctrl/Cmd-click opens them on desktop, and a tap on mobile
+- A reference of several parts opens the part you click or tap: `4:5-7` in `John 3:16; 4:5-7`
+  (in a bare reference, `[John 3:16; 4:5-7]`, or a link's target while you edit it)
 
 **Commands**
 

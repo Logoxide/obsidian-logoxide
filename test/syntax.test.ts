@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Topos } from "logoxide";
-import { findReferences, wholeReference } from "../src/core/syntax.ts";
+import { findReferences, partAt, wholeReference } from "../src/core/syntax.ts";
 
 const topos = Topos.new();
 const found = (text: string) =>
@@ -47,4 +47,14 @@ test("other bracket syntax is left alone", () => {
   assert.deepEqual(found("[John 3:16](https://example.com)"), ['bare John 3:16 "John 3:16"']);
   // Brackets around more than a reference
   assert.deepEqual(found("[see John 3:16]"), ['bare John 3:16 "John 3:16"']);
+});
+
+test("a click on a part of a reference opens that part", () => {
+  const at = (text: string, offset: number) => partAt(topos, text, offset)?.reference ?? null;
+  assert.equal(at("John 3:16; 4:5-7", 2), "John 3:16");
+  assert.equal(at("John 3:16; 4:5-7", 12), "John 4:5-7");
+  assert.equal(at("Rom 8:28, 31, 38-39", 10), "Romans 8:31");
+  // Between parts, and a reference of one part: the whole reference
+  assert.equal(at("John 3:16; 4:5-7", 9), null);
+  assert.equal(at("John 3:16", 2), null);
 });

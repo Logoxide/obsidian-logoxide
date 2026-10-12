@@ -11,7 +11,7 @@ import {
 import { Component, editorLivePreviewField, MarkdownView, type HoverParent } from "obsidian";
 import { BookStyle, type Passage } from "logoxide";
 import { embedAloneCursorLines, embedsAloneIn } from "../core/settings.ts";
-import { blankAround, findReferences } from "../core/syntax.ts";
+import { blankAround, findReferences, partAt } from "../core/syntax.ts";
 import type ToposPlugin from "../main.ts";
 
 /** Rebuilds the references in an editor, after the settings change what they link to */
@@ -116,9 +116,12 @@ export function referenceDecorations(plugin: ToposPlugin) {
     const el = target(event);
     // Links are opened by `interceptLinkClicks`, before Obsidian sees them
     if (!el || el.matches(".topos-link, .topos-link-target")) return false;
-    const url = el.dataset.toposUrl;
+    let url = el.dataset.toposUrl;
     if (!url || !plugin.settings.linkInEditor || !plugin.clickOpens(event, true, focusedAtPress)) return false;
     event.preventDefault();
+    // A part of the reference opens that part: `4:5-7` in `John 3:16; 4:5-7`
+    const part = clickedPart(plugin, view, event);
+    if (part) url = plugin.referenceUrl(part, el.dataset.toposTranslation) ?? url;
     window.open(url, "_blank");
     // The tap focused the editor; don't leave the keyboard opening behind the link
     if (!focusedAtPress) view.contentDOM.blur();
@@ -187,11 +190,29 @@ export function interceptLinkClicks(plugin: ToposPlugin, doc: Document): void {
     event.preventDefault();
     event.stopPropagation();
     if (event.type === "mousedown") return;
-    const passage = plugin.topos.parse(found.el.dataset.toposOsis ?? "", BookStyle.Name);
+    const passage = clickedPart(plugin, found.view, event) ?? plugin.topos.parse(found.el.dataset.toposOsis ?? "", BookStyle.Name);
     const newLeaf = event.button === 1 || event.ctrlKey || event.metaKey ? "tab" : false;
     if (passage) void plugin.openPassage(passage, newLeaf, found.el.dataset.toposTranslation);
   };
   for (const type of ["mousedown", "click", "auxclick"] as const) plugin.registerDomEvent(doc, type, handle, { capture: true });
+}
+
+/**
+ * The part of a reference clicked, when it has several (`4:5-7` in `[John 3:16; 4:5-7]`): in a
+ * reference's text, or a link's shown target, not a link's own text (`[text](John 3:16; 4:5)`)
+ */
+function clickedPart(plugin: ToposPlugin, view: EditorView, event: MouseEvent): Passage | null {
+  const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+  if (pos === null) return null;
+  const line = view.state.doc.lineAt(pos);
+  const at = pos - line.from;
+  for (const r of findReferences(plugin.topos, line.text, plugin.translations())) {
+    if (at < r.start || at >= r.end) continue;
+    // The reference is what's shown, or the link's target, between `](` and `)`
+    const [start, end] = r.kind === "explicit" || r.kind === "bare" ? [r.labelStart, r.labelEnd] : [r.labelEnd + 2, r.end - 1];
+    return at >= start && at < end ? partAt(plugin.topos, line.text.slice(start, end), at - start) : null;
+  }
+  return null;
 }
 
 /** A reference and the translation it names, for titles: `John 3:16 (KJV)` */

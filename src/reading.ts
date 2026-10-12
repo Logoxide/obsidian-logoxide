@@ -1,6 +1,6 @@
 import { Component, MarkdownRenderChild, type MarkdownPostProcessor } from "obsidian";
 import type { Passage } from "logoxide";
-import { blankAround, findReferences, wholeReference } from "./core/syntax.ts";
+import { blankAround, findReferences, partAt, wholeReference } from "./core/syntax.ts";
 import { hoverParent, named } from "./editor/decorations.ts";
 import { embedsAloneIn } from "./core/settings.ts";
 import type ToposPlugin from "./main.ts";
@@ -173,8 +173,14 @@ function openOnClick(plugin: ToposPlugin, element: HTMLElement, passage: Passage
     // In live preview, a click in a callout would otherwise start editing it
     event.preventDefault();
     event.stopPropagation();
-    if (link) void plugin.openPassage(passage, event.button === 1 || event.ctrlKey || event.metaKey ? "tab" : false, translation);
-    else if (element.dataset.toposUrl) element.ownerDocument.defaultView?.open(element.dataset.toposUrl, "_blank");
+    // A part of the reference opens that part: `4:5-7` in `John 3:16; 4:5-7`
+    const offset = element.dataset.toposKind === "link" ? null : offsetAt(element, event);
+    const part = offset === null ? null : partAt(plugin.topos, element.textContent ?? "", offset);
+    if (link) void plugin.openPassage(part ?? passage, event.button === 1 || event.ctrlKey || event.metaKey ? "tab" : false, translation);
+    else {
+      const url = (part && plugin.referenceUrl(part, translation)) || element.dataset.toposUrl;
+      if (url) element.ownerDocument.defaultView?.open(url, "_blank");
+    }
   };
   element.addEventListener("click", open);
   // A middle click arrives as auxclick; its mousedown would paste (Linux) or autoscroll
@@ -182,6 +188,20 @@ function openOnClick(plugin: ToposPlugin, element: HTMLElement, passage: Passage
   element.addEventListener("mousedown", (event) => {
     if (event.button === 1) event.preventDefault();
   });
+}
+
+/** Where in an element's text a click was (UTF-16), if the browser can say */
+function offsetAt(element: HTMLElement, event: MouseEvent): number | null {
+  const doc = element.ownerDocument as Document & { caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null };
+  const caret = doc.caretPositionFromPoint?.(event.clientX, event.clientY);
+  const point = caret ? { node: caret.offsetNode, offset: caret.offset } : null;
+  const range = point ? null : doc.caretRangeFromPoint?.(event.clientX, event.clientY);
+  const node = point?.node ?? range?.startContainer;
+  if (!node || !element.contains(node)) return null;
+  const before = doc.createRange();
+  before.setStart(element, 0);
+  before.setEnd(node, point?.offset ?? range!.startOffset);
+  return before.toString().length;
 }
 
 function previewOnHover(plugin: ToposPlugin, element: HTMLElement, passage: Passage, bare: boolean, translation?: string): void {

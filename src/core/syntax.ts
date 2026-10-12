@@ -163,3 +163,14 @@ export function blankAround(line: (n: number) => string | undefined, first: numb
   }
   return true;
 }
+
+/**
+ * The part of a reference written at `offset` in `text` (UTF-16), when it has several:
+ * `4:5-7` in `John 3:16; 4:5-7` is John 4:5-7; null for a reference of one part, or between parts
+ * (topos's `parts`, which is slower than searching, so `text` should be the reference itself)
+ */
+export function partAt(topos: Topos, text: string, offset: number): Passage | null {
+  const parts = topos.parts(text, OffsetUnit.Utf16);
+  if (parts.length < 2) return null;
+  return parts.find((p) => p.start <= offset && offset < p.end)?.passage ?? null;
+}
