@@ -39,6 +39,8 @@ export function referenceDecorations(plugin: ToposPlugin) {
     update(update: ViewUpdate): void {
       const refresh = update.transactions.some((tr) => tr.effects.some((e) => e.is(refreshReferences)));
       if (refresh || update.docChanged || update.viewportChanged || update.selectionSet) this.decorations = this.build(update.view);
+      // Line-end texts that don't wrap: the room on their rows may have changed
+      if (update.docChanged || update.geometryChanged) refitInlineText(update.view);
     }
 
     build(view: EditorView): DecorationSet {
@@ -286,12 +288,15 @@ interface InlineItem {
 /**
  * The text of a line's references at its end in live preview (the `inlineText` settings), joined
  * by ` · `. Tapping it puts the cursor at the line's end. Without wrapping, it's as wide as the
- * room left on the line's last row, measured again when the editor's width changes
+ * room left on the line's last row, measured again when the text or the editor's size changes
  */
 class InlineTextWidget extends WidgetType {
-  private static observers = new WeakMap<HTMLElement, ResizeObserver>();
+  /** Each editor's line-end texts that fit their row, to fit again (`refitInlineText`) */
+  static readonly fits = new WeakMap<EditorView, Set<() => void>>();
+  private static readonly owned = new WeakMap<HTMLElement, { view: EditorView; fit: () => void }>();
   private readonly generation: number;
-  private readonly wrap: boolean;
+  /** The settings its text and layout follow (its color and style are CSS variables) */
+  private readonly look: string;
 
   constructor(
     private readonly plugin: ToposPlugin,
@@ -299,7 +304,8 @@ class InlineTextWidget extends WidgetType {
   ) {
     super();
     this.generation = plugin.inlineGeneration;
-    this.wrap = plugin.settings.inlineTextWrap;
+    const { inlineTextTemplate, inlineTextLength, inlineTextWrap } = plugin.settings;
+    this.look = `${inlineTextTemplate}\n${inlineTextLength}\n${inlineTextWrap}`;
   }
 
   private get key(): string {
@@ -307,55 +313,65 @@ class InlineTextWidget extends WidgetType {
   }
 
   eq(other: InlineTextWidget): boolean {
-    return other.key === this.key && other.generation === this.generation && other.wrap === this.wrap;
+    return other.key === this.key && other.generation === this.generation && other.look === this.look;
   }
 
   toDOM(view: EditorView): HTMLElement {
     const el = document.createElement("span");
     el.className = "topos-inline-text";
-    void Promise.all(this.items.map((i) => this.plugin.inlineVerseText(i.passage, i.translation))).then((texts) => {
-      el.textContent = texts.filter(Boolean).join(" · ");
-      if (!this.wrap) fit();
-    });
+    const wrap = this.plugin.settings.inlineTextWrap;
+    const show = (texts: (string | null | undefined)[]) => (el.textContent = texts.filter(Boolean).join(" · "));
+    // Known already: drawn now, not a moment later (which would flicker)
+    const known = this.items.map((i) => this.plugin.inlineVerseTextNow(i.passage, i.translation));
+    if (known.every((t) => t !== undefined)) show(known);
+    else void Promise.all(this.items.map((i) => this.plugin.inlineVerseText(i.passage, i.translation))).then(show).then(() => wrap || fit());
     // A tap puts the cursor at the end of the line, as it would on text there
     el.addEventListener("mousedown", (e) => e.preventDefault());
     el.addEventListener("click", (e) => {
       e.preventDefault();
-      const pos = view.posAtDOM(el);
-      view.dispatch({ selection: { anchor: pos } });
+      view.dispatch({ selection: { anchor: view.posAtDOM(el) } });
       view.focus();
     });
-    if (this.wrap) return el;
+    if (wrap) return el;
     el.classList.add("is-nowrap");
-    // The room left on the row: from where it starts (measured at no width) to the line's right edge
-    const fit = () => {
-      el.style.maxWidth = "0px";
+    // The room left on the row: from where the line's text ends to the line's right edge, read
+    // without narrowing it first (which would show it empty a moment); written only when it changes
+    const fit = () =>
       view.requestMeasure({
         read: () => {
           const line = el.closest<HTMLElement>(".cm-line");
           if (!line || !el.isConnected) return null;
-          const right = line.getBoundingClientRect().right - (parseFloat(getComputedStyle(line).paddingRight) || 0);
-          return right - el.getBoundingClientRect().left;
+          const end = view.coordsAtPos(view.posAtDOM(el), -1);
+          if (!end) return null;
+          const style = getComputedStyle(line);
+          const right = line.getBoundingClientRect().right - (parseFloat(style.paddingRight) || 0);
+          return Math.max(0, Math.floor(right - end.right - (parseFloat(getComputedStyle(el).marginLeft) || 0)));
         },
         write: (room) => {
-          if (room !== null) el.style.maxWidth = `${Math.max(0, Math.floor(room))}px`;
+          if (room !== null && el.style.maxWidth !== `${room}px`) el.style.maxWidth = `${room}px`;
         },
       });
-    };
-    const observer = new ResizeObserver(fit);
-    observer.observe(view.contentDOM);
-    InlineTextWidget.observers.set(el, observer);
+    fit();
+    const fits = InlineTextWidget.fits.get(view) ?? new Set();
+    InlineTextWidget.fits.set(view, fits.add(fit));
+    InlineTextWidget.owned.set(el, { view, fit });
     return el;
   }
 
   destroy(dom: HTMLElement): void {
-    InlineTextWidget.observers.get(dom)?.disconnect();
+    const owned = InlineTextWidget.owned.get(dom);
+    if (owned) InlineTextWidget.fits.get(owned.view)?.delete(owned.fit);
   }
 
   /** Its clicks are its own (they put the cursor at the line's end) */
   ignoreEvent(): boolean {
     return true;
   }
+}
+
+/** Fits an editor's line-end texts to their rows again (its text or size changed) */
+function refitInlineText(view: EditorView): void {
+  for (const fit of InlineTextWidget.fits.get(view) ?? []) fit();
 }
 
 /** `![John 1:1]` in live preview: the passage's text */

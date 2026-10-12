@@ -106,6 +106,7 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
   topos!: Topos;
   /** Bibles in the vault (folders of USX files) */
   bibles = new BibleLibrary(this, () => {
+    this.bibleTextChanged();
     this.resetTranslations();
     void this.verseCounts.update();
     this.folderStubs.soon();
@@ -116,6 +117,7 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
   verseCounts = new VerseCounts(this, () => this.resetTranslations(true));
   /** Bibles from logoxide packages: the ones the vault's `logoxide.toml` asks for */
   packages = new LogoxideBibles(this, () => {
+    this.bibleTextChanged();
     this.bibles.reset();
     this.resetTranslations(true);
   });
@@ -727,7 +729,7 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
   /** A reference's text as shown after it in live preview, by the `inlineText` settings (null: none) */
   inlineVerseText(passage: Passage, translation?: string | null): Promise<string | null> {
     const { inlineTextTemplate: template, inlineTextLength: max } = this.settings;
-    const key = `${passage.osis}\n${translation ?? ""}`;
+    const key = this.inlineKey(passage, translation);
     let text = this.inlineTexts.get(key);
     if (!text) {
       text = (async () => {
@@ -742,20 +744,38 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
           bible: this.bibles.forText(translation)?.name ?? "",
         };
         return inlineText(template, values, max);
-      })().catch(() => null);
+      })()
+        .catch(() => null)
+        .then((value) => (this.inlineKnown.set(key, value), value));
       this.inlineTexts.set(key, text);
     }
     return text;
   }
 
-  /** Each reference's text after it in live preview, until the settings or Bibles change */
+  /** That text, if it's known already (so it's drawn at once, without a moment empty) */
+  inlineVerseTextNow(passage: Passage, translation?: string | null): string | null | undefined {
+    return this.inlineKnown.get(this.inlineKey(passage, translation));
+  }
+
+  /** What that text depends on: the passage, the translation, and the settings for it */
+  private inlineKey(passage: Passage, translation?: string | null): string {
+    return [passage.osis, translation ?? "", this.settings.inlineTextTemplate, this.settings.inlineTextLength].join("\n");
+  }
+
+  /** Each reference's text after it in live preview (by `inlineKey`), until the Bibles change */
   private readonly inlineTexts = new Map<string, Promise<string | null>>();
-  /** Counts those changes, so the editors' widgets of that text are drawn again */
+  private readonly inlineKnown = new Map<string, string | null>();
+  /** Counts the Bibles' changes, so the editors' widgets of that text are drawn again */
   inlineGeneration = 0;
 
-  refreshLinks(): void {
+  /** The Bibles changed: their text after references is looked up again */
+  private bibleTextChanged(): void {
     this.inlineTexts.clear();
+    this.inlineKnown.clear();
     this.inlineGeneration++;
+  }
+
+  refreshLinks(): void {
     this.applyColor();
     this.app.workspace.updateOptions();
     for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
