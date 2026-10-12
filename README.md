@@ -86,7 +86,7 @@ the sidebar, which takes the sidebar's search along) has room to read results:
   as ordinary links: Ctrl/Cmd-click opens them on desktop, and a tap on mobile
 - *Clicking a reference of several verses* chooses what a click or tap on `John 3:16-18; 4:5-7`
   opens: all of it, from its first verse (the default); the part under it (`4:5-7`), or a range's
-  last verse on its end (`7` opens 4:7), in a bare reference, `[John 3:16-18; 4:5-7]`, or a link's
+  last verse on its end (`7` opens 4:7; a `-`, `,`, or `;` counts for the verse before it), in a bare reference, `[John 3:16-18; 4:5-7]`, or a link's
   target while you edit it; or a menu of where each part starts and ends (John 3:16, 3:18, 4:5, 4:7)
 
 **Commands**

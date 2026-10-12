@@ -58,10 +58,17 @@ test("a click on a part of a reference opens that part", () => {
   assert.equal(at("John 3:16; 4:5-7", 15), "John 4:7");
   assert.equal(at("John 3:16-18", 10), "John 3:18");
   assert.equal(at("John 3-4", 7), "John 4");
-  // Between parts, and the rest of a reference of one part: all of it
-  assert.equal(at("John 3:16; 4:5-7", 9), null);
+  // Between parts: the verse before it
+  assert.equal(at("John 3:16; 4:5-7", 9), "John 3:16");
+  assert.equal(at("John 3:16; 4:5-7", 10), "John 3:16");
+  assert.equal(at("Rom 8:28, 31, 38-39", 8), "Romans 8:28");
+  assert.equal(at("John 3:16-18, 20", 12), "John 3:18");
+  assert.equal(at("John 3:16; 4:5-7", 14), "John 4:5-7");
+  // The rest of a reference of one part, and past the last part: all of it
   assert.equal(at("John 3:16-18", 2), null);
+  assert.equal(at("John 3:16-18", 9), null);
   assert.equal(at("John 3:16", 2), null);
+  assert.equal(at("John 3:16; 4:5 KJV", 16), null);
 });
 
 test("a passage's stops are where each part starts and ends, each once", () => {

@@ -166,14 +166,17 @@ export function blankAround(line: (n: number) => string | undefined, first: numb
 
 /**
  * The part of a reference written at `offset` in `text` (UTF-16): `4:5-7` in `John 3:16; 4:5-7`
- * is John 4:5-7, and its `7` John 4:7; null where that's all of it (a reference of one part, away
- * from its range's end), or between parts (topos's `parts`, which is slower than searching, so
- * `text` should be the reference itself)
+ * is John 4:5-7, and its `7` John 4:7. What's between them counts for the verse before it: the `;`
+ * is John 3:16, and the `-` of `16-18` its 16. Null where that's all of it (a reference of one
+ * part, away from its range's end), or outside the parts (topos's `parts`, which is slower than
+ * searching, so `text` should be the reference itself)
  */
 export function partAt(topos: Topos, text: string, offset: number): Passage | null {
   const parts = topos.parts(text, OffsetUnit.Utf16);
-  const part = parts.find((p) => p.start <= offset && offset < p.end);
-  if (!part) return null;
+  const index = parts.findLastIndex((p) => p.start <= offset);
+  const part = parts[index];
+  // Past the last part (a translation's name after it) isn't any of them
+  if (!part || (offset >= part.end && index === parts.length - 1)) return null;
   if (part.lastStart !== null && offset >= part.lastStart) return part.last;
   return parts.length > 1 ? part.passage : null;
 }
