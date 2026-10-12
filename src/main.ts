@@ -9,7 +9,7 @@ import {
   TFile,
   type HoverParent,
   type OpenViewState,
-  type Menu,
+  Menu,
   type PaneType,
   type TAbstractFile,
   type Workspace,
@@ -60,7 +60,7 @@ import type { NoteLinks } from "./bible/notes.ts";
 import { notesShown } from "./core/display.ts";
 import { formatVerseLocator, passageParts, splitBible, type VersePart } from "./core/verse-locator.ts";
 import { mappedLabel, versesParts } from "./core/mapping.ts";
-import { wholeReference } from "./core/syntax.ts";
+import { partAt, passageStops, wholeReference } from "./core/syntax.ts";
 import { COMMENTARY_VIEW, CommentaryView } from "./bible/commentary.ts";
 import type { StrongsPopupOptions } from "./bible/strongs.ts";
 import { strongsHover } from "./editor/strongs.ts";
@@ -1073,6 +1073,27 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
   /** Where references open, for menus and tooltips: `BibleHub` */
   linkSite(): string {
     return siteName(this.settings.linkTemplate);
+  }
+
+  /**
+   * Opens what a click or tap on a reference opens, by the `referenceTap` setting: all of it; the
+   * part under the pointer (`at`: the reference's text and where in it the pointer is, when known),
+   * a range's last verse on its end; or a menu of where each part starts and ends
+   */
+  tapReference(event: MouseEvent, passage: Passage, at: { text: string; offset: number } | null, open: (passage: Passage) => void): void {
+    const mode = this.settings.referenceTap;
+    if (mode === "part" && at) {
+      open(partAt(this.topos, at.text, at.offset) ?? passage);
+      return;
+    }
+    const stops = mode === "menu" ? passageStops(this.topos, passage) : [];
+    if (stops.length < 2) {
+      open(passage);
+      return;
+    }
+    const menu = new Menu();
+    for (const stop of stops) menu.addItem((item) => item.setTitle(stop.reference).setIcon("book-open").onClick(() => open(stop)));
+    menu.showAtMouseEvent(event);
   }
 
   openReference(passage: Passage, translation?: string | null): void {

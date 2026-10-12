@@ -11,7 +11,7 @@ import {
 import { Component, editorLivePreviewField, MarkdownView, type HoverParent } from "obsidian";
 import { BookStyle, type Passage } from "logoxide";
 import { embedAloneCursorLines, embedsAloneIn } from "../core/settings.ts";
-import { blankAround, findReferences, partAt } from "../core/syntax.ts";
+import { blankAround, findReferences } from "../core/syntax.ts";
 import type ToposPlugin from "../main.ts";
 
 /** Rebuilds the references in an editor, after the settings change what they link to */
@@ -116,13 +116,12 @@ export function referenceDecorations(plugin: ToposPlugin) {
     const el = target(event);
     // Links are opened by `interceptLinkClicks`, before Obsidian sees them
     if (!el || el.matches(".topos-link, .topos-link-target")) return false;
-    let url = el.dataset.toposUrl;
-    if (!url || !plugin.settings.linkInEditor || !plugin.clickOpens(event, true, focusedAtPress)) return false;
+    const url = el.dataset.toposUrl;
+    const passage = passageOf(el);
+    if (!url || !passage || !plugin.settings.linkInEditor || !plugin.clickOpens(event, true, focusedAtPress)) return false;
     event.preventDefault();
-    // A part of the reference opens that part: `4:5-7` in `John 3:16; 4:5-7`
-    const part = clickedPart(plugin, view, event);
-    if (part) url = plugin.referenceUrl(part, el.dataset.toposTranslation) ?? url;
-    window.open(url, "_blank");
+    const translation = el.dataset.toposTranslation;
+    plugin.tapReference(event, passage, clickedText(plugin, view, event), (p) => window.open(plugin.referenceUrl(p, translation) ?? url, "_blank"));
     // The tap focused the editor; don't leave the keyboard opening behind the link
     if (!focusedAtPress) view.contentDOM.blur();
     return true;
@@ -193,9 +192,10 @@ export function openClickedLink(plugin: ToposPlugin, event: MouseEvent): boolean
   event.preventDefault();
   event.stopPropagation();
   if (event.type === "mousedown") return true;
-  const passage = clickedPart(plugin, found.view, event) ?? plugin.topos.parse(found.el.dataset.toposOsis ?? "", BookStyle.Name);
+  const passage = plugin.topos.parse(found.el.dataset.toposOsis ?? "", BookStyle.Name);
   const newLeaf = event.button === 1 || event.ctrlKey || event.metaKey ? "tab" : false;
-  if (passage) void plugin.openPassage(passage, newLeaf, found.el.dataset.toposTranslation);
+  const translation = found.el.dataset.toposTranslation;
+  if (passage) plugin.tapReference(event, passage, clickedText(plugin, found.view, event), (p) => void plugin.openPassage(p, newLeaf, translation));
   return true;
 }
 
@@ -207,19 +207,22 @@ function linkClickOpens(plugin: ToposPlugin, event: MouseEvent, view: EditorView
 }
 
 /**
- * The part of a reference clicked, when it has several (`4:5-7` in `[John 3:16; 4:5-7]`): in a
- * reference's text, or a link's shown target, not a link's own text (`[text](John 3:16; 4:5)`)
+ * The text of the reference clicked, and where in it the click was: a reference's text, or a
+ * link's shown target, not a link's own text (`[text](John 3:16; 4:5)`)
  */
-function clickedPart(plugin: ToposPlugin, view: EditorView, event: MouseEvent): Passage | null {
-  const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+function clickedText(plugin: ToposPlugin, view: EditorView, event: MouseEvent): { text: string; offset: number } | null {
+  let pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
   if (pos === null) return null;
+  // The character under the pointer, not the gap nearest it (the right half of `7` is after it)
+  const gap = view.coordsAtPos(pos, -1);
+  if (gap && event.clientX < gap.left && pos > 0) pos--;
   const line = view.state.doc.lineAt(pos);
   const at = pos - line.from;
   for (const r of findReferences(plugin.topos, line.text, plugin.translations())) {
     if (at < r.start || at >= r.end) continue;
     // The reference is what's shown, or the link's target, between `](` and `)`
     const [start, end] = r.kind === "explicit" || r.kind === "bare" ? [r.labelStart, r.labelEnd] : [r.labelEnd + 2, r.end - 1];
-    return at >= start && at < end ? partAt(plugin.topos, line.text.slice(start, end), at - start) : null;
+    return at >= start && at < end ? { text: line.text.slice(start, end), offset: at - start } : null;
   }
   return null;
 }

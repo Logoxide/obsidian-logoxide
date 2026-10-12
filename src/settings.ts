@@ -4,7 +4,7 @@ import { DEFAULT_FORMAT, written, type FormatSettings } from "./core/format.ts";
 import { parseQuery } from "./core/query.ts";
 import type { BookCompletion } from "./core/completions.ts";
 import { FILTERS, linkUrl, PLACEHOLDERS, SITES, templateError } from "./core/links.ts";
-import { bookStyle, embedAloneWhere, type EmbedAloneIn, type StyleName } from "./core/settings.ts";
+import { bookStyle, embedAloneWhere, type EmbedAloneIn, type ReferenceTap, type StyleName } from "./core/settings.ts";
 import { notesShown } from "./core/display.ts";
 import type ToposPlugin from "./main.ts";
 import { kindName } from "./bible/add.ts";
@@ -995,6 +995,24 @@ export class ToposSettingsPanel {
           settings.tapOpensInEditor = value;
           void save();
         }),
+      );
+    new Setting(notes)
+      .setName("Clicking a reference of several verses")
+      .setDesc(
+        md(
+          "What a click or tap on `John 3:16-18; 4:5-7` opens: all of it, from its first verse; the part under it (`4:5-7`), or a range's last verse on its end (`7`); or a menu of where each part starts and ends (John 3:16, 3:18, 4:5, 4:7).",
+        ),
+      )
+      .addDropdown((d) =>
+        d
+          .addOption("whole", "All of it")
+          .addOption("part", "The part clicked")
+          .addOption("menu", "A menu of its verses")
+          .setValue(settings.referenceTap)
+          .onChange((value) => {
+            settings.referenceTap = value as ReferenceTap;
+            void save();
+          }),
       );
     this.referenceColor(notes);
     new Setting(notes)

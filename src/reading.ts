@@ -1,6 +1,6 @@
 import { Component, MarkdownRenderChild, type MarkdownPostProcessor } from "obsidian";
 import type { Passage } from "logoxide";
-import { blankAround, findReferences, partAt, wholeReference } from "./core/syntax.ts";
+import { blankAround, findReferences, wholeReference } from "./core/syntax.ts";
 import { hoverParent, named } from "./editor/decorations.ts";
 import { embedsAloneIn } from "./core/settings.ts";
 import type ToposPlugin from "./main.ts";
@@ -173,14 +173,15 @@ function openOnClick(plugin: ToposPlugin, element: HTMLElement, passage: Passage
     // In live preview, a click in a callout would otherwise start editing it
     event.preventDefault();
     event.stopPropagation();
-    // A part of the reference opens that part: `4:5-7` in `John 3:16; 4:5-7`
+    // The reference's text, where a click on a part of it can open that part (not a link's own text)
     const offset = element.dataset.toposKind === "link" ? null : offsetAt(element, event);
-    const part = offset === null ? null : partAt(plugin.topos, element.textContent ?? "", offset);
-    if (link) void plugin.openPassage(part ?? passage, event.button === 1 || event.ctrlKey || event.metaKey ? "tab" : false, translation);
-    else {
-      const url = (part && plugin.referenceUrl(part, translation)) || element.dataset.toposUrl;
+    const at = offset === null ? null : { text: element.textContent ?? "", offset };
+    const newLeaf = event.button === 1 || event.ctrlKey || event.metaKey ? "tab" : false;
+    plugin.tapReference(event, passage, at, (p) => {
+      if (link) return void plugin.openPassage(p, newLeaf, translation);
+      const url = plugin.referenceUrl(p, translation) ?? element.dataset.toposUrl;
       if (url) element.ownerDocument.defaultView?.open(url, "_blank");
-    }
+    });
   };
   element.addEventListener("click", open);
   // A middle click arrives as auxclick; its mousedown would paste (Linux) or autoscroll
@@ -201,7 +202,11 @@ function offsetAt(element: HTMLElement, event: MouseEvent): number | null {
   const before = doc.createRange();
   before.setStart(element, 0);
   before.setEnd(node, point?.offset ?? range!.startOffset);
-  return before.toString().length;
+  const offset = before.toString().length;
+  // The character under the pointer, not the gap nearest it (the right half of `7` is after it)
+  before.collapse(false);
+  const gap = before.getBoundingClientRect();
+  return offset > 0 && event.clientX < gap.left ? offset - 1 : offset;
 }
 
 function previewOnHover(plugin: ToposPlugin, element: HTMLElement, passage: Passage, bare: boolean, translation?: string): void {

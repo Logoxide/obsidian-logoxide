@@ -165,12 +165,27 @@ export function blankAround(line: (n: number) => string | undefined, first: numb
 }
 
 /**
- * The part of a reference written at `offset` in `text` (UTF-16), when it has several:
- * `4:5-7` in `John 3:16; 4:5-7` is John 4:5-7; null for a reference of one part, or between parts
- * (topos's `parts`, which is slower than searching, so `text` should be the reference itself)
+ * The part of a reference written at `offset` in `text` (UTF-16): `4:5-7` in `John 3:16; 4:5-7`
+ * is John 4:5-7, and its `7` John 4:7; null where that's all of it (a reference of one part, away
+ * from its range's end), or between parts (topos's `parts`, which is slower than searching, so
+ * `text` should be the reference itself)
  */
 export function partAt(topos: Topos, text: string, offset: number): Passage | null {
   const parts = topos.parts(text, OffsetUnit.Utf16);
-  if (parts.length < 2) return null;
-  return parts.find((p) => p.start <= offset && offset < p.end)?.passage ?? null;
+  const part = parts.find((p) => p.start <= offset && offset < p.end);
+  if (!part) return null;
+  if (part.lastStart !== null && offset >= part.lastStart) return part.last;
+  return parts.length > 1 ? part.passage : null;
+}
+
+/**
+ * Where each part of a passage starts and ends, in order and each once: `John 3:16-18; 4:5, 1-2`
+ * is John 3:16, 3:18, 4:5, 4:1, and 4:2
+ */
+export function passageStops(topos: Topos, passage: Passage): Passage[] {
+  const stops = new Map<string, Passage>();
+  for (const part of topos.parts(passage.reference, OffsetUnit.Utf16)) {
+    for (const p of [part.first, part.last]) if (!stops.has(p.osis)) stops.set(p.osis, p);
+  }
+  return [...stops.values()];
 }

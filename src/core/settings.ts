@@ -14,6 +14,9 @@ export type StyleName = "name" | "abbreviation" | "osis";
  */
 export type MarkLook = "none" | "faded" | "accent" | "red" | (string & {});
 
+/** What clicking or tapping a reference opens (see `ToposSettings.referenceTap`) */
+export type ReferenceTap = "whole" | "part" | "menu";
+
 export interface ToposSettings {
   /** How references are written by autocomplete, normalizing, and the sidebar */
   style: StyleName;
@@ -27,6 +30,12 @@ export interface ToposSettings {
   clickNeedsModifier: boolean;
   /** On mobile, a tap on a reference in an unfocused editor opens it (instead of placing the cursor) */
   tapOpensInEditor: boolean;
+  /**
+   * What clicking or tapping a reference opens: all of it, from its first verse (`whole`); the part
+   * under the pointer, and a range's last verse on it (`part`); or a menu of where each part starts
+   * and ends (`menu`)
+   */
+  referenceTap: ReferenceTap;
   /** References' color, like `#d8b4fe` ("" uses the theme's accent color) */
   referenceColor: string;
   /** Suggest chapters, verses, and books while typing */
@@ -151,6 +160,7 @@ export const DEFAULT_SETTINGS: ToposSettings = {
   linkInReading: true,
   clickNeedsModifier: true,
   tapOpensInEditor: false,
+  referenceTap: "whole",
   referenceColor: "",
   autocomplete: true,
   bookCompletion: "capitalized",
