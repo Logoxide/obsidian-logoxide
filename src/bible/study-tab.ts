@@ -195,7 +195,7 @@ export class CommentariesTab extends VerseTab {
     } else {
       const notes = await this.bookNotes();
       if (!current() || reader !== this.reader) return;
-      const groups = studyGroups(notes, verse.chapter, verse.verse, reader.lastVerse(verse.chapter));
+      const groups = studyGroups(notes, verse.chapter, verse.verse, reader.lastVerse(verse.chapter), this.plugin.settings.stretchNotes);
       const onVerse = this.heading(el, reader, verse);
       const onChapter = this.passage(reader, `${verse.chapter}`);
       this.group(el, `On ${onVerse?.reference ?? "this verse"}`, groups.verse, onVerse, `No commentary has a note on ${onVerse?.reference ?? "this verse"}.`);

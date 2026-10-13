@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { normalizeStrongs, strongsAt, strongsIn, strongsKeys, wordStrongs } from "../src/core/strongs.ts";
-import { coversVerse, locatorReference, notedVerses, noteLabel, noteVerses, onChapter, studyGroups, weightLabel } from "../src/core/study.ts";
+import { coversVerse, locatorReference, notedVerses, noteLabel, noteVerses, onChapter, stretched, studyGroups, weightLabel } from "../src/core/study.ts";
 
 test("Strong's numbers are found in text, in normal form", () => {
   assert.deepEqual(strongsIn("loved (G25, G0026) and H430a; not XG25 or G25xy or H"), [
@@ -92,4 +92,17 @@ test("a verse's notes, and its chapter's as a whole, by commentary", () => {
     ],
   );
   assert.deepEqual([...notedVerses([{ commentary: "TC", title: "", notes: [intro, on16, on17] }])], ["3:16", "3:17"]);
+});
+
+test("stretched notes cover the verses after them, up to the next", () => {
+  const span = (chapter: number, verse: number, lastChapter: number, last: number) => ({ chapter, verse, lastChapter, last, part: 0 });
+  const first = span(3, 1, 3, 8);
+  const later = span(3, 22, 3, 36);
+  const notes = [{ commentary: "MHCC", title: "", notes: [first, later] }];
+  assert.deepEqual(studyGroups(notes, 3, 16, 36).verse, []);
+  assert.deepEqual(studyGroups(notes, 3, 16, 36, true).verse, [{ commentary: "MHCC", title: "", notes: [first] }], "3:1-8 reaches 3:21");
+  assert.deepEqual(studyGroups(notes, 3, 30, 36, true).verse[0]?.notes, [later]);
+  assert.equal(stretched(first, [first, later], 36).last, 21);
+  assert.equal(stretched(later, [first, later], 36).last, 36);
+  assert.equal(stretched(span(3, 0, 3, 0), [first], 36).last, 0, "an introduction stays");
 });

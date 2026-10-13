@@ -83,12 +83,28 @@ export interface StudyGroups<N extends NoteSpan> {
   chapter: NotesOf<N>[];
 }
 
-/** Each commentary's notes on a verse, and on its chapter as a whole (`lastVerse`: the chapter's last verse) */
-export function studyGroups<N extends NoteSpan>(commentaries: NotesOf<N>[], chapter: number, verse: number, lastVerse: number): StudyGroups<N> {
+/**
+ * A note stretched over the verses after it, up to the commentary's next note in the chapter (else
+ * the chapter's end, `lastVerse`), so a verse it skips shows the note before it: the `stretchNotes`
+ * setting. An introduction, or a note running into the next chapter, stays as it is
+ */
+export function stretched<N extends NoteSpan>(note: N, notes: readonly N[], lastVerse: number): NoteSpan {
+  if (note.verse === 0 || note.lastChapter !== note.chapter) return note;
+  let last = Math.max(note.last, lastVerse);
+  for (const n of notes) if (n.chapter === note.chapter && n.verse > note.last && n.verse <= last) last = n.verse - 1;
+  return { ...note, last };
+}
+
+/**
+ * Each commentary's notes on a verse, and on its chapter as a whole (`lastVerse`: the chapter's
+ * last verse); with `stretch`, a note also covers the verses after it up to the next (`stretched`)
+ */
+export function studyGroups<N extends NoteSpan>(commentaries: NotesOf<N>[], chapter: number, verse: number, lastVerse: number, stretch = false): StudyGroups<N> {
   const groups: StudyGroups<N> = { verse: [], chapter: [] };
   for (const { commentary, title, notes } of commentaries) {
     const whole = notes.filter((n) => onChapter(n, chapter, lastVerse));
-    const on = verse > 0 ? notes.filter((n) => !whole.includes(n) && coversVerse(n, chapter, verse)) : [];
+    const reach = (n: N) => (stretch && n.chapter === chapter ? stretched(n, notes, lastVerse) : n);
+    const on = verse > 0 ? notes.filter((n) => !whole.includes(n) && coversVerse(reach(n), chapter, verse)) : [];
     if (on.length > 0) groups.verse.push({ commentary, title, notes: on });
     if (whole.length > 0) groups.chapter.push({ commentary, title, notes: whole });
   }
