@@ -544,6 +544,16 @@ export class ToposSettingsPanel {
         ),
       new Setting(embeds)
         .setClass("topos-subsetting")
+        .setName("In headings")
+        .setDesc(md("Also after a reference in a heading (`## John 3` in a book's notes)."))
+        .addToggle((t) =>
+          t.setValue(settings.inlineTextInHeadings).onChange((value) => {
+            settings.inlineTextInHeadings = value;
+            void save();
+          }),
+        ),
+      new Setting(embeds)
+        .setClass("topos-subsetting")
         .setName("Style")
         .addDropdown((d) =>
           d

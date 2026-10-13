@@ -140,6 +140,8 @@ export interface ToposSettings {
   inlineTextStyle: InlineTextStyle;
   /** The space before it (its `padding-left`, a CSS length: `1em`, `12px`) */
   inlineTextPadding: string;
+  /** Also after a reference in a heading (`## John 3` in a book's notes) */
+  inlineTextInHeadings: boolean;
   /**
    * Where to show the text of a bare reference alone on its line, like `![John 1:1]` (in the
    * editor, unless the cursor is near it), on devices that haven't chosen (`embedAloneDevices`)
@@ -231,6 +233,7 @@ export const DEFAULT_SETTINGS: ToposSettings = {
   inlineTextColor: "faded",
   inlineTextStyle: "italic",
   inlineTextPadding: "1em",
+  inlineTextInHeadings: false,
   embedAlone: "off",
   embedAloneDevices: {},
   embedAloneBlankLines: 0,

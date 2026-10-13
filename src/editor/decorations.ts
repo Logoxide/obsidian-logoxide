@@ -84,8 +84,10 @@ export function referenceDecorations(plugin: ToposPlugin) {
             }
           }
           // Its text at the end of its line, unless it's being edited
-          if (inline && r.kind !== "embed" && !editing(a, b)) {
-            const end = doc.lineAt(a).to;
+          const line = doc.lineAt(a);
+          const heading = /^#{1,6}\s/.test(line.text);
+          if (inline && r.kind !== "embed" && !editing(a, b) && (!heading || plugin.settings.inlineTextInHeadings)) {
+            const end = line.to;
             const items = inlineLines.get(end) ?? [];
             items.push({ passage: r.passage, translation: r.translation });
             inlineLines.set(end, items);
