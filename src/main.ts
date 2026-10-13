@@ -46,6 +46,8 @@ import { bookStyle, DEFAULT_SETTINGS, openSettings, ToposSettingsPanel, type Top
 import { BibleEmbed } from "./bible/embed.ts";
 import { BibleMedia } from "./bible/media.ts";
 import { BibleView } from "./bible/view.ts";
+import { BibleNotes } from "./bible/bible-notes.ts";
+import { registerSwitcher } from "./bible/switcher.ts";
 import { createBibleFormat } from "./bible/format.ts";
 import { STUB_EXTENSION } from "./core/stubs.ts";
 import { BibleLibrary } from "./bible/library.ts";
@@ -113,6 +115,8 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
   });
   /** Folder Bibles' books, named by their titles (`John.bible` beside `JHN.usx`) */
   folderStubs = new FolderStubs(this);
+  /** The vault's notes on Bible books (the Bible's annotation files) */
+  notes = new BibleNotes(this);
   /** Each Bible book's verse counts, for references that name its translation */
   verseCounts = new VerseCounts(this, () => this.resetTranslations(true));
   /** Bibles from logoxide packages: the ones the vault's `logoxide.toml` asks for */
@@ -206,6 +210,17 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
     await this.migrateToposSettings();
   }
 
+  /** A Bible book's annotation file is its notes (`notesFolder`, `notesLayout`); else a note linking to it */
+  override findAnnotationFile(target: TFile): TFile | null | undefined {
+    const of = this.notes.bookOf(target.path);
+    return (of && this.notes.find(of.book, of.bible)) ?? undefined;
+  }
+
+  override async createAnnotationFile(view: DocumentView<BibleBook, BibleReader>): Promise<TFile | null> {
+    const of = view.file ? this.notes.bookOf(view.file.path) : null;
+    return of ? this.notes.open(of.book, of.bible) : null;
+  }
+
   protected override async onLoaded(): Promise<void> {
     await this.engine();
     await this.bibleStyles.load();
@@ -223,6 +238,7 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
     });
 
     this.registerView(SEARCH_VIEW, (leaf) => new SearchView(leaf, this));
+    registerSwitcher(this);
     this.registerObsidianProtocolHandler("logoxide", (params) => void this.openBibleUrl(params));
     this.registerView(SEARCH_PANE_VIEW, (leaf) => new SearchPane(leaf, this));
     this.registerView(COMMENTARY_VIEW, (leaf) => new CommentaryView(leaf, this));

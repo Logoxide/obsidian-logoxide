@@ -323,6 +323,32 @@ export class ToposSettingsPanel {
           }),
       );
 
+    const notes = section(el, "Your notes", "A file of notes for each book, with a heading for each chapter (`## John 3`). Highlights you insert from a Bible go there, under their chapter. The button in a Bible tab's header (and a notes file's) switches between your notes and the book in any Bible.").items;
+    new Setting(notes)
+      .setName("Notes for each book")
+      .setDesc(md("One file a book shared by every translation (`Bibles/John.md`), or one a translation (`Bibles/ESV/John.md`). Its frontmatter names the book (`bible-book: John`). Changing this doesn't move notes you have."))
+      .addDropdown((d) =>
+        d
+          .addOptions({ shared: "Shared by the translations", translation: "One for each translation" })
+          .setValue(settings.notesLayout)
+          .onChange((value) => {
+            settings.notesLayout = value as "shared" | "translation";
+            void save();
+          }),
+      );
+    new Setting(notes)
+      .setName("Folder")
+      .setDesc("Where notes on Bible books go.")
+      .addText((t) =>
+        t
+          .setPlaceholder("Bibles")
+          .setValue(settings.notesFolder)
+          .onChange((value) => {
+            settings.notesFolder = value.trim();
+            void save();
+          }),
+      );
+
     const files = section(el, "Book files", "A Bible that's a folder of USX or USFM files (`Bibles/BSB/JHN.usx`).").items;
     let hide: Setting | null = null;
     new Setting(files)

@@ -1,3 +1,4 @@
+import type { NotesLayout } from "./notes-files.ts";
 import { BookStyle } from "logoxide";
 import type { BookCompletion } from "./completions.ts";
 import { SITES } from "./links.ts";
@@ -160,6 +161,10 @@ export interface ToposSettings {
   markInDocuments: boolean;
   /** The commentary view follows the Bible tab's verse and the reference under the editor's cursor */
   commentaryFollows: boolean;
+  /** Where notes on a Bible book go: one file shared by the translations (`Bibles/John.md`), or one a translation (`Bibles/ESV/John.md`) */
+  notesLayout: NotesLayout;
+  /** The folder of the notes on Bible books */
+  notesFolder: string;
   /** A mark beside each verse a commentary has a note on, in Bible tabs; it opens the *Commentaries* tab */
   commentaryMarks: boolean;
   /** A commentary's note also covers the verses after it up to its next note in the chapter (a verse it skips shows the note before it) */
@@ -235,6 +240,8 @@ export const DEFAULT_SETTINGS: ToposSettings = {
   pickerVerse: true,
   markInDocuments: true,
   commentaryFollows: true,
+  notesLayout: "shared",
+  notesFolder: "Bibles",
   commentaryMarks: true,
   stretchNotes: false,
   strongsHover: true,
