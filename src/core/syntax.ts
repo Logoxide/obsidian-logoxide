@@ -221,3 +221,15 @@ export function passageStops(topos: Topos, passage: Passage): Passage[] {
   }
   return [...stops.values()];
 }
+
+/** Wiki links and Markdown links, and `[John 3:16]`-style brackets: a reference in one is linked, not mentioned */
+const LINKED = /!?\[\[[^\]]*\]\]|!?\[[^\]]*\]\([^)]*\)|!?\[[^\][]*\]/g;
+
+/**
+ * Whether a reference found at `start` (to `end`) in a line is written out bare, in no link of any
+ * kind (`[[…|John 3:16]]`, `[text](John 3:16)`, `[John 3:16]`): a mention, not a link
+ */
+export function isBareMention(line: string, start: number, end: number): boolean {
+  for (const m of line.matchAll(LINKED)) if (start < m.index + m[0].length && end > m.index) return false;
+  return true;
+}

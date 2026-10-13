@@ -47,6 +47,7 @@ import { BibleEmbed } from "./bible/embed.ts";
 import { BibleMedia } from "./bible/media.ts";
 import { BibleView } from "./bible/view.ts";
 import { BibleNotes } from "./bible/bible-notes.ts";
+import type { HighlightEntry } from "file-plus-plus/annotator";
 import { registerSwitcher } from "./bible/switcher.ts";
 import { createBibleFormat } from "./bible/format.ts";
 import { STUB_EXTENSION } from "./core/stubs.ts";
@@ -62,7 +63,7 @@ import type { NoteLinks } from "./bible/notes.ts";
 import { notesShown } from "./core/display.ts";
 import { formatVerseLocator, passageParts, splitBible, type VersePart } from "./core/verse-locator.ts";
 import { mappedLabel, versesParts } from "./core/mapping.ts";
-import { partAt, passageStops, wholeReference } from "./core/syntax.ts";
+import { isBareMention, partAt, passageStops, wholeReference } from "./core/syntax.ts";
 import { inlineNeeds, inlineText, inlineTextVars } from "./core/inline-text.ts";
 import { COMMENTARY_VIEW, CommentaryView } from "./bible/commentary.ts";
 import type { StrongsPopupOptions } from "./bible/strongs.ts";
@@ -93,6 +94,8 @@ export interface Placement {
  * A copy format for an embed of the selection, highlighted, that names its Bible rather than its
  * file: `![John 3:16 BSB](#:~:text=so%20loved&color=yellow)`
  */
+/** The most mentions of a book a Highlights list reads */
+const MENTIONS_LIMIT = 2000;
 const EMBED_FORMAT = { id: "embed", name: "Embed", template: "![{{reference}} {{bible}}](#{{highlight}}&color={{color}})" };
 
 /** An embed's highlight (`:~:text=so%20loved&color=yellow`), and how a new one is written in the note */
@@ -214,6 +217,63 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
   override findAnnotationFile(target: TFile): TFile | null | undefined {
     const of = this.notes.bookOf(target.path);
     return (of && this.notes.find(of.book, of.bible)) ?? undefined;
+  }
+
+  /** Each Bible book's mentions, as last read (`mentionsOf`), by its file */
+  private mentions = new Map<string, { key: string; entries: HighlightEntry[] }>();
+
+  /**
+   * The places notes write out a verse of a Bible book without linking to it (`John 3:16`; whole
+   * chapters don't count), for its Highlights list (`mentionsInHighlights`): as last read, while
+   * they're read again from the reference index and the notes' text (Markdown files only), and the
+   * book's tabs drawn again if they changed
+   */
+  override mentionsOf(target: TFile): HighlightEntry[] {
+    if (!this.settings.mentionsInHighlights || !this.refs) return [];
+    void this.readMentions(target);
+    return this.mentions.get(target.path)?.entries ?? [];
+  }
+
+  private async readMentions(target: TFile): Promise<void> {
+    const of = this.notes.bookOf(target.path);
+    if (!of) return;
+    const hits = this.refs.query({ ...NO_FILTERS, books: [of.book.name], verses: true }, { kind: "vault" }, "file", ["md"]).page(0, MENTIONS_LIMIT);
+    const texts = new Map<string, string | null>();
+    const mentions: HighlightEntry[] = [];
+    for (const hit of hits) {
+      if (hit.passage.bookId !== of.book.id) continue;
+      if (!texts.has(hit.path)) {
+        const file = this.app.vault.getFileByPath(hit.path);
+        texts.set(hit.path, file ? await this.app.vault.cachedRead(file) : null);
+      }
+      const text = texts.get(hit.path);
+      if (!text) continue;
+      const lineStart = text.lastIndexOf("\n", hit.start - 1) + 1;
+      const lineEnd = text.indexOf("\n", hit.start);
+      const line = text.slice(lineStart, lineEnd === -1 ? text.length : lineEnd);
+      const column = hit.start - lineStart;
+      const length = hit.end - hit.start;
+      if (!isBareMention(line, column, column + length)) continue;
+      const locator = this.passageLocator(hit.passage);
+      // A line naming a passage more than once (in several translations) is one mention
+      if (mentions.some((m) => m.sourcePath === hit.path && m.locator === locator && m.position.start.offset - m.position.start.col === lineStart)) continue;
+      const number = text.slice(0, lineStart).split("\n").length - 1;
+      mentions.push({
+        id: `mention:${hit.path}:${hit.start}`,
+        targetPath: target.path,
+        sourcePath: hit.path,
+        locator,
+        subpath: `#${locator}`,
+        displayText: hit.passage.reference,
+        original: line.slice(column, column + length),
+        position: { start: { line: number, col: column, offset: hit.start }, end: { line: number, col: column + length, offset: hit.end } },
+        mention: line.trim(),
+      });
+    }
+    const key = mentions.map((m) => `${m.id}\u0000${m.mention}`).join("\n");
+    if (this.mentions.get(target.path)?.key === key) return;
+    this.mentions.set(target.path, { key, entries: mentions });
+    for (const view of this.views()) if (view.file?.path === target.path) view.refreshHighlights();
   }
 
   override async createAnnotationFile(view: DocumentView<BibleBook, BibleReader>): Promise<TFile | null> {

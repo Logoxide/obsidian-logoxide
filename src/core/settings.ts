@@ -167,6 +167,8 @@ export interface ToposSettings {
   notesLayout: NotesLayout;
   /** The folder of the notes on Bible books */
   notesFolder: string;
+  /** In a Bible tab's Highlights list, the places notes write out a verse of its book (`John 3:16`, not a link), under Elsewhere */
+  mentionsInHighlights: boolean;
   /** A mark beside each verse a commentary has a note on, in Bible tabs; it opens the *Commentaries* tab */
   commentaryMarks: boolean;
   /** A commentary's note also covers the verses after it up to its next note in the chapter (a verse it skips shows the note before it) */
@@ -245,6 +247,7 @@ export const DEFAULT_SETTINGS: ToposSettings = {
   commentaryFollows: true,
   notesLayout: "shared",
   notesFolder: "Bibles",
+  mentionsInHighlights: true,
   commentaryMarks: true,
   stretchNotes: false,
   strongsHover: true,

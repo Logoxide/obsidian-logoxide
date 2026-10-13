@@ -337,6 +337,16 @@ export class ToposSettingsPanel {
           }),
       );
     new Setting(notes)
+      .setName("Mentions in the Highlights list")
+      .setDesc(md("A Bible tab's *Highlights* list also shows where your notes write out a verse of its book without linking to it (`John 3:16`), under *Elsewhere*. They aren't drawn in the text."))
+      .addToggle((t) =>
+        t.setValue(settings.mentionsInHighlights).onChange((value) => {
+          settings.mentionsInHighlights = value;
+          void save();
+          for (const view of this.plugin.views()) view.refreshHighlights();
+        }),
+      );
+    new Setting(notes)
       .setName("Folder")
       .setDesc("Where notes on Bible books go.")
       .addText((t) =>

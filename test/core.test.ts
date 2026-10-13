@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { BookStyle, Topos } from "logoxide";
 import { compileFilters, keep, NO_FILTERS, type Filters } from "../src/core/filters.ts";
+import { isBareMention } from "../src/core/syntax.ts";
 import { linkUrl, siteName, SITES, templateError, templateFromTranslation } from "../src/core/links.ts";
 import {
   applyReplacements,
@@ -451,4 +452,14 @@ test("--verses: whole chapters don't count, nor single-chapter books with --skip
   assert.deepEqual(kept({ verses: true }), ["John 3:16", "John 2; 3:16", "Jude 25"]);
   assert.deepEqual(kept({ verses: true, skipSingleChapter: true }), ["John 3:16", "John 2; 3:16"]);
   assert.equal(kept({}).length, 5);
+});
+
+test("a reference written out bare is a mention; one in any link isn't", () => {
+  const at = (line: string, ref: string) => isBareMention(line, line.indexOf(ref), line.indexOf(ref) + ref.length);
+  assert.ok(at("See John 3:16 here.", "John 3:16"));
+  assert.ok(!at("[[ESV/John.bible#v=3:16|John 3:16]]", "John 3:16"));
+  assert.ok(!at("[so loved](John 3:16)", "John 3:16"));
+  assert.ok(!at("[John 3:16] and more", "John 3:16"));
+  assert.ok(!at("![John 3:16]", "John 3:16"));
+  assert.ok(at("[[Other note]] then John 3:16", "John 3:16"));
 });
