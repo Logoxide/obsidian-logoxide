@@ -255,15 +255,17 @@ export class CommentariesTab extends VerseTab {
     this.placeMarks();
   }
 
-  /** Puts each mark beside its verse's number, at the text's right edge */
+  /** Puts each mark beside its verse's number, at the text's right edge (before comments in the margin) */
   private placeMarks(): void {
     const reader = this.reader;
     const layer = this.marksEl;
     if (!reader || !layer) return;
     const box = reader.scroller.getBoundingClientRect();
-    const text = reader.content.getBoundingClientRect();
+    const content = reader.content.getBoundingClientRect();
+    // At the text's edge, in its padding: comments in the margin start 20px after it (file-plus-plus's Margin)
+    const textRight = content.right - (parseFloat(reader.content.ownerDocument.defaultView?.getComputedStyle(reader.content).paddingRight ?? "") || 0);
     const size = 18;
-    const left = Math.min(text.right - box.left + 2, reader.scroller.clientWidth - size - 2);
+    const left = Math.min(textRight - box.left + 1, reader.scroller.clientWidth - size - 2);
     let lastTop = -Infinity;
     let shift = 0;
     for (const mark of Array.from(layer.children) as HTMLElement[]) {
