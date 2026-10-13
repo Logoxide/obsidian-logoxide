@@ -34,6 +34,8 @@ export function createBibleFormat(plugin: ToposPlugin): FileFormat<BibleBook, Bi
     load: (app, file) => loadBook(plugin, app, file),
     // `## John 3` in a book's notes is chapter 3
     locatorOfText: (markdown, target) => plugin.notes.locatorOfText(markdown, target),
+    // A comment card in the margin names its passage (`John 3:16`), not the book's notes it's in
+    highlightLabel: (locator, target) => plugin.notes.passageLabel(locator, target),
     // A section per chapter, its verses' text in order; a range is its verses plus the exact words
     extractText: async (app, file) => {
       const doc = await loadBook(plugin, app, file);

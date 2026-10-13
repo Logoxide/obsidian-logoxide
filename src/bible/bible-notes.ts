@@ -3,6 +3,8 @@ import type { BookInfo } from "logoxide";
 import type { Bible } from "../core/bibles.ts";
 import { BOOK_KEY, headingChapter, notesPath, notesText, osisLocator, TRANSLATION_KEY } from "../core/notes-files.ts";
 import { wholeReference } from "../core/syntax.ts";
+import { parseVerseLocator } from "../core/verse-locator.ts";
+import { partsReference } from "../core/mapping.ts";
 import type ToposPlugin from "../main.ts";
 
 /** A Bible book's file: which book, in which Bible */
@@ -97,6 +99,13 @@ export class BibleNotes {
     if (!book || !text || text.length > 40) return null;
     const passage = wholeReference(this.plugin.topos, text);
     return passage?.bookId === book.id ? osisLocator(passage.osis) : null;
+  }
+
+  /** A highlight's passage in a book's file (`John 3:16-18`), from its locator; null without verses */
+  passageLabel(locator: string, target: TFile | null): string | null {
+    const book = target ? this.bookOf(target.path)?.book : null;
+    const parts = parseVerseLocator(locator);
+    return book && parts?.length ? partsReference(book.name, parts) : null;
   }
 
   /** The chapter a heading names, in a book (`## John 3`) */
