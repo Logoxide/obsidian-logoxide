@@ -230,7 +230,7 @@ function openOnClick(plugin: ToposPlugin, element: HTMLElement, passage: Passage
     plugin.tapReference(event, passage, at, (p) => {
       if (link) return void plugin.openPassage(p, newLeaf, translation);
       const url = plugin.referenceUrl(p, translation) ?? element.dataset.toposUrl;
-      if (url) element.ownerDocument.defaultView?.open(url, "_blank");
+      if (url) plugin.openUrl(url, newLeaf);
     });
   };
   element.addEventListener("click", open);

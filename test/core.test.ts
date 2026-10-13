@@ -26,6 +26,15 @@ const link = (template: string, reference: string) => {
 };
 const site = (id: string) => SITES.find((s) => s.id === id)!.template;
 
+test("the Bible in the vault is a site: obsidian://logoxide links name the passage and its translation", () => {
+  const bible = site("bible");
+  assert.equal(link(bible, "jn 3:16-18"), "obsidian://logoxide?ref=John%203%3A16-18");
+  const passage = parse("Ps 23");
+  assert.equal(linkUrl(bible, passage, books.get(passage.bookId), "KJV"), "obsidian://logoxide?ref=Psalm%2023&translation=KJV");
+  assert.equal(siteName(bible), "your Bible");
+  assert.equal(templateError(bible), null);
+});
+
 test("each site's links open the first verse or chapter", () => {
   const lw = site("literalword");
   assert.equal(link(lw, "John 3:16-18"), "https://app.literalword.com/43/3/16");

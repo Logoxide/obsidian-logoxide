@@ -335,7 +335,7 @@ engine. Notes you edit are always searched by the built-in engine.
 ## Links
 
 References open in Literal Word by default. The settings offer BibleHub, lets.bible,
-BibleGateway, and YouVersion, no links at all, or a link template of your own, with a preview as you type:
+BibleGateway, YouVersion, your Bible in Obsidian, no links at all, or a link template of your own, with a preview as you type:
 
 | Site | Template |
 |---|---|
@@ -344,6 +344,11 @@ BibleGateway, and YouVersion, no links at all, or a link template of your own, w
 | lets.bible | `https://lets.bible/bible/{book\|lower\|kebab}/{chapter}[?v={verse}]` |
 | BibleGateway | `https://www.biblegateway.com/passage/?search={reference}[&version={translation}]` |
 | YouVersion | `https://www.bible.com/bible/{translation.youversion}/{book.usfm}.{chapter}[.{verse}][-{end_verse}]` |
+| Your Bible, in Obsidian | `obsidian://logoxide?ref={reference}[&translation={translation}]` |
+
+*Your Bible* opens the passage in the vault's Bible tab (the one a reference names, `John 3:16 KJV`,
+else the current one). Its links also work from outside Obsidian: `obsidian://logoxide?ref=John%203:16`
+in a browser or another app opens the passage in the vault last open.
 
 A reference that names a translation (`John 3:16 KJV`) opens in it where the site has it: Literal
 Word's NASB, LSB, ESV, NKJV, and KJV; BibleHub's KJV, ESV, NIV, NLT, NASB, NKJV, and ASV;

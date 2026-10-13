@@ -23,7 +23,7 @@ import type { EditorView } from "@codemirror/view";
 import { DEFAULT_FORMAT, written } from "./core/format.ts";
 import { migrateQuery, parseQuery, type SavedQuery } from "./core/query.ts";
 import { NO_FILTERS } from "./core/filters.ts";
-import { linkUrl, OLD_SITE_TEMPLATES, siteName, templateFromTranslation, type LinkBook } from "./core/links.ts";
+import { BIBLE_URL, linkUrl, OLD_SITE_TEMPLATES, siteName, templateFromTranslation, type LinkBook } from "./core/links.ts";
 import { applyReplacements, normalizeReferences, referenceAt } from "./core/references.ts";
 import { ReferenceIndex } from "./core/index.ts";
 import { searchText, type Hit } from "./core/search.ts";
@@ -222,6 +222,7 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
     });
 
     this.registerView(SEARCH_VIEW, (leaf) => new SearchView(leaf, this));
+    this.registerObsidianProtocolHandler("logoxide", (params) => void this.openBibleUrl(params));
     this.registerView(SEARCH_PANE_VIEW, (leaf) => new SearchPane(leaf, this));
     this.registerView(COMMENTARY_VIEW, (leaf) => new CommentaryView(leaf, this));
     this.registerHoverLinkSource(HOVER_SOURCE, { display: "Logoxide: Bible references in notes", defaultMod: false });
@@ -440,10 +441,30 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
    * the vault has no such Bible with the book
    */
   async openPassage(passage: Passage, newLeaf?: PaneType | boolean, translation?: string | null): Promise<void> {
+    if (this.settings.referenceLinks !== "bible" || !(await this.openInBible(passage, newLeaf, translation))) this.openReference(passage, translation);
+  }
+
+  /** Opens a passage in the Bible tab (the Bible it names, else the current one); false when the vault has no such Bible with the book */
+  async openInBible(passage: Passage, newLeaf?: PaneType | boolean, translation?: string | null): Promise<boolean> {
     const bible = translation ? this.bibles.named(translation) : this.bibles.current();
-    const file = this.settings.referenceLinks === "bible" && bible ? await this.bibles.bookFile(passage, bible) : null;
+    const file = bible ? await this.bibles.bookFile(passage, bible) : null;
     if (file) await this.openDocument(file, this.passageLocator(passage), newLeaf, { eState: { link: true } });
-    else this.openReference(passage, translation);
+    return !!file;
+  }
+
+  /** Opens a reference's link: in the browser, or the vault's Bible for the *Your Bible* site's links (`obsidian://logoxide?ref=…`) */
+  openUrl(url: string, newLeaf?: PaneType | boolean): void {
+    if (url.startsWith(`${BIBLE_URL}?`)) void this.openBibleUrl(Object.fromEntries(new URL(url).searchParams), newLeaf);
+    else window.open(url, "_blank");
+  }
+
+  /** `obsidian://logoxide?ref=John%203:16[&translation=KJV]`, from a reference's link or from outside Obsidian */
+  private async openBibleUrl(params: Record<string, string>, newLeaf?: PaneType | boolean): Promise<void> {
+    const passage = params.ref ? wholeReference(this.topos, params.ref) : null;
+    if (!passage) return void new Notice(params.ref ? `${params.ref} isn't a Bible reference.` : "The link names no passage.");
+    const translation = params.translation || null;
+    if (!(await this.openInBible(passage, newLeaf, translation)))
+      new Notice(`No Bible in the vault has ${passage.reference}${translation ? ` in ${translation}` : ""}.`);
   }
 
   /**
@@ -1148,7 +1169,7 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
 
   openReference(passage: Passage, translation?: string | null): void {
     const url = this.referenceUrl(passage, translation);
-    if (url) window.open(url, "_blank");
+    if (url) this.openUrl(url);
     else if (!this.settings.linkTemplate.trim()) new Notice("Links are turned off in the Topos settings.");
     else new Notice(`${this.linkSite()} has no link for ${passage.reference}.`);
   }

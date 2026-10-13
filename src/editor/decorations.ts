@@ -136,7 +136,7 @@ export function referenceDecorations(plugin: ToposPlugin) {
     if (!url || !passage || !plugin.settings.linkInEditor || !plugin.clickOpens(event, true, focusedAtPress)) return false;
     event.preventDefault();
     const translation = el.dataset.toposTranslation;
-    plugin.tapReference(event, passage, clickedText(plugin, view, event), (p) => window.open(plugin.referenceUrl(p, translation) ?? url, "_blank"));
+    plugin.tapReference(event, passage, clickedText(plugin, view, event), (p) => plugin.openUrl(plugin.referenceUrl(p, translation) ?? url));
     // The tap focused the editor; don't leave the keyboard opening behind the link
     if (!focusedAtPress) view.contentDOM.blur();
     return true;

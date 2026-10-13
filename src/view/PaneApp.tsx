@@ -1230,7 +1230,7 @@ function HitCard({
               host={host}
               icon="external-link"
               title={`Open in ${plugin.linkSite()}`}
-              onClick={() => window.open(url, "_blank")}
+              onClick={() => plugin.openUrl(url)}
             />
           )}
         </span>

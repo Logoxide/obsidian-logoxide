@@ -18,6 +18,9 @@ export interface LinkSite {
   template: string;
 }
 
+/** Where `obsidian://logoxide` links (the *Your Bible* site) open: the vault's Bible, the translation it names if there's one */
+export const BIBLE_URL = "obsidian://logoxide";
+
 /** Sites with their templates ready to use, in the translation a reference names when the site has it */
 export const SITES: LinkSite[] = [
   { id: "literalword", name: "Literal Word", template: "https://app.literalword.com/[{translation.literalword}/]{book.id}/{chapter}[/{verse}]" },
@@ -29,6 +32,7 @@ export const SITES: LinkSite[] = [
     name: "YouVersion",
     template: "https://www.bible.com/bible/{translation.youversion}/{book.usfm}.{chapter}[.{verse}][-{end_verse}]",
   },
+  { id: "bible", name: "your Bible", template: `${BIBLE_URL}?ref={reference}[&translation={translation}]` },
 ];
 
 /** The built-in sites' templates before they used translations, and what they are now */

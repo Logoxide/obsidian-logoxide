@@ -39,6 +39,7 @@ class Plugin extends Component {
     this.manifest = manifest;
   }
   registerExtensions() {}
+  registerObsidianProtocolHandler() {}
   registerHoverLinkSource() {}
   async loadData() {
     return null;

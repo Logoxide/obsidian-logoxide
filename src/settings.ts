@@ -1190,7 +1190,7 @@ export class ToposSettingsPanel {
       .setDesc("Where clicking a reference, the sidebar's ↗ button, and reading view links go.")
       .addDropdown((d) => {
         sites = d;
-        for (const site of SITES) d.addOption(site.id, site.name);
+        for (const site of SITES) d.addOption(site.id, site.id === "bible" ? "Your Bible, in Obsidian" : site.name);
         d.addOption("custom", "A link template");
         d.addOption("none", "Nowhere (no links)");
         d.setValue(choice(settings.linkTemplate)).onChange((value) => {

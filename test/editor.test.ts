@@ -59,6 +59,7 @@ test("editor links follow the settings after a refresh", async () => {
     referenceUrl: (passage: any) => linkUrl(settings.linkTemplate, passage),
     linkSite: () => "the site",
     clickOpens: (event: MouseEvent) => event.button === 1 || event.ctrlKey,
+    openUrl: (url: string) => window.open(url, "_blank"),
     tapReference: (_event: MouseEvent, passage: any, _at: unknown, open: (passage: any) => void) => open(passage),
     bibles: { all: () => [] },
     translations: () => undefined,
