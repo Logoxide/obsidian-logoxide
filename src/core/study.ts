@@ -51,3 +51,53 @@ export function weightLabel(weight: number | null | undefined): string {
   if (weight === null || weight === undefined || !Number.isFinite(weight)) return "";
   return String(Math.round(weight * 100) / 100);
 }
+
+/** A chapter and verse as one number, for comparing places */
+const placeKey = (chapter: number, verse: number) => chapter * 1000 + verse;
+
+/** Whether a note covers a verse (verse 0: the chapter's introduction, before verse 1) */
+export function coversVerse(note: NoteSpan, chapter: number, verse: number): boolean {
+  const at = placeKey(chapter, verse);
+  return placeKey(note.chapter, note.verse) <= at && at <= placeKey(note.lastChapter, note.last);
+}
+
+/**
+ * Whether a note is on a chapter as a whole: its introduction (verse 0, however far it reaches),
+ * or a note covering all of it (`lastVerse`: the chapter's last verse)
+ */
+export function onChapter(note: NoteSpan, chapter: number, lastVerse: number): boolean {
+  if (note.chapter === chapter && note.verse === 0) return true;
+  return lastVerse > 1 && coversVerse(note, chapter, 1) && coversVerse(note, chapter, lastVerse);
+}
+
+/** A commentary's notes */
+export interface NotesOf<N extends NoteSpan> {
+  commentary: string;
+  title: string;
+  notes: N[];
+}
+
+/** What commentaries say about a verse: notes on it, and notes on its chapter as a whole, each by commentary (those with none left out) */
+export interface StudyGroups<N extends NoteSpan> {
+  verse: NotesOf<N>[];
+  chapter: NotesOf<N>[];
+}
+
+/** Each commentary's notes on a verse, and on its chapter as a whole (`lastVerse`: the chapter's last verse) */
+export function studyGroups<N extends NoteSpan>(commentaries: NotesOf<N>[], chapter: number, verse: number, lastVerse: number): StudyGroups<N> {
+  const groups: StudyGroups<N> = { verse: [], chapter: [] };
+  for (const { commentary, title, notes } of commentaries) {
+    const whole = notes.filter((n) => onChapter(n, chapter, lastVerse));
+    const on = verse > 0 ? notes.filter((n) => !whole.includes(n) && coversVerse(n, chapter, verse)) : [];
+    if (on.length > 0) groups.verse.push({ commentary, title, notes: on });
+    if (whole.length > 0) groups.chapter.push({ commentary, title, notes: whole });
+  }
+  return groups;
+}
+
+/** The verses where commentaries' notes start (`3:16`), for marking them in the text; introductions aren't */
+export function notedVerses(commentaries: NotesOf<NoteSpan>[]): Set<string> {
+  const verses = new Set<string>();
+  for (const { notes } of commentaries) for (const n of notes) if (n.verse > 0) verses.add(`${n.chapter}:${n.verse}`);
+  return verses;
+}

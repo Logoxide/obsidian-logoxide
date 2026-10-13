@@ -160,6 +160,8 @@ export interface ToposSettings {
   markInDocuments: boolean;
   /** The commentary view follows the Bible tab's verse and the reference under the editor's cursor */
   commentaryFollows: boolean;
+  /** A mark beside each verse a commentary has a note on, in Bible tabs; it opens the *Commentaries* tab */
+  commentaryMarks: boolean;
   /** A commentary's note also covers the verses after it up to its next note in the chapter (a verse it skips shows the note before it) */
   stretchNotes: boolean;
   /** Show a Strong's number's dictionary entry on hover (Bible words that carry one, `G25` in notes and the editor) */
@@ -233,6 +235,7 @@ export const DEFAULT_SETTINGS: ToposSettings = {
   pickerVerse: true,
   markInDocuments: true,
   commentaryFollows: true,
+  commentaryMarks: true,
   stretchNotes: false,
   strongsHover: true,
 };

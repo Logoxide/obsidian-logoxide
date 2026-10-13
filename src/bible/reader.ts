@@ -171,7 +171,8 @@ ${USX_CSS}
    room to scroll past its end. Outside the layer, as file-plus-plus's padding is */
 .${PREFIX}-content.tpb-passage { padding-top: 0.25em; padding-bottom: 0.5em; --${PREFIX}-font-size: var(--font-text-size, 16px); }
 .tpb-passage > .${PREFIX}-section + .${PREFIX}-section { margin-top: 0; }
-.tpb-passage p.topos-p:last-child { margin-bottom: 0; }`;
+.tpb-passage p.topos-p:last-child { margin-bottom: 0; }
+${NOTE_MARKS_CSS}`;
   }
 
   protected async renderContent(): Promise<void> {
@@ -389,6 +390,37 @@ ${USX_CSS}
     return found ? { chapter: found.chapter, verse: found.verse } : null;
   }
 
+  /** A verse's number (its marker), if the book has it */
+  markerOf(chapter: number, verse: number): HTMLElement | null {
+    return this.markers.find((m) => m.chapter === chapter && m.verse <= verse && verse <= m.last)?.el ?? null;
+  }
+
+  /** Each verse number with its place, in order */
+  verseMarkers(): readonly { el: HTMLElement; chapter: number; verse: number }[] {
+    return this.markers;
+  }
+
+  /** A chapter's last verse (0 when the book hasn't it) */
+  lastVerse(chapter: number): number {
+    let last = 0;
+    for (const m of this.markers) if (m.chapter === chapter) last = Math.max(last, m.last);
+    return last;
+  }
+
+  /** The book's last chapter */
+  lastChapter(): number {
+    return this.markers.at(-1)?.chapter ?? 0;
+  }
+
+  /** Whether a verse's number is in view */
+  verseShown(chapter: number, verse: number): boolean {
+    const el = this.markerOf(chapter, verse);
+    if (!el) return false;
+    const r = el.getBoundingClientRect();
+    const box = this.scroller.getBoundingClientRect();
+    return r.bottom > box.top && r.top < box.bottom;
+  }
+
   /** The first verse in view */
   verseInView(): { chapter: number; verse: number } | null {
     const part = parseVerseLocator(this.getLocation()?.locator ?? "")?.[0];
@@ -545,3 +577,17 @@ function sectionChapter(el: HTMLElement): number | null {
   const n = Number(el.closest<HTMLElement>(`[data-${PREFIX}-section]`)?.getAttribute(`data-${PREFIX}-section`));
   return Number.isFinite(n) && n > 0 ? n : null;
 }
+
+/** The marks' look, in the reader's shadow root (`CommentariesTab`) */
+const NOTE_MARKS_CSS = /* css */ `
+.topos-note-marks { position: absolute; top: 0; left: 0; width: 0; height: 0; z-index: 2; }
+.topos-note-mark {
+  position: absolute; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;
+  color: var(--text-faint, gray); opacity: 0.7; cursor: pointer; border-radius: 4px;
+  -webkit-user-select: none; user-select: none;
+}
+.topos-note-mark:hover { color: var(--interactive-accent, #7c5cff); opacity: 1; background: var(--background-modifier-hover, rgba(127,127,127,0.15)); }
+.topos-note-mark svg { width: 13px; height: 13px; }
+/* A finger's worth to tap, without a bigger mark */
+.topos-note-mark::after { content: ""; position: absolute; inset: -6px; }
+`;

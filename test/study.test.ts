@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { normalizeStrongs, strongsAt, strongsIn, strongsKeys, wordStrongs } from "../src/core/strongs.ts";
-import { locatorReference, noteLabel, noteVerses, weightLabel } from "../src/core/study.ts";
+import { coversVerse, locatorReference, notedVerses, noteLabel, noteVerses, onChapter, studyGroups, weightLabel } from "../src/core/study.ts";
 
 test("Strong's numbers are found in text, in normal form", () => {
   assert.deepEqual(strongsIn("loved (G25, G0026) and H430a; not XG25 or G25xy or H"), [
@@ -61,4 +61,35 @@ test("cross-references' weights", () => {
   assert.equal(weightLabel(0.333333), "0.33");
   assert.equal(weightLabel(null), "");
   assert.equal(weightLabel(undefined), "");
+});
+
+test("a verse's notes, and its chapter's as a whole, by commentary", () => {
+  const span = (chapter: number, verse: number, lastChapter: number, last: number) => ({ chapter, verse, lastChapter, last, part: 0 });
+  const intro = span(3, 0, 3, 15);
+  const on16 = span(3, 16, 3, 16);
+  const on17 = span(3, 17, 3, 18);
+  const across = span(2, 20, 4, 3);
+  assert.ok(coversVerse(on17, 3, 18) && !coversVerse(on17, 3, 16));
+  assert.ok(coversVerse(across, 3, 36) && coversVerse(across, 4, 1) && !coversVerse(across, 4, 4));
+  assert.ok(onChapter(intro, 3, 36), "an introduction, however far it reaches");
+  assert.ok(onChapter(across, 3, 36), "all of the chapter");
+  assert.ok(!onChapter(on16, 3, 36) && !onChapter(span(3, 1, 3, 1), 3, 1), "one verse isn't the chapter");
+  const groups = studyGroups(
+    [
+      { commentary: "TC", title: "A Tiny Commentary", notes: [intro, on16, on17] },
+      { commentary: "MH", title: "Matthew Henry", notes: [across, on17] },
+    ],
+    3,
+    16,
+    36,
+  );
+  assert.deepEqual(groups.verse, [{ commentary: "TC", title: "A Tiny Commentary", notes: [on16] }]);
+  assert.deepEqual(
+    groups.chapter.map((g) => [g.commentary, g.notes]),
+    [
+      ["TC", [intro]],
+      ["MH", [across]],
+    ],
+  );
+  assert.deepEqual([...notedVerses([{ commentary: "TC", title: "", notes: [intro, on16, on17] }])], ["3:16", "3:17"]);
 });

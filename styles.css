@@ -2126,6 +2126,26 @@ body.theme-dark {
 }
 .topos-commentary .topos-w[data-strong] { text-decoration: underline dotted 1px; text-decoration-color: var(--text-faint); text-underline-offset: 3px; cursor: help; }
 
+/* The Bible tab's Commentaries tab (src/bible/study-tab.ts): a group per verse and chapter, a fold per commentary */
+.topos-study-tab { padding: 0.25em 0.5em 1em; font-size: var(--font-ui-small); user-select: text; }
+.topos-study-group > .topos-commentary-heading {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: var(--font-ui-smaller);
+  color: var(--text-faint);
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding-bottom: 0.2em;
+  margin-bottom: 0.5em;
+}
+.topos-study-commentary { margin-bottom: 0.6em; }
+.topos-study-commentary > summary {
+  cursor: pointer;
+  font-size: var(--font-ui-smaller);
+  font-weight: 600;
+  margin-bottom: 0.3em;
+}
+.topos-study-commentary > .topos-commentary-note { padding-left: 0.9em; border-left: 2px solid var(--background-modifier-border); }
+
 /* Strong's entries: popups in the commentary view, the editor's hover (src/bible/strongs.ts) */
 .topos-strongs { text-decoration: underline dotted 1px; text-underline-offset: 3px; cursor: help; }
 .topos-strongs-popup {

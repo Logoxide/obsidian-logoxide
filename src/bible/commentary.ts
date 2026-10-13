@@ -1,5 +1,5 @@
-import { ItemView, sanitizeHTMLToDom, setIcon, type HoverPopover, type WorkspaceLeaf } from "obsidian";
-import { OffsetUnit, PackageKind, type Passage } from "logoxide";
+import { ItemView, sanitizeHTMLToDom, setIcon, type HoverParent, type HoverPopover, type WorkspaceLeaf } from "obsidian";
+import { OffsetUnit, PackageKind, type Note, type Passage } from "logoxide";
 import { bookStyle } from "../core/settings.ts";
 import { noteVerses, weightLabel } from "../core/study.ts";
 import { strongsKeys } from "../core/strongs.ts";
@@ -122,18 +122,8 @@ export class CommentaryView extends ItemView {
       for (const { commentary, title, notes } of commentaries) {
         const section = el.createDiv({ cls: "topos-commentary-section" });
         for (const note of notes) {
-          const item = section.createDiv({ cls: "topos-commentary-note" });
-          const label = item.createDiv({ cls: "topos-commentary-label", attr: { title } });
-          label.createSpan({ cls: "topos-commentary-name", text: commentary });
-          label.appendText(" · ");
-          const where = `${book} ${noteVerses(note)}`;
-          const at = label.createSpan({ cls: "topos-commentary-verses", text: where });
-          const target = this.plugin.topos.parse(where.replace(/(\d)[a-z]\b/, "$1"), bookStyle("name"));
-          if (target) this.linkTo(at, target);
-          const body = item.createDiv({ cls: "topos-commentary-body" });
-          body.append(sanitizeHTMLToDom(note.html));
-          this.linkReferences(body, passage);
-          markStrongs(body);
+          const label = renderNote(this.plugin, section, note, book, passage, this);
+          label.prepend(createSpan({ cls: "topos-commentary-name", text: commentary, attr: { title } }), " · ");
         }
       }
       const crossRefs = await packages.crossReferences(passage.osis);
@@ -146,7 +136,7 @@ export class CommentaryView extends ItemView {
             const target = this.plugin.topos.parse(ref.to, bookStyle(this.plugin.settings.style));
             const li = list.createEl("li");
             const link = li.createSpan({ cls: "topos-commentary-ref", text: target?.reference ?? ref.to });
-            if (target) this.linkTo(link, target);
+            if (target) linkPassage(this.plugin, link, target, this);
             const weight = weightLabel(ref.weight);
             li.createSpan({ cls: "topos-commentary-meta", text: weight ? ` ${name} · ${weight}` : ` ${name}` });
           }
@@ -165,40 +155,60 @@ export class CommentaryView extends ItemView {
     this.contentEl.replaceChildren(...Array.from(el.childNodes));
   }
 
-  /** Makes an element open a passage on a click (Ctrl/Cmd or a middle click: a new tab) and preview it on hover */
-  private linkTo(el: HTMLElement, passage: Passage): void {
-    el.addClass("topos-commentary-link");
-    el.setAttribute("role", "link");
-    el.addEventListener("click", (e) => {
-      e.preventDefault();
-      void this.plugin.openPassage(passage, e.ctrlKey || e.metaKey ? "tab" : false);
-    });
-    el.addEventListener("auxclick", (e) => {
-      if (e.button === 1) void this.plugin.openPassage(passage, "tab");
-    });
-    el.addEventListener("mouseover", (e) => void this.plugin.previewPassage(e, el, passage, this));
-  }
+}
 
-  /** Links the references in a note's text (`compare Romans 5:8`), but not to the passage shown */
-  private linkReferences(el: HTMLElement, shown: Passage): void {
-    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-    const nodes: Text[] = [];
-    while (walker.nextNode()) nodes.push(walker.currentNode as Text);
-    for (const node of nodes) {
-      const found = this.plugin.topos.search(node.data, OffsetUnit.Utf16).filter((m) => m.passage.osis !== shown.osis);
-      if (found.length === 0) continue;
-      const fragment = document.createDocumentFragment();
-      let last = 0;
-      for (const m of found) {
-        if (m.start < last) continue;
-        fragment.append(node.data.slice(last, m.start));
-        const ref = createSpan({ text: node.data.slice(m.start, m.end) });
-        this.linkTo(ref, m.passage);
-        fragment.append(ref);
-        last = m.end;
-      }
-      fragment.append(node.data.slice(last));
-      node.replaceWith(fragment);
+/**
+ * A commentary's note: a label naming its verses (a link to them; the caller may add the
+ * commentary's name before them) above its text, whose references and Strong's numbers are links
+ * (not to `shown`, the passage it's shown for). Returns the label
+ */
+export function renderNote(plugin: ToposPlugin, parent: HTMLElement, note: Note, book: string, shown: Passage, hoverParent: HoverParent): HTMLElement {
+  const item = parent.createDiv({ cls: "topos-commentary-note" });
+  const label = item.createDiv({ cls: "topos-commentary-label" });
+  const where = `${book} ${noteVerses(note)}`;
+  const at = label.createSpan({ cls: "topos-commentary-verses", text: where });
+  const target = plugin.topos.parse(where.replace(/(\d)[a-z]\b/, "$1"), bookStyle("name"));
+  if (target) linkPassage(plugin, at, target, hoverParent);
+  const body = item.createDiv({ cls: "topos-commentary-body" });
+  body.append(sanitizeHTMLToDom(note.html));
+  linkReferences(plugin, body, shown, hoverParent);
+  markStrongs(body);
+  return label;
+}
+
+/** Makes an element open a passage on a click (Ctrl/Cmd or a middle click: a new tab) and preview it on hover */
+export function linkPassage(plugin: ToposPlugin, el: HTMLElement, passage: Passage, hoverParent: HoverParent): void {
+  el.addClass("topos-commentary-link");
+  el.setAttribute("role", "link");
+  el.addEventListener("click", (e) => {
+    e.preventDefault();
+    void plugin.openPassage(passage, e.ctrlKey || e.metaKey ? "tab" : false);
+  });
+  el.addEventListener("auxclick", (e) => {
+    if (e.button === 1) void plugin.openPassage(passage, "tab");
+  });
+  el.addEventListener("mouseover", (e) => void plugin.previewPassage(e, el, passage, hoverParent));
+}
+
+/** Links the references in a note's text (`compare Romans 5:8`), but not to the passage shown */
+export function linkReferences(plugin: ToposPlugin, el: HTMLElement, shown: Passage, hoverParent: HoverParent): void {
+  const walker = el.doc.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  const nodes: Text[] = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode as Text);
+  for (const node of nodes) {
+    const found = plugin.topos.search(node.data, OffsetUnit.Utf16).filter((m) => m.passage.osis !== shown.osis);
+    if (found.length === 0) continue;
+    const fragment = el.doc.createDocumentFragment();
+    let last = 0;
+    for (const m of found) {
+      if (m.start < last) continue;
+      fragment.append(node.data.slice(last, m.start));
+      const ref = createSpan({ text: node.data.slice(m.start, m.end) });
+      linkPassage(plugin, ref, m.passage, hoverParent);
+      fragment.append(ref);
+      last = m.end;
     }
+    fragment.append(node.data.slice(last));
+    node.replaceWith(fragment);
   }
 }

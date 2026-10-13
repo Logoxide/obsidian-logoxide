@@ -608,6 +608,16 @@ export class ToposSettingsPanel {
         }),
       );
     new Setting(study)
+      .setName("Mark verses with notes")
+      .setDesc("A mark beside each verse a commentary has a note on, in Bible tabs. It opens the *Commentaries* tab of the Bible's sidebar on that verse. Also the *Toggle commentary marks* command.")
+      .addToggle((t) =>
+        t.setValue(settings.commentaryMarks).onChange((value) => {
+          settings.commentaryMarks = value;
+          void this.plugin.saveData(settings);
+          this.plugin.refreshCommentaries();
+        }),
+      );
+    new Setting(study)
       .setName("Stretch notes over the verses after them")
       .setDesc("A commentary's note also covers the verses after it up to its next note in the chapter, so a verse the commentary skips shows the note before it. Off by default: a commentary may skip verses on purpose.")
       .addToggle((t) =>

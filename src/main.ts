@@ -120,6 +120,7 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
     this.bibleTextChanged();
     this.bibles.reset();
     this.resetTranslations(true);
+    this.refreshCommentaries();
   });
   /** Adds, installs, and removes logoxide packages */
   bibleManager = new BibleManager(this);
@@ -1190,6 +1191,7 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
   /** Shows the open commentary views again (a setting changed what they show) */
   refreshCommentaries(): void {
     for (const view of this.commentaryViews()) void view.render();
+    for (const view of this.views()) if (view instanceof BibleView) view.commentaries?.refresh();
   }
 
   /** Opens the commentary view in the right sidebar (or shows it), on a passage when given */
@@ -1288,6 +1290,26 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
           const names = this.packages.names();
           new Notice(problems.length > 0 ? problems.join("\n") : names.length > 0 ? `Bibles from logoxide: ${names.join(", ")}` : "No logoxide packages (logoxide.toml)");
         }),
+    });
+    this.addCommand({
+      id: "toggle-commentary-marks",
+      name: "Toggle commentary marks",
+      callback: () => {
+        this.settings.commentaryMarks = !this.settings.commentaryMarks;
+        void this.saveData(this.settings);
+        this.refreshCommentaries();
+      },
+    });
+    this.addCommand({
+      id: "show-commentaries-tab",
+      name: "Show the commentaries in the Bible's sidebar",
+      checkCallback: (checking) => {
+        const view = this.app.workspace.getActiveViewOfType(BibleView);
+        const verse = view?.reader?.verseInView();
+        if (!view?.commentaries || !verse) return false;
+        if (!checking) view.commentaries.showVerse(verse.chapter, verse.verse);
+        return true;
+      },
     });
     this.addCommand({
       id: "open-commentary",
