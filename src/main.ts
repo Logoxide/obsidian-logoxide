@@ -442,7 +442,7 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
   async openPassage(passage: Passage, newLeaf?: PaneType | boolean, translation?: string | null): Promise<void> {
     const bible = translation ? this.bibles.named(translation) : this.bibles.current();
     const file = this.settings.referenceLinks === "bible" && bible ? await this.bibles.bookFile(passage, bible) : null;
-    if (file) await this.openDocument(file, this.passageLocator(passage), newLeaf);
+    if (file) await this.openDocument(file, this.passageLocator(passage), newLeaf, { eState: { link: true } });
     else this.openReference(passage, translation);
   }
 
@@ -644,7 +644,7 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
             const { path, subpath } = parseLinktext(linktext);
             if (path && !plugin.app.metadataCache.getFirstLinkpathDest(path, sourcePath)) {
               const file = await plugin.namedBibleBook(path, subpath);
-              if (file) return plugin.openDocument(file, subpath.replace(/^#/, ""), newLeaf, state);
+              if (file) return plugin.openDocument(file, subpath.replace(/^#/, ""), newLeaf, { ...state, eState: { ...(state?.eState as object | undefined), link: true } });
               const passage = wholeReference(plugin.topos, decodeURI(path));
               if (passage) return plugin.openPassage(passage, newLeaf);
             }
