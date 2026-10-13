@@ -444,3 +444,11 @@ async function loadInputs() {
   });
   return import(out);
 }
+
+test("--verses: whole chapters don't count, nor single-chapter books with --skip-single-chapter", () => {
+  const kept = (filters: Partial<Filters>) =>
+    ["John 3:16", "John 3", "John 2-4", "John 2; 3:16", "Jude 25"].filter((r) => keep(topos, compileFilters(topos, { ...NO_FILTERS, ...filters }), topos.parse(r, 0)!));
+  assert.deepEqual(kept({ verses: true }), ["John 3:16", "John 2; 3:16", "Jude 25"]);
+  assert.deepEqual(kept({ verses: true, skipSingleChapter: true }), ["John 3:16", "John 2; 3:16"]);
+  assert.equal(kept({}).length, 5);
+});

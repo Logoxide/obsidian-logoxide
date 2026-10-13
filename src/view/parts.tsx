@@ -3,8 +3,8 @@ import type { Filters, Testament } from "../core/filters.ts";
 import type { Hit } from "../core/search.ts";
 import type ToposPlugin from "../main.ts";
 
-/** The filters that are lists of names or passages */
-export type ListKey = Exclude<keyof Filters, "testaments" | "excludeTestaments">;
+export type { ListKey } from "../core/filters.ts";
+import type { ListKey } from "../core/filters.ts";
 
 /** The passage filters, like the CLI's */
 export const PASSAGE_ROWS: { key: ListKey; label: string; hint: string; placeholder: string }[] = [

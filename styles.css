@@ -2199,3 +2199,6 @@ body.theme-dark {
 .topos-switcher-icon, .topos-switcher-chevron { display: flex; }
 .topos-switcher-chevron svg { width: 12px; height: 12px; }
 .topos-switcher-label { white-space: nowrap; }
+
+/* The search's switches (--verses) */
+.topos-filter-check { display: flex; align-items: center; gap: 0.4em; font-size: var(--font-ui-small); color: var(--text-muted); }

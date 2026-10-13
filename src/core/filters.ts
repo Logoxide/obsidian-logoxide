@@ -27,7 +27,17 @@ export interface Filters {
   exactOverlap: string[];
   /** Drop references that share any verse with one of these passages (`--exclude-overlap`) */
   excludeOverlap: string[];
+  /** Keep references that name a verse, not whole chapters alone (`--verses`: John 3:16 and John 2; 3:16, not John 3) */
+  verses: boolean;
+  /** With `verses`, also drop references in single-chapter books, whose numbers are verses (`Jude 25`; `--skip-single-chapter`) */
+  skipSingleChapter: boolean;
 }
+
+/** The filters that are switches, not lists */
+export const FILTER_FLAGS = ["verses", "skipSingleChapter"] as const;
+export type FlagKey = (typeof FILTER_FLAGS)[number];
+/** The filters that are lists of names or passages */
+export type ListKey = Exclude<keyof Filters, "testaments" | "excludeTestaments" | FlagKey>;
 
 /** The filters that keep references by passage (joined with OR) */
 export const PASSAGE_INCLUSIONS = ["inside", "anyOverlap", "explicitOverlap", "exactOverlap"] as const;
@@ -44,6 +54,8 @@ export const NO_FILTERS: Filters = {
   explicitOverlap: [],
   exactOverlap: [],
   excludeOverlap: [],
+  verses: false,
+  skipSingleChapter: false,
 };
 
 /** Filters resolved against the book data, ready to test passages quickly */
@@ -57,6 +69,10 @@ export interface CompiledFilter {
   explicitOverlap: Passage[];
   exactOverlap: Passage[];
   excludeOverlap: Passage[];
+  /** Only references that name a verse (`--verses`), and whether single-chapter books' count */
+  verses: { singleChapterBooks: boolean } | null;
+  /** The books with one chapter (for `skipSingleChapter`) */
+  singleChapter: Set<number>;
   /** Names or passages that could not be understood */
   errors: string[];
 }
@@ -70,8 +86,15 @@ function range(from: number, to: number): number[] {
   return Array.from({ length: to - from + 1 }, (_, i) => from + i);
 }
 
+/** How many filters are set: each name or passage, and each switch on */
+export function filterCount(filters: Filters): number {
+  let n = 0;
+  for (const [key, value] of Object.entries(filters)) n += (FILTER_FLAGS as readonly string[]).includes(key) ? (key === "verses" && value ? 1 : 0) : (value as unknown[]).length;
+  return n;
+}
+
 export function isEmpty(filters: Filters): boolean {
-  return Object.values(filters).every((values) => values.length === 0);
+  return filterCount(filters) === 0;
 }
 
 /** Resolves names and passages, with the CLI's rules (see {@link Filters}) */
@@ -147,7 +170,9 @@ export function compileFilters(topos: Topos, filters: Filters): CompiledFilter {
     }
   }
 
-  return { books, conflict, inside, anyOverlap, explicitOverlap, exactOverlap, excludeOverlap, errors };
+  const verses = filters.verses ? { singleChapterBooks: !filters.skipSingleChapter } : null;
+  const singleChapter = new Set(verses && !verses.singleChapterBooks ? topos.books().filter((b) => b.chapters === 1).map((b) => b.id) : []);
+  return { books, conflict, inside, anyOverlap, explicitOverlap, exactOverlap, excludeOverlap, verses, singleChapter, errors };
 }
 
 /** The parts of a passage that name verses, leaving out whole chapters, or null if none do */
@@ -159,6 +184,7 @@ export function explicitVerses(passage: Passage): Passage | null {
 /** Whether a found passage passes the filter */
 export function keep(topos: Topos, filter: CompiledFilter, passage: Passage): boolean {
   if (filter.books && !filter.books.has(passage.bookId)) return false;
+  if (filter.verses && (explicitVerses(passage) === null || filter.singleChapter.has(passage.bookId))) return false;
   const hasPassageInclusion = PASSAGE_INCLUSIONS.some((key) => filter[key].length > 0);
   if (hasPassageInclusion) {
     const named = filter.explicitOverlap.length > 0 ? explicitVerses(passage) : null;

@@ -59,6 +59,7 @@ export function toQuery(topos: Topos, filters: Filters): ToposQuery {
   for (const p of filters.explicitOverlap.filter(passage)) query = query.explicitOverlap(p);
   for (const p of filters.exactOverlap.filter(passage)) query = query.exactOverlap(p);
   for (const p of filters.excludeOverlap.filter(passage)) query = query.excludeOverlap(p);
+  if (filters.verses) query = query.verses(!filters.skipSingleChapter);
   return query;
 }
 

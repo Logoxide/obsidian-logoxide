@@ -32,6 +32,8 @@ test("queries use the CLI's filter options", () => {
     explicitOverlap: ["John 2"],
     exactOverlap: ["John 3:16"],
     excludeOverlap: ["Ps 23", "Ps 24"],
+    verses: false,
+    skipSingleChapter: false,
   });
 });
 
@@ -85,4 +87,13 @@ test("saved searches from before 0.4.0 keep their meaning", () => {
   );
   // One that can't be read is left alone
   assert.equal(migrateQuery("--bogus -o x"), "--bogus -o x");
+});
+
+test("--verses keeps references that name a verse; --skip-single-chapter needs it", () => {
+  const parsed = parseQuery("--nt --verses --skip-single-chapter");
+  assert.equal(parsed.filters.verses, true);
+  assert.equal(parsed.filters.skipSingleChapter, true);
+  assert.deepEqual(parsed.errors, []);
+  assert.equal(formatQuery(parsed.filters), "--nt --verses --skip-single-chapter");
+  assert.deepEqual(parseQuery("--skip-single-chapter").errors, ["--skip-single-chapter needs --verses"]);
 });

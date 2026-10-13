@@ -11,7 +11,7 @@ import {
 import type { Passage } from "logoxide";
 import { chosenExtensions, extensionOf, toggleExtension } from "../core/file-types.ts";
 import { cleanPath, excludes, parsePattern, patternProblems, patternText, type PathPattern } from "../core/paths.ts";
-import { compileFilters, isEmpty, NO_FILTERS, type Filters, type Testament } from "../core/filters.ts";
+import { compileFilters, filterCount, isEmpty, NO_FILTERS, type Filters, type Testament } from "../core/filters.ts";
 import { written } from "../core/format.ts";
 import { formatQuery, parseQuery } from "../core/query.ts";
 import type { Hit } from "../core/search.ts";
@@ -225,7 +225,7 @@ export function PaneApp({
   const removeFrom = (key: ListKey) => (i: number) =>
     setFilters({ [key]: state.filters[key].filter((_, j) => j !== i) } as Partial<Filters>);
 
-  const activeFilters = Object.values(state.filters).reduce((n, values) => n + values.length, 0);
+  const activeFilters = filterCount(state.filters);
   const query = formatQuery(state.filters, searchWhere(state));
   const savedQueries = plugin.settings.queries;
   const sameQuery = (text: string) => {
@@ -301,6 +301,18 @@ export function PaneApp({
             />
           </FilterRow>
         ))}
+        <FilterRow label="Verses" hint="only references that name a verse (--verses)">
+          <label className="topos-filter-check">
+            <input type="checkbox" checked={state.filters.verses} onChange={(e) => setFilters({ verses: e.currentTarget.checked, ...(e.currentTarget.checked ? {} : { skipSingleChapter: false }) })} />
+            Not whole chapters (John 3)
+          </label>
+          {state.filters.verses && (
+            <label className="topos-filter-check">
+              <input type="checkbox" checked={state.filters.skipSingleChapter} onChange={(e) => setFilters({ skipSingleChapter: e.currentTarget.checked })} />
+              Not single-chapter books (Jude 25)
+            </label>
+          )}
+        </FilterRow>
         {filter.errors.length > 0 && (
           <ul className="topos-errors">
             {filter.errors.map((error) => (

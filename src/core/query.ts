@@ -1,4 +1,4 @@
-import { NO_FILTERS, type Filters, type Testament } from "./filters.ts";
+import { NO_FILTERS, type Filters, type ListKey, type Testament } from "./filters.ts";
 import { cleanPath, EVERYWHERE, type PathPattern, type Where } from "./paths.ts";
 
 /** A named search, saved in the settings */
@@ -16,8 +16,6 @@ export interface ParsedQuery extends Where {
   filters: Filters;
   errors: string[];
 }
-
-type ListKey = Exclude<keyof Filters, "testaments" | "excludeTestaments">;
 
 const LIST_OPTIONS: Record<string, ListKey> = {
   "-g": "genres",
@@ -95,6 +93,14 @@ export function parseQuery(text: string, { legacy = false }: { legacy?: boolean 
       value = option.slice(eq + 1);
       option = option.slice(0, eq);
     }
+    if (option === "--verses") {
+      filters.verses = true;
+      continue;
+    }
+    if (option === "--skip-single-chapter") {
+      filters.skipSingleChapter = true;
+      continue;
+    }
     if (option === "--nt" || option === "--ot") {
       const t: Testament = option === "--nt" ? "new" : "old";
       if (!filters.testaments.includes(t)) filters.testaments.push(t);
@@ -121,6 +127,7 @@ export function parseQuery(text: string, { legacy = false }: { legacy?: boolean 
       else if (!filters[testamentKey].includes(t)) filters[testamentKey].push(t);
     }
   }
+  if (filters.skipSingleChapter && !filters.verses) errors.push("--skip-single-chapter needs --verses");
   return { filters, paths, patterns, errors };
 }
 
@@ -146,6 +153,8 @@ export function formatQuery(filters: Filters, where: Where = EVERYWHERE): string
     ["excludeOverlap", "--exclude-overlap"],
   ];
   for (const [key, option] of lists) for (const value of filters[key]) parts.push(option, quote(value));
+  if (filters.verses) parts.push("--verses");
+  if (filters.verses && filters.skipSingleChapter) parts.push("--skip-single-chapter");
   const patternOption = { glob: "--glob", iglob: "--iglob", regex: "--path-regex" };
   for (const { kind, pattern } of where.patterns) parts.push(patternOption[kind], quote(pattern));
   return parts.join(" ");
