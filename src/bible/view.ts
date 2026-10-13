@@ -120,13 +120,19 @@ export class BibleView extends DocumentView<BibleBook, BibleReader> {
         if (reader === this.reader && !(now && !now.collapsed)) this.openVerseMenu(verse.chapter, verse.verse);
       }, 330);
     };
-    // A triple click selects the verse, a fourth the paragraph (the browser's triple click: the paragraph)
+    // A triple click selects the verse, a fourth the paragraph (the browser's triple click: the
+    // paragraph). Counted here: Chromium on Linux starts again at 1 after a triple click
+    let clicks = { count: 0, at: 0, x: 0, y: 0 };
     const onMouseDown = (e: MouseEvent) => {
-      if (e.button !== 0 || e.detail < 3 || Date.now() - touchedAt < 800) return;
+      if (e.button !== 0 || Date.now() - touchedAt < 800) return;
+      const now = Date.now();
+      const again = e.detail > 1 || (now - clicks.at < 600 && Math.hypot(e.clientX - clicks.x, e.clientY - clicks.y) < 8);
+      clicks = { count: again ? Math.max(clicks.count + 1, e.detail) : 1, at: now, x: e.clientX, y: e.clientY };
+      if (clicks.count < 3) return;
       const el = e.composedPath()[0];
       if (!(el instanceof Element) || !reader.content.contains(el) || el.closest(TAP_IGNORES)) return;
       let range: Range | null = null;
-      if (e.detail === 3) {
+      if (clicks.count === 3) {
         const verse = reader.verseAtPoint(e.clientX, e.clientY, el);
         range = verse && reader.versesRange({ chapter: verse.chapter, verse: verse.verse, endChapter: verse.chapter, endVerse: verse.verse });
       } else {
