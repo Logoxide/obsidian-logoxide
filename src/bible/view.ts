@@ -120,6 +120,29 @@ export class BibleView extends DocumentView<BibleBook, BibleReader> {
         if (reader === this.reader && !(now && !now.collapsed)) this.openVerseMenu(verse.chapter, verse.verse);
       }, 330);
     };
+    // A triple click selects the verse, a fourth the paragraph (the browser's triple click: the paragraph)
+    const onMouseDown = (e: MouseEvent) => {
+      if (e.button !== 0 || e.detail < 3 || Date.now() - touchedAt < 800) return;
+      const el = e.composedPath()[0];
+      if (!(el instanceof Element) || !reader.content.contains(el) || el.closest(TAP_IGNORES)) return;
+      let range: Range | null = null;
+      if (e.detail === 3) {
+        const verse = reader.verseAtPoint(e.clientX, e.clientY, el);
+        range = verse && reader.versesRange({ chapter: verse.chapter, verse: verse.verse, endChapter: verse.chapter, endVerse: verse.verse });
+      } else {
+        const block = el.closest(PARAGRAPHS);
+        if (block && reader.content.contains(block)) {
+          range = block.ownerDocument.createRange();
+          range.selectNodeContents(block);
+        }
+      }
+      if (!range) return;
+      e.preventDefault();
+      const selection = this.contentEl.doc.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    };
+    reader.scroller.addEventListener("mousedown", onMouseDown, true);
     reader.scroller.addEventListener("touchstart", onTouchStart, { capture: true, passive: true });
     reader.scroller.addEventListener("click", onClick, true);
     // The commentary view follows the verse at the top
@@ -129,6 +152,7 @@ export class BibleView extends DocumentView<BibleBook, BibleReader> {
     this.offReader.push(
       () => offRelocated?.(),
       () => reader.scroller.removeEventListener("click", onClick, true),
+      () => reader.scroller.removeEventListener("mousedown", onMouseDown, true),
       () => reader.scroller.removeEventListener("touchstart", onTouchStart, true),
       () => window.clearTimeout(tapTimer),
       () => follower.destroy(),
@@ -474,3 +498,6 @@ export class BibleView extends DocumentView<BibleBook, BibleReader> {
 
 /** Where a tap is something else's: links, notes and their marks, the commentary marks, popups */
 const TAP_IGNORES = "a, .topos-note, .tpb-note-ref, .topos-note-marks, .topos-strongs-popup, .tpb-note-popup";
+
+/** What a fourth click selects: the block it's in */
+const PARAGRAPHS = "p, li, blockquote, h1, h2, h3, h4, h5, h6, dd, dt, td, pre";
