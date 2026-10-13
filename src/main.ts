@@ -1195,6 +1195,7 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
       if (!(view instanceof BibleView)) continue;
       view.commentaries?.refresh();
       view.crossReferences?.refresh();
+      view.language?.refresh();
     }
   }
 

@@ -7,7 +7,8 @@ import { linkPassage, renderNote } from "./commentary.ts";
 import type { Bible } from "../core/bibles.ts";
 import type { CommentaryNotes } from "./packages.ts";
 import type { BibleReader } from "./reader.ts";
-import { strongsPopups } from "./strongs.ts";
+import { markStrongs, renderEntries, strongsPopups } from "./strongs.ts";
+import { wordStrongs } from "../core/strongs.ts";
 import type { BibleView } from "./view.ts";
 
 /** The Bible tab's sidebar tabs */
@@ -356,4 +357,99 @@ function byWeight<T extends { weight: number | null }>(references: readonly T[])
     .map((ref, i) => ({ ref, i }))
     .sort((a, b) => (b.ref.weight ?? -Infinity) - (a.ref.weight ?? -Infinity) || a.i - b.i)
     .map(({ ref }) => ref);
+}
+
+export const LANGUAGE_TAB = "language";
+
+/** A word of a verse that carries Strong's numbers, and its text */
+interface TaggedWord {
+  el: HTMLElement;
+  text: string;
+  keys: string[];
+}
+
+/**
+ * The *Language tools* tab: each word of a verse whose markup names its Strong's numbers, with the
+ * vault's dictionary entries for them (read when a word is opened). `showWord` opens it on a word
+ */
+export class LanguageTab extends VerseTab {
+  /** A word to open and scroll to (in its verse) */
+  private word: HTMLElement | null = null;
+
+  constructor(view: BibleView, plugin: ToposPlugin) {
+    super(view, plugin, LANGUAGE_TAB, "languages", "Language tools");
+  }
+
+  /** Opens the tab on a word's verse, the word open */
+  showWord(word: HTMLElement): void {
+    const verse = this.reader?.verseOf(word);
+    if (!verse) return;
+    this.word = word;
+    this.showVerse(verse.chapter, verse.verse);
+  }
+
+  /** The words of a verse that carry Strong's numbers, in order */
+  private words(reader: BibleReader, verse: Place): TaggedWord[] {
+    const range = reader.versesRange({ chapter: verse.chapter, verse: verse.verse, endChapter: verse.chapter, endVerse: verse.verse });
+    if (!range) return [];
+    const words: TaggedWord[] = [];
+    for (const el of Array.from(reader.content.querySelectorAll<HTMLElement>("[data-strong]"))) {
+      if (!range.intersectsNode(el) || el.closest(".topos-note")) continue;
+      const keys = wordStrongs(el.dataset.strong);
+      const text = (el.textContent ?? "").trim();
+      if (keys.length > 0 && text) words.push({ el, text, keys });
+    }
+    return words;
+  }
+
+  protected async build(el: HTMLElement): Promise<void> {
+    const reader = this.reader;
+    const verse = this.verse;
+    if (!reader || !verse) {
+      el.createDiv({ cls: "topos-commentary-empty", text: "Scroll to a verse to look up its words." });
+      return;
+    }
+    const passage = this.heading(el, reader, verse);
+    const words = this.words(reader, verse);
+    if (words.length === 0) {
+      el.createDiv({ cls: "topos-commentary-empty", text: `This Bible's text of ${passage?.reference ?? "this verse"} names no Strong's numbers. A Bible tagged with them (the KJV with Strong's, for one) gives each word's entry.` });
+      return;
+    }
+    if (!this.plugin.packages.hasStrongs()) {
+      el.createDiv({ cls: "topos-commentary-empty", text: "The vault has no Strong's dictionaries yet: add one under Settings → Logoxide → Add Bibles." });
+    }
+    const list = el.createDiv({ cls: "topos-study-words" });
+    // The word asked for (`showWord`), while its verse is the one shown
+    const wanted = this.word;
+    let opened: HTMLElement | null = null;
+    for (const word of words) {
+      const details = list.createEl("details", { cls: "topos-study-word" });
+      const summary = details.createEl("summary");
+      summary.createSpan({ cls: "topos-study-word-text", text: word.text });
+      summary.createSpan({ cls: "topos-commentary-meta", text: ` ${word.keys.join(" ")}` });
+      const body = details.createDiv({ cls: "topos-study-word-entries" });
+      let read = false;
+      details.addEventListener("toggle", () => {
+        if (!details.open || read) return;
+        read = true;
+        body.setText("…");
+        void Promise.all(word.keys.map(async (key) => ({ key, entries: await this.plugin.packages.entries(key, TEXT_OPTIONS) }))).then((found) => {
+          body.empty();
+          for (const { key, entries } of found) renderEntries(body.createDiv(), key, entries);
+          for (const text of Array.from(body.querySelectorAll<HTMLElement>(".topos-strongs-body"))) markStrongs(text);
+        });
+      });
+      // Its word in the text, on hover
+      summary.addEventListener("mouseenter", () => word.el.classList.add("topos-word-shown"));
+      summary.addEventListener("mouseleave", () => word.el.classList.remove("topos-word-shown"));
+      if (word.el === wanted) {
+        details.open = true;
+        opened = details;
+      }
+    }
+    if (opened) {
+      const target = opened;
+      window.setTimeout(() => target.scrollIntoView({ block: "nearest" }), 0);
+    }
+  }
 }

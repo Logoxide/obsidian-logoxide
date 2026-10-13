@@ -76,8 +76,15 @@ export function renderEntries(el: HTMLElement, key: string, entries: DictionaryE
   }
 }
 
-/** Shows a word's Strong's entries in a popup beside it; returns what removes its listeners, whose `hide` hides the popup (before the content is drawn again) */
-export function strongsPopups(scroller: HTMLElement, content: HTMLElement, options: StrongsPopupOptions): (() => void) & { hide(): void } {
+/** What `strongsPopups` returns: removes its listeners; `hide` hides the popup (before the content is drawn again), `open` shows a word's, pinned */
+export type StrongsPopups = (() => void) & {
+  hide(): void;
+  /** Shows a word's entries until a press elsewhere, with `actions` (buttons) added below them */
+  open(word: HTMLElement, actions?: (el: HTMLElement) => void): void;
+};
+
+/** Shows a word's Strong's entries in a popup beside it */
+export function strongsPopups(scroller: HTMLElement, content: HTMLElement, options: StrongsPopupOptions): StrongsPopups {
   const doc = scroller.ownerDocument;
   const win = doc.defaultView ?? window;
   let popup: HTMLElement | null = null;
@@ -96,7 +103,7 @@ export function strongsPopups(scroller: HTMLElement, content: HTMLElement, optio
     shown = null;
     pinned = false;
   };
-  const show = async (word: HTMLElement) => {
+  const show = async (word: HTMLElement, actions?: (el: HTMLElement) => void) => {
     if (shown === word) return;
     const keys = wordStrongs(word.dataset.strong);
     if (keys.length === 0) return;
@@ -123,6 +130,11 @@ export function strongsPopups(scroller: HTMLElement, content: HTMLElement, optio
     if (popup !== el) return;
     el.replaceChildren();
     for (const { key, entries } of found) renderEntries(el.appendChild(doc.createElement("div")), key, entries);
+    if (actions) {
+      const row = el.appendChild(doc.createElement("div"));
+      row.className = "topos-strongs-actions";
+      actions(row);
+    }
     place(el, word);
   };
   const kept = () => !!popup?.matches(":hover") || (!!shown?.isConnected && shown.matches(":hover"));
@@ -176,7 +188,12 @@ export function strongsPopups(scroller: HTMLElement, content: HTMLElement, optio
     doc.removeEventListener("pointerdown", down, true);
     doc.removeEventListener("keydown", key);
   };
-  return Object.assign(off, { hide });
+  const open = (word: HTMLElement, actions?: (el: HTMLElement) => void) => {
+    hide();
+    void show(word, actions);
+    pinned = true;
+  };
+  return Object.assign(off, { hide, open });
 }
 
 /** The popup's look (the reader's stylesheet has it too, since it renders in a shadow root) */
@@ -210,4 +227,14 @@ export const STRONGS_CSS = /* css */ `
   margin-bottom: 0.2em;
 }
 .topos-strongs-none { opacity: 0.65; font-style: italic; }
+.topos-strongs-actions {
+  display: flex; flex-wrap: wrap; gap: 0.4em; margin-top: 0.6em; padding-top: 0.5em;
+  border-top: 1px solid var(--background-modifier-border, rgba(128, 128, 128, 0.3));
+  font-family: var(--font-interface, system-ui, sans-serif);
+}
+.topos-strongs-actions button {
+  font: inherit; font-size: 0.85em; padding: 0.3em 0.7em; border-radius: var(--radius-s, 4px); cursor: pointer;
+  border: 1px solid var(--background-modifier-border, rgba(128, 128, 128, 0.3));
+  background: var(--interactive-normal, transparent); color: inherit;
+}
 `;

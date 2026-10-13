@@ -1,4 +1,4 @@
-import { Notice, setIcon, type Menu } from "obsidian";
+import { Menu, Notice, setIcon } from "obsidian";
 import { DocumentView, MediaPlayer, PlaybackFollower } from "file-plus-plus/obsidian";
 import { PREFIX, type SelectionInfo, type TocItem } from "file-plus-plus/core";
 import { clipOf, timingAt, timingOf, type Timing } from "../core/timings.ts";
@@ -8,7 +8,7 @@ import type ToposPlugin from "../main.ts";
 import { openPassagePicker } from "./picker.ts";
 import type { Recording } from "./packages.ts";
 import type { BibleBook, BibleReader } from "./reader.ts";
-import { CommentariesTab, CrossReferencesTab } from "./study-tab.ts";
+import { CommentariesTab, CrossReferencesTab, LanguageTab } from "./study-tab.ts";
 
 /**
  * Marks the verse a player is reading in a reader, as it plays: the timing at the player's time, its
@@ -56,6 +56,8 @@ export class BibleView extends DocumentView<BibleBook, BibleReader> {
   commentaries: CommentariesTab | null = null;
   /** The sidebar's *Cross-references* tab */
   crossReferences: CrossReferencesTab | null = null;
+  /** The sidebar's *Language tools* tab */
+  language: LanguageTab | null = null;
 
   private get topos(): ToposPlugin {
     return this.plugin as unknown as ToposPlugin;
@@ -73,25 +75,52 @@ export class BibleView extends DocumentView<BibleBook, BibleReader> {
     this.listenButton.hide();
     this.commentaries = new CommentariesTab(this, this.topos);
     this.crossReferences = new CrossReferencesTab(this, this.topos);
+    this.language = new LanguageTab(this, this.topos);
     this.register(() => {
       this.commentaries?.destroy();
       this.crossReferences?.destroy();
+      this.language?.destroy();
     });
   }
 
   protected override onReaderReady(reader: BibleReader): void {
     const follower = (this.follower = new PlaybackFollower(reader));
-    // A verse number plays from its verse: while the player is open, or with Ctrl/Cmd
+    // A verse number opens the verse's menu (with Ctrl/Cmd, when the book has a recording: plays
+    // from it); a tap on a verse's text too, unless it's on a highlight, a link, or a note
+    let touchedAt = 0;
+    let menuWasOpen = false;
+    let tapTimer = 0;
+    const onTouchStart = () => {
+      touchedAt = Date.now();
+      menuWasOpen = !!this.contentEl.doc.querySelector(".menu");
+      // A second tap: file-plus-plus's double tap (the paragraph), not this tap's menu
+      window.clearTimeout(tapTimer);
+    };
     const onClick = (e: MouseEvent) => {
       const el = e.composedPath()[0];
-      if (!(el instanceof Element) || !el.classList.contains("topos-verse") || !this.recording) return;
-      if (!this.player && !(e.ctrlKey || e.metaKey)) return;
-      const verse = reader.verseOfMarker(el);
+      if (!(el instanceof Element)) return;
+      if (el.classList.contains("topos-verse")) {
+        const verse = reader.verseOfMarker(el);
+        if (!verse) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (this.recording && (e.ctrlKey || e.metaKey)) void this.playFrom(verse.chapter, verse.verse);
+        else this.openVerseMenu(verse.chapter, verse.verse);
+        return;
+      }
+      const touch = Date.now() - touchedAt < 800;
+      if (!touch || menuWasOpen || !reader.content.contains(el) || el.closest(TAP_IGNORES)) return;
+      const range = reader.getSelectionRange();
+      if ((range && !range.collapsed) || reader.highlightsAt(e.clientX, e.clientY).length > 0 || reader.layerHitsAt(e.clientX, e.clientY).length > 0) return;
+      const verse = reader.verseAtPoint(e.clientX, e.clientY, el);
       if (!verse) return;
-      e.preventDefault();
-      e.stopPropagation();
-      void this.playFrom(verse.chapter, verse.verse);
+      window.clearTimeout(tapTimer);
+      tapTimer = window.setTimeout(() => {
+        const now = reader.getSelectionRange();
+        if (reader === this.reader && !(now && !now.collapsed)) this.openVerseMenu(verse.chapter, verse.verse);
+      }, 330);
     };
+    reader.scroller.addEventListener("touchstart", onTouchStart, { capture: true, passive: true });
     reader.scroller.addEventListener("click", onClick, true);
     // The commentary view follows the verse at the top
     const offRelocated = reader.on("relocated", (loc) => {
@@ -100,6 +129,8 @@ export class BibleView extends DocumentView<BibleBook, BibleReader> {
     this.offReader.push(
       () => offRelocated?.(),
       () => reader.scroller.removeEventListener("click", onClick, true),
+      () => reader.scroller.removeEventListener("touchstart", onTouchStart, true),
+      () => window.clearTimeout(tapTimer),
       () => follower.destroy(),
     );
     // Re-rendered (edited, or the settings changed): the player keeps playing, now marking this reader
@@ -107,6 +138,7 @@ export class BibleView extends DocumentView<BibleBook, BibleReader> {
     void this.findRecording(reader);
     this.commentaries?.attach(reader);
     this.crossReferences?.attach(reader);
+    this.language?.attach(reader);
   }
 
   /** Looks for the book's recording (a package's book, through its stub), and offers to listen when it has one */
@@ -274,13 +306,112 @@ export class BibleView extends DocumentView<BibleBook, BibleReader> {
     if (index !== -1) this.player.seek(this.recording.timings[index]!.startMs / 1000, true);
   }
 
-  /** "Play from 3:16" and "Play 3:16-18" (then stops), for the verse right-clicked or the selection */
+  /**
+   * A verse's menu (a tap on it, its number): the verse selected, to copy or annotate, its
+   * cross-references, commentaries, and words, and playing it
+   */
+  openVerseMenu(chapter: number, verse: number, at?: { x: number; y: number }): void {
+    const reader = this.reader;
+    const range = reader?.versesRange({ chapter, verse, endChapter: chapter, endVerse: verse });
+    if (!reader || !range) return;
+    reader.setPendingSelection(range);
+    let selecting = false;
+    const menu = new Menu();
+    const name = `${reader.bible.name} ${chapter}:${verse}`;
+    menu.addItem((item) => item.setTitle(name).setIcon("book-open").setSection("title").setIsLabel?.(true));
+    menu.addItem((item) =>
+      item
+        .setTitle("Copy / Annotate…")
+        .setIcon("highlighter")
+        .setSection("selection")
+        // After this menu is gone (it takes the selection's paint away as it goes)
+        .onClick(() => {
+          selecting = true;
+          window.setTimeout(() => this.openSelectionMenu(range), 0);
+        }),
+    );
+    this.addStudyItems(menu, chapter, verse, null);
+    if (this.recording) {
+      menu.addItem((item) =>
+        item
+          .setTitle(`Play from ${chapter}:${verse}`)
+          .setIcon("play")
+          .setSection("view")
+          .onClick(() => void this.playFrom(chapter, verse)),
+      );
+    }
+    menu.onHide(() =>
+      window.setTimeout(() => {
+        if (!selecting) reader.setPendingSelection(null);
+      }, 0),
+    );
+    const r = range.getClientRects()[0] ?? range.getBoundingClientRect();
+    menu.showAtPosition(at ?? { x: r.left + 12, y: r.bottom + 6 });
+  }
+
+  /** Cross-references, Commentaries, and Language tools (a word's, when one is given) for a verse */
+  private addStudyItems(menu: Menu, chapter: number, verse: number, word: HTMLElement | null): void {
+    menu.addItem((item) =>
+      item
+        .setTitle("Cross-references")
+        .setIcon("git-compare-arrows")
+        .setSection("action")
+        .onClick(() => this.crossReferences?.showVerse(chapter, verse)),
+    );
+    menu.addItem((item) =>
+      item
+        .setTitle("Commentaries")
+        .setIcon("message-square-quote")
+        .setSection("action")
+        .onClick(() => this.commentaries?.showVerse(chapter, verse)),
+    );
+    menu.addItem((item) =>
+      item
+        .setTitle(word ? `Language tools: ${word.textContent?.trim() ?? ""}` : "Language tools")
+        .setIcon("languages")
+        .setSection("action")
+        .onClick(() => (word ? this.language?.showWord(word) : this.language?.showVerse(chapter, verse))),
+    );
+  }
+
+  /** A long press on a word that carries Strong's numbers: its entries, with what else it can do */
+  protected override onTextHold(_x: number, _y: number, target: Element | null): boolean {
+    const reader = this.reader;
+    const word = target?.closest<HTMLElement>("[data-strong]");
+    if (!reader?.strongs || !word || !reader.content.contains(word) || word.closest(".topos-note") || !this.topos.packages.hasStrongs()) return false;
+    const verse = reader.verseOf(word);
+    reader.strongs.open(word, (row) => {
+      const button = (text: string, run: () => void) => {
+        const b = row.appendChild(row.ownerDocument.createElement("button"));
+        b.textContent = text;
+        b.addEventListener("click", () => {
+          reader.strongs?.hide();
+          run();
+        });
+      };
+      button("Language tools", () => this.language?.showWord(word));
+      button("Copy / Annotate…", () => {
+        const range = word.ownerDocument.createRange();
+        range.selectNodeContents(word);
+        this.openSelectionMenu(range);
+      });
+      if (verse) button(`${verse.chapter}:${verse.verse}…`, () => this.openVerseMenu(verse.chapter, verse.verse));
+    });
+    return true;
+  }
+
+  /** The verse's (or the selection's) study items, and "Play from 3:16" and "Play 3:16-18" (then stops), for the verse right-clicked or the selection */
   protected override extendSelectionMenu(menu: Menu, info: SelectionInfo): void {
     const reader = this.reader;
-    const recording = this.recording;
-    if (!reader || !recording) return;
+    if (!reader) return;
     // A right-click without a selection gives the paragraph: the verse clicked is the one meant
     const click = this.lastClick && !this.lastClick.selected && Date.now() - this.lastClick.at < 1000 ? this.lastClick : null;
+    const at = click ? reader.verseAtPoint(click.x, click.y, click.target) : reader.versesOf(info.range);
+    const word = click?.target ? (click.target instanceof Element ? click.target : click.target.parentElement)?.closest<HTMLElement>("[data-strong]") ?? null : null;
+    if (at) this.addStudyItems(menu, at.chapter, at.verse, word && reader.content.contains(word) ? word : null);
+    const recording = this.recording;
+    if (!recording) return;
+    // A right-click without a selection gives the paragraph: the verse clicked is the one meant
     const verses = click ? null : reader.versesOf(info.range);
     const clicked = click && reader.verseAtPoint(click.x, click.y, click.target);
     const from = verses ?? (clicked ? { chapter: clicked.chapter, verse: clicked.verse, endChapter: clicked.chapter, endVerse: clicked.verse } : reader.versesOf(info.range));
@@ -327,6 +458,7 @@ export class BibleView extends DocumentView<BibleBook, BibleReader> {
   protected override onTeardown(): void {
     this.commentaries?.detach();
     this.crossReferences?.detach();
+    this.language?.detach();
     this.offReader.forEach((off) => off());
     this.offReader = [];
     this.offFollow?.();
@@ -339,3 +471,6 @@ export class BibleView extends DocumentView<BibleBook, BibleReader> {
     this.recording = null;
   }
 }
+
+/** Where a tap is something else's: links, notes and their marks, the commentary marks, popups */
+const TAP_IGNORES = "a, .topos-note, .tpb-note-ref, .topos-note-marks, .topos-strongs-popup, .tpb-note-popup";

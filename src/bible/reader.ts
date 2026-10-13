@@ -1,7 +1,7 @@
 import { DocumentReader, PREFIX, splitTextDirective, textFragmentScheme, withTextDirective, type LocatorScheme, type ParsedLocator, type ReaderOptions, type TocItem } from "file-plus-plus/core";
 import type { BookTextOptions, LogoxideBook } from "logoxide";
 import { markNotes, notePopups, NOTES_CSS, type NoteLinks } from "./notes.ts";
-import { STRONGS_CSS, strongsPopups, type StrongsPopupOptions } from "./strongs.ts";
+import { STRONGS_CSS, strongsPopups, type StrongsPopupOptions, type StrongsPopups } from "./strongs.ts";
 import { END, formatVerseLocator, parseVerseLocator, partSegments, splitBible, splitContext, splitEdition, withBible, withContext, withContextVerses, withEdition, type VersePart } from "../core/verse-locator.ts";
 
 /** A Bible book opened from a USX file */
@@ -78,6 +78,8 @@ interface Marker {
 export class BibleReader extends DocumentReader {
   readonly schemes = BIBLE_SCHEMES;
   private markers: Marker[] = [];
+  /** The Strong's popups over the text's words (`open` shows one, pinned) */
+  strongs: StrongsPopups | null = null;
   private markerEls: HTMLElement[] = [];
   private _toc: TocItem[] = [];
   private readonly preview: VersePart[] | null;
@@ -113,7 +115,10 @@ export class BibleReader extends DocumentReader {
         verseOf: (note) => this.verseBefore(note),
       }),
     );
-    if (opts.strongs) this.cleanup.push(strongsPopups(this.scroller, this.content, opts.strongs));
+    if (opts.strongs) {
+      this.strongs = strongsPopups(this.scroller, this.content, opts.strongs);
+      this.cleanup.push(this.strongs);
+    }
   }
 
   get toc(): TocItem[] {
@@ -380,6 +385,11 @@ ${NOTE_MARKS_CSS}`;
     return found ? { chapter: found.chapter, verse: found.verse } : null;
   }
 
+  /** The verse an element of the text is in */
+  verseOf(el: Element): { chapter: number; verse: number } | null {
+    return this.verseBefore(el);
+  }
+
   /** The verse an element is in: the last verse number before it */
   private verseBefore(el: Element): { chapter: number; verse: number } | null {
     let found: Marker | null = null;
@@ -590,4 +600,6 @@ const NOTE_MARKS_CSS = /* css */ `
 .topos-note-mark svg { width: 13px; height: 13px; }
 /* A finger's worth to tap, without a bigger mark */
 .topos-note-mark::after { content: ""; position: absolute; inset: -6px; }
+/* A word the Language tools tab points at */
+.topos-word-shown { background: color-mix(in srgb, var(--interactive-accent, #7c5cff) 25%, transparent); border-radius: 3px; }
 `;
