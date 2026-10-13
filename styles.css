@@ -2144,6 +2144,10 @@ body.theme-dark {
   font-weight: 600;
   margin-bottom: 0.3em;
 }
+.topos-study-xref-list { list-style: none; margin: 0; padding: 0 0 0 0.9em; border-left: 2px solid var(--background-modifier-border); }
+.topos-study-xref-list > li { margin-bottom: 0.5em; }
+.topos-study-xref-text { color: var(--text-muted); line-height: 1.45; }
+.topos-study-more { margin: 0.2em 0 0 0.9em; font-size: var(--font-ui-smaller); }
 .topos-study-commentary > .topos-commentary-note { padding-left: 0.9em; border-left: 2px solid var(--background-modifier-border); }
 
 /* Strong's entries: popups in the commentary view, the editor's hover (src/bible/strongs.ts) */

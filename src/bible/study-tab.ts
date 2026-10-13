@@ -1,45 +1,43 @@
 import { setIcon, type HoverParent } from "obsidian";
 import { PackageKind, type Passage } from "logoxide";
 import { bookStyle } from "../core/settings.ts";
-import { notedVerses, studyGroups, type NotesOf } from "../core/study.ts";
+import { notedVerses, studyGroups, weightLabel, type NotesOf } from "../core/study.ts";
 import type ToposPlugin from "../main.ts";
-import { renderNote } from "./commentary.ts";
+import { linkPassage, renderNote } from "./commentary.ts";
+import type { Bible } from "../core/bibles.ts";
 import type { CommentaryNotes } from "./packages.ts";
 import type { BibleReader } from "./reader.ts";
 import { strongsPopups } from "./strongs.ts";
 import type { BibleView } from "./view.ts";
 
-/** The Bible tab's sidebar tab of commentaries */
+/** The Bible tab's sidebar tabs */
 export const COMMENTARIES_TAB = "commentaries";
+export const CROSS_REFERENCES_TAB = "cross-references";
 
-type Place = { chapter: number; verse: number };
+export type Place = { chapter: number; verse: number };
 
 /**
- * The *Commentaries* tab of a Bible tab's sidebar: the commentaries' notes on a verse, then on its
- * chapter as a whole, each by commentary. It shows the verse at the top of the text until one is
- * picked (a mark beside a verse, `showVerse`), and moves on when that verse leaves the view. Verses
- * commentaries have notes on get a mark in the margin (the `commentaryMarks` setting), drawn over
- * the text, so the text, its selections, and its links are left alone
+ * A tab of a Bible tab's sidebar about a verse. It shows the verse at the top of the text until one
+ * is picked (`showVerse`), and moves on when that verse leaves the view
  */
-export class CommentariesTab {
-  private readonly panel: HTMLElement;
-  private reader: BibleReader | null = null;
-  /** The book's notes, each commentary's, read once per reader */
-  private notes: Promise<CommentaryNotes[]> | null = null;
+abstract class VerseTab {
+  protected readonly panel: HTMLElement;
+  protected reader: BibleReader | null = null;
   /** The verse shown */
-  private verse: Place | null = null;
+  protected verse: Place | null = null;
   /** Each render's number: a slower one that finishes after a newer one started is dropped */
-  private rendering = 0;
-  /** The marks beside verses, in the reader's scroller */
-  private marksEl: HTMLElement | null = null;
-  private off: (() => void)[] = [];
+  protected rendering = 0;
+  protected off: (() => void)[] = [];
   private readonly offPopups: ReturnType<typeof strongsPopups>;
 
   constructor(
-    private readonly view: BibleView,
-    private readonly plugin: ToposPlugin,
+    protected readonly view: BibleView,
+    protected readonly plugin: ToposPlugin,
+    private readonly id: string,
+    icon: string,
+    label: string,
   ) {
-    this.panel = view.addSidebarTab(COMMENTARIES_TAB, "message-square-quote", "Commentaries", () => void this.shown());
+    this.panel = view.addSidebarTab(id, icon, label, () => void this.shown());
     this.panel.addClass("topos-commentary", "topos-study-tab");
     this.offPopups = strongsPopups(this.panel, this.panel, {
       lookup: (key) => plugin.packages.entries(key, TEXT_OPTIONS),
@@ -49,12 +47,12 @@ export class CommentariesTab {
     });
   }
 
-  private get hoverParent(): HoverParent {
+  protected get hoverParent(): HoverParent {
     return this.view as unknown as HoverParent;
   }
 
-  private get shownNow(): boolean {
-    return this.view.sidebarTabShown(COMMENTARIES_TAB);
+  protected get shownNow(): boolean {
+    return this.view.sidebarTabShown(this.id);
   }
 
   /** A new reader (another book, or the same one drawn again) */
@@ -64,19 +62,13 @@ export class CommentariesTab {
     this.reader = reader;
     if (!sameBook) this.verse = null;
     const offRelocated = reader.on("relocated", () => void this.relocated());
-    const resized = new ResizeObserver(() => this.placeMarks());
-    resized.observe(reader.content);
-    this.off.push(() => offRelocated?.(), () => resized.disconnect());
-    void this.drawMarks();
+    this.off.push(() => offRelocated?.());
     if (this.shownNow) void this.shown();
   }
 
   detach(): void {
     this.off.forEach((off) => off());
     this.off = [];
-    this.marksEl?.remove();
-    this.marksEl = null;
-    this.notes = null;
   }
 
   destroy(): void {
@@ -84,17 +76,15 @@ export class CommentariesTab {
     this.offPopups();
   }
 
-  /** The commentaries changed (installed, removed, or a setting): read and draw everything again */
+  /** What the tab shows changed (packages installed or removed, a setting): draws it again */
   refresh(): void {
-    this.notes = null;
-    void this.drawMarks();
     if (this.shownNow) void this.render();
   }
 
   /** Opens the tab on a verse */
   showVerse(chapter: number, verse: number): void {
     this.verse = { chapter, verse };
-    this.view.showSidebarTab(COMMENTARIES_TAB);
+    this.view.showSidebarTab(this.id);
     void this.render();
   }
 
@@ -116,8 +106,70 @@ export class CommentariesTab {
   }
 
   /** The book's name, as topos names it */
-  private bookName(reader: BibleReader): string {
+  protected bookName(reader: BibleReader): string {
     return this.plugin.topos.books().find((b) => b.id === reader.bible.bookId)?.name ?? "";
+  }
+
+  protected passage(reader: BibleReader, reference: string): Passage | null {
+    return this.plugin.topos.parse(`${this.bookName(reader)} ${reference}`, bookStyle("name"));
+  }
+
+  /** Draws the tab again, from `build`; a newer render meanwhile wins */
+  async render(): Promise<void> {
+    const n = ++this.rendering;
+    const el = createDiv();
+    const current = () => n === this.rendering;
+    await this.build(el, current);
+    if (!current()) return;
+    this.offPopups.hide();
+    this.panel.replaceChildren(...Array.from(el.childNodes));
+  }
+
+  /** What the tab shows, into `el` (`current`: false once a newer render started) */
+  protected abstract build(el: HTMLElement, current: () => boolean): Promise<void>;
+
+  /** The verse shown, as a heading */
+  protected heading(el: HTMLElement, reader: BibleReader, verse: Place): Passage | null {
+    const passage = this.passage(reader, `${verse.chapter}:${verse.verse}`);
+    el.createDiv({ cls: "topos-study-head" }).createEl("h4", { cls: "topos-commentary-passage", text: passage?.reference ?? `${verse.chapter}:${verse.verse}` });
+    return passage;
+  }
+}
+
+/**
+ * The *Commentaries* tab: the commentaries' notes on a verse, then on its chapter as a whole, each
+ * by commentary. Verses commentaries have notes on get a mark in the margin (the `commentaryMarks`
+ * setting), drawn over the text, so the text, its selections, and its links are left alone
+ */
+export class CommentariesTab extends VerseTab {
+  /** The book's notes, each commentary's, read once per reader */
+  private notes: Promise<CommentaryNotes[]> | null = null;
+  /** The marks beside verses, in the reader's scroller */
+  private marksEl: HTMLElement | null = null;
+
+  constructor(view: BibleView, plugin: ToposPlugin) {
+    super(view, plugin, COMMENTARIES_TAB, "message-square-quote", "Commentaries");
+  }
+
+  override attach(reader: BibleReader): void {
+    super.attach(reader);
+    const resized = new ResizeObserver(() => this.placeMarks());
+    resized.observe(reader.content);
+    this.off.push(() => resized.disconnect());
+    void this.drawMarks();
+  }
+
+  override detach(): void {
+    super.detach();
+    this.marksEl?.remove();
+    this.marksEl = null;
+    this.notes = null;
+  }
+
+  override refresh(): void {
+    this.notes = null;
+    void this.drawMarks();
+    super.refresh();
   }
 
   /** The notes of every commentary on the open book */
@@ -131,34 +183,23 @@ export class CommentariesTab {
     return this.notes;
   }
 
-  private passage(reader: BibleReader, reference: string): Passage | null {
-    return this.plugin.topos.parse(`${this.bookName(reader)} ${reference}`, bookStyle("name"));
-  }
-
-  /** Draws the tab again: the verse's notes, then its chapter's */
-  async render(): Promise<void> {
-    const n = ++this.rendering;
+  /** The verse's notes, then its chapter's */
+  protected async build(el: HTMLElement, current: () => boolean): Promise<void> {
     const reader = this.reader;
     const verse = this.verse;
-    const el = createDiv();
     if (!reader || !verse) {
       el.createDiv({ cls: "topos-commentary-empty", text: "Scroll to a verse to read the commentaries on it." });
     } else if (!this.plugin.packages.hasKind(PackageKind.Commentary)) {
       el.createDiv({ cls: "topos-commentary-empty", text: "The vault has no commentaries yet: add one under Settings → Logoxide → Add Bibles." });
     } else {
       const notes = await this.bookNotes();
-      if (n !== this.rendering || reader !== this.reader) return;
+      if (!current() || reader !== this.reader) return;
       const groups = studyGroups(notes, verse.chapter, verse.verse, reader.lastVerse(verse.chapter));
-      const onVerse = this.passage(reader, `${verse.chapter}:${verse.verse}`);
+      const onVerse = this.heading(el, reader, verse);
       const onChapter = this.passage(reader, `${verse.chapter}`);
-      const head = el.createDiv({ cls: "topos-study-head" });
-      head.createEl("h4", { cls: "topos-commentary-passage", text: onVerse?.reference ?? `${verse.chapter}:${verse.verse}` });
       this.group(el, `On ${onVerse?.reference ?? "this verse"}`, groups.verse, onVerse, `No commentary has a note on ${onVerse?.reference ?? "this verse"}.`);
       this.group(el, `On ${onChapter?.reference ?? "the chapter"} as a whole`, groups.chapter, onChapter, null);
     }
-    if (n !== this.rendering) return;
-    this.offPopups.hide();
-    this.panel.replaceChildren(...Array.from(el.childNodes));
   }
 
   /** A heading, then each commentary's notes under its name (folding away) */
@@ -239,3 +280,80 @@ export class CommentariesTab {
 
 const TEXT_OPTIONS = { notes: false, headings: false, classPrefix: "topos-" };
 
+
+/** How many cross-references a package's list shows before *Show all* */
+const FIRST_REFERENCES = 25;
+
+/**
+ * The *Cross-references* tab: each cross-reference package's lines from a verse, the strongest
+ * first, with the text of each in the tab's Bible
+ */
+export class CrossReferencesTab extends VerseTab {
+  constructor(view: BibleView, plugin: ToposPlugin) {
+    super(view, plugin, CROSS_REFERENCES_TAB, "git-compare-arrows", "Cross-references");
+  }
+
+  protected async build(el: HTMLElement, current: () => boolean): Promise<void> {
+    const reader = this.reader;
+    const verse = this.verse;
+    if (!reader || !verse) {
+      el.createDiv({ cls: "topos-commentary-empty", text: "Scroll to a verse to see its cross-references." });
+      return;
+    }
+    if (!this.plugin.packages.hasKind(PackageKind.CrossReferences)) {
+      el.createDiv({ cls: "topos-commentary-empty", text: "The vault has no cross-references yet: add a package of them under Settings → Logoxide → Add Bibles." });
+      return;
+    }
+    const passage = this.heading(el, reader, verse);
+    if (!passage) return;
+    const lists = await this.plugin.packages.crossReferences(passage.osis);
+    if (!current() || reader !== this.reader) return;
+    if (lists.length === 0) el.createDiv({ cls: "topos-commentary-empty", text: `No cross-references from ${passage.reference}.` });
+    for (const { name, title, references } of lists) {
+      const details = el.createEl("details", { cls: "topos-study-commentary topos-study-xrefs", attr: { open: "" } });
+      const summary = details.createEl("summary");
+      summary.createSpan({ cls: "topos-commentary-name", text: name });
+      summary.createSpan({ cls: "topos-commentary-meta", text: ` ${title && title !== name ? `${title} · ` : ""}${references.length}` });
+      const list = details.createEl("ul", { cls: "topos-study-xref-list" });
+      const sorted = byWeight(references);
+      // The text in the tab's own Bible (another may have its name)
+      const bible = this.view.file ? this.plugin.bibles.ofFile(this.view.file.path) : null;
+      const show = (from: number, to: number) => {
+        for (const ref of sorted.slice(from, to)) this.reference(list, ref.to, ref.weight, bible);
+      };
+      show(0, FIRST_REFERENCES);
+      if (sorted.length > FIRST_REFERENCES) {
+        const more = details.createEl("button", { cls: "topos-study-more", text: `Show all ${sorted.length}` });
+        more.addEventListener("click", () => {
+          show(FIRST_REFERENCES, sorted.length);
+          more.remove();
+        });
+      }
+    }
+  }
+
+  /** A cross-reference: a link to it, its weight, and its text (filled in when read) */
+  private reference(list: HTMLElement, to: string, weight: number | null, bible: Bible | null): void {
+    const target = this.plugin.topos.parse(to, bookStyle(this.plugin.settings.style));
+    const li = list.createEl("li");
+    const head = li.createDiv({ cls: "topos-study-xref-head" });
+    const link = head.createSpan({ cls: "topos-commentary-ref", text: target?.reference ?? to });
+    const shown = weightLabel(weight);
+    if (shown) head.createSpan({ cls: "topos-commentary-meta", text: ` ${shown}` });
+    if (!target) return;
+    linkPassage(this.plugin, link, target, this.hoverParent);
+    const text = li.createDiv({ cls: "topos-study-xref-text" });
+    void this.plugin.bibles.textIn(target, bible, this.reader?.bible.bible || null).then((words) => {
+      if (words) text.setText(words);
+      else text.remove();
+    });
+  }
+}
+
+/** Cross-references, the strongest first (those without a weight keep their order, after) */
+function byWeight<T extends { weight: number | null }>(references: readonly T[]): T[] {
+  return references
+    .map((ref, i) => ({ ref, i }))
+    .sort((a, b) => (b.ref.weight ?? -Infinity) - (a.ref.weight ?? -Infinity) || a.i - b.i)
+    .map(({ ref }) => ref);
+}

@@ -134,7 +134,12 @@ export class BibleLibrary {
     // A logoxide package's Bible, when the reference names one the vault has no folder for
     const packages = this.plugin.packages;
     if (translation && !this.named(translation) && packages.has(translation)) return packages.text(passage, translation);
-    const bible = this.forText(translation);
+    return this.textIn(passage, this.forText(translation), translation);
+  }
+
+  /** A passage's plain text from a Bible (a book file's: `ofFile`), else as `text` finds it */
+  async textIn(passage: Passage, bible: Bible | null, translation?: string | null): Promise<string | null> {
+    const packages = this.plugin.packages;
     // Its books are stubs, which name the package's files: the package reads them
     if (bible?.package) return packages.text(passage, bible.name);
     const opened = await this.bookFile(passage, bible);

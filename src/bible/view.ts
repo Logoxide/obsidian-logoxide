@@ -8,7 +8,7 @@ import type ToposPlugin from "../main.ts";
 import { openPassagePicker } from "./picker.ts";
 import type { Recording } from "./packages.ts";
 import type { BibleBook, BibleReader } from "./reader.ts";
-import { CommentariesTab } from "./study-tab.ts";
+import { CommentariesTab, CrossReferencesTab } from "./study-tab.ts";
 
 /**
  * Marks the verse a player is reading in a reader, as it plays: the timing at the player's time, its
@@ -54,6 +54,8 @@ export class BibleView extends DocumentView<BibleBook, BibleReader> {
   private reading: Timing | null = null;
   /** The sidebar's *Commentaries* tab, and the marks beside verses */
   commentaries: CommentariesTab | null = null;
+  /** The sidebar's *Cross-references* tab */
+  crossReferences: CrossReferencesTab | null = null;
 
   private get topos(): ToposPlugin {
     return this.plugin as unknown as ToposPlugin;
@@ -70,7 +72,11 @@ export class BibleView extends DocumentView<BibleBook, BibleReader> {
     if (search) this.toolbarEl.insertBefore(this.listenButton, search);
     this.listenButton.hide();
     this.commentaries = new CommentariesTab(this, this.topos);
-    this.register(() => this.commentaries?.destroy());
+    this.crossReferences = new CrossReferencesTab(this, this.topos);
+    this.register(() => {
+      this.commentaries?.destroy();
+      this.crossReferences?.destroy();
+    });
   }
 
   protected override onReaderReady(reader: BibleReader): void {
@@ -100,6 +106,7 @@ export class BibleView extends DocumentView<BibleBook, BibleReader> {
     if (this.player && this.recording) this.bindPlayer(this.player, this.recording);
     void this.findRecording(reader);
     this.commentaries?.attach(reader);
+    this.crossReferences?.attach(reader);
   }
 
   /** Looks for the book's recording (a package's book, through its stub), and offers to listen when it has one */
@@ -319,6 +326,7 @@ export class BibleView extends DocumentView<BibleBook, BibleReader> {
 
   protected override onTeardown(): void {
     this.commentaries?.detach();
+    this.crossReferences?.detach();
     this.offReader.forEach((off) => off());
     this.offReader = [];
     this.offFollow?.();

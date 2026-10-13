@@ -1191,7 +1191,11 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
   /** Shows the open commentary views again (a setting changed what they show) */
   refreshCommentaries(): void {
     for (const view of this.commentaryViews()) void view.render();
-    for (const view of this.views()) if (view instanceof BibleView) view.commentaries?.refresh();
+    for (const view of this.views()) {
+      if (!(view instanceof BibleView)) continue;
+      view.commentaries?.refresh();
+      view.crossReferences?.refresh();
+    }
   }
 
   /** Opens the commentary view in the right sidebar (or shows it), on a passage when given */
@@ -1308,6 +1312,17 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
         const verse = view?.reader?.verseInView();
         if (!view?.commentaries || !verse) return false;
         if (!checking) view.commentaries.showVerse(verse.chapter, verse.verse);
+        return true;
+      },
+    });
+    this.addCommand({
+      id: "show-cross-references-tab",
+      name: "Show the cross-references in the Bible's sidebar",
+      checkCallback: (checking) => {
+        const view = this.app.workspace.getActiveViewOfType(BibleView);
+        const verse = view?.reader?.verseInView();
+        if (!view?.crossReferences || !verse) return false;
+        if (!checking) view.crossReferences.showVerse(verse.chapter, verse.verse);
         return true;
       },
     });
