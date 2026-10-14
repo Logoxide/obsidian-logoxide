@@ -320,32 +320,29 @@ ${NOTE_MARKS_CSS}`;
     return [moved, ...parts.slice(1)];
   }
 
-  /**
-   * A preview with verses around its passage: the passage at the top, where it is without them, so
-   * the verses before it are a scroll up, and those after it below it
-   */
+  /** A preview with verses around its passage: the passage in the middle, with the verses before it above and those after it below */
   override scrollToRange(range: Range, opts: Parameters<DocumentReader["scrollToRange"]>[1] = {}): void {
     if (!this.scrollToPassage()) super.scrollToRange(range, opts);
   }
 
-  /** A preview with verses around its passage: scrolls its passage's first line to the very top; whether it has one */
+  /**
+   * A preview with verses around its passage: scrolls its passage to the middle (its first line to
+   * the top, when it's taller than the preview); whether it has one
+   */
   scrollToPassage(): boolean {
     const passage = this.preview && this.hasContext ? this.spanning(this.preview) : null;
     if (!passage) return false;
-    this.scroller.scrollTop += passage.getBoundingClientRect().top - this.scroller.getBoundingClientRect().top;
+    const { top, height } = passage.getBoundingClientRect();
+    const view = this.scroller.getBoundingClientRect();
+    this.scroller.scrollTop += top - view.top - Math.max(0, (view.height - height) / 2);
     return true;
   }
 
-  /**
-   * How tall a preview's text is, with its padding: all of it, or with verses around it, from its
-   * passage down (those before it are scrolled past)
-   */
+  /** How tall a preview's text is, with its padding, verses around its passage included */
   passageHeight(): number {
     const style = getComputedStyle(this.content);
     const last = this.content.lastElementChild ?? this.content;
-    const passage = this.preview && this.hasContext ? this.spanning(this.preview) : null;
-    const top = passage ? passage.getBoundingClientRect().top : this.content.getBoundingClientRect().top;
-    return last.getBoundingClientRect().bottom - top + parseFloat(style.paddingBottom);
+    return last.getBoundingClientRect().bottom - this.content.getBoundingClientRect().top + parseFloat(style.paddingBottom);
   }
 
   /** The text of verses (a bridge's whole verses), as a range */
