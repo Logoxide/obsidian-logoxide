@@ -172,9 +172,10 @@ ${NOTES_CSS}
 ${STRONGS_CSS}
 ${USX_CSS}
 }
-/* A passage (preview or embed) is as big as the note's text, and as tall as its own: not a book's
-   room to scroll past its end. Outside the layer, as file-plus-plus's padding is */
-.${PREFIX}-content.tpb-passage { padding-top: 0.25em; padding-bottom: 0.5em; --${PREFIX}-font-size: var(--font-text-size, 16px); }
+/* A passage (preview or embed) is as big as the note's text (a preview over a document, as its
+   text: \`--topos-passage-font-size\`, BibleEmbed), and as tall as its own: not a book's room to
+   scroll past its end. Outside the layer, as file-plus-plus's padding is */
+.${PREFIX}-content.tpb-passage { padding-top: 0.25em; padding-bottom: 0.5em; --${PREFIX}-font-size: var(--topos-passage-font-size, var(--font-text-size, 16px)); }
 .tpb-passage > .${PREFIX}-section + .${PREFIX}-section { margin-top: 0; }
 .tpb-passage p.topos-p:last-child { margin-bottom: 0; }
 ${NOTE_MARKS_CSS}`;

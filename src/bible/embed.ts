@@ -37,8 +37,25 @@ export class BibleEmbed extends DocumentEmbed<BibleBook, BibleReader> {
     if (linktext && sourcePath) this.onHighlight = (fragment) => void rewriteWikiEmbed(plugin, sourcePath, linktext, fragment);
   }
 
+  protected override buildExtraUi(): void {
+    this.matchHoveredDocument();
+  }
+
+  /**
+   * A hover preview over a document (an EPUB in EPUB++, a transcript, a Bible tab) has its text's
+   * size, not the notes': the size of the section the pointer is in, which follows the document's
+   * own font size setting
+   */
+  private matchHoveredDocument(): void {
+    if (!this.containerEl.closest(".hover-popover")) return;
+    const size = hoveredDocumentFontSize(this.containerEl.doc, this.host);
+    if (size) this.host.style.setProperty("--topos-passage-font-size", size);
+  }
+
   protected override onReaderReady(reader: BibleReader, loc: ParsedLocator, range: Range | null): void {
     if (!reader.isPreview) return;
+    // Put in its popover after it was built
+    if (!this.host.style.getPropertyValue("--topos-passage-font-size")) this.matchHoveredDocument();
     // A link's verses aren't highlighted in its embed, but a highlight in them is (`:~:text=`),
     // if its words are there (else it would be all of them)
     if (!TEXT_DIRECTIVE.test(loc.locator ?? "") || !reader.hasWords(loc.locator ?? "")) reader.setHighlights([]);
@@ -209,6 +226,24 @@ function keepFromEditor(button: HTMLElement): void {
   };
   for (const type of ["pointerdown", "mousedown", "touchstart"]) button.addEventListener(type, keep);
 }
+
+/**
+ * The text size of the file-plus-plus document under the pointer, if it's over one (not `own`, the
+ * preview's own reader): the section it's in (a `data-<prefix>-section` element, whatever the
+ * plugin's prefix) in the reader's shadow root, which Obsidian's `:hover` doesn't look into
+ */
+function hoveredDocumentFontSize(doc: Document, own: HTMLElement): string | null {
+  const hosts = Array.from(doc.querySelectorAll(":hover")).filter((el) => el.shadowRoot && el !== own);
+  for (const host of hosts.reverse()) {
+    const hovered = Array.from(host.shadowRoot!.querySelectorAll(":hover"));
+    const section = hovered.reverse().find((el) => el.getAttributeNames().some((n) => SECTION_ATTRIBUTE.test(n)));
+    if (section) return getComputedStyle(section).fontSize;
+  }
+  return null;
+}
+
+/** What file-plus-plus marks each section of a document with, `data-fpp-section` before its build renames it */
+const SECTION_ATTRIBUTE = /^data-[a-z]+-section$/;
 
 /** A highlight's words in a locator, and its color after them: `:~:text=so%20loved&color=yellow` */
 const TEXT_DIRECTIVE = /(:~:|%3A~%3A)text=.*$/i;
