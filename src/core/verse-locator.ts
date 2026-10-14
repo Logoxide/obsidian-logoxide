@@ -71,7 +71,10 @@ export function withBible(locator: string, bible: string | null): string {
   return at === -1 ? locator + param : locator.slice(0, at) + param + locator.slice(at);
 }
 
-const CONTEXT = /&c=(\d+)/i;
+const CONTEXT = /&c=(\d+|chapter)/i;
+
+/** Context of the passage's whole chapters (`&c=chapter`), rather than a number of verses */
+export const CHAPTER_CONTEXT = 1000;
 
 /**
  * A locator without the context it asks for, and that context: how many verses around its passage
@@ -80,18 +83,20 @@ const CONTEXT = /&c=(\d+)/i;
 export function splitContext(locator: string): { locator: string; context: number | null } {
   const m = CONTEXT.exec(locator);
   if (!m) return { locator, context: null };
-  return { locator: locator.replace(m[0], ""), context: Number(m[1]) };
+  return { locator: locator.replace(m[0], ""), context: m[1]!.toLowerCase() === "chapter" ? CHAPTER_CONTEXT : Number(m[1]) };
 }
 
 /** A locator asking for context around its passage, before its exact words (`v=3:16&c=2:~:text=…`) */
 export function withContext(locator: string, context: number | null): string {
   if (context === null) return locator;
+  const c = context === CHAPTER_CONTEXT ? "chapter" : context;
   const at = locator.search(/(:~:|%3A~%3A)/i);
-  return at === -1 ? `${locator}&c=${context}` : `${locator.slice(0, at)}&c=${context}${locator.slice(at)}`;
+  return at === -1 ? `${locator}&c=${c}` : `${locator.slice(0, at)}&c=${c}${locator.slice(at)}`;
 }
 
 /**
- * Parts with `context` verses before and after each (whole chapters as they are), by each chapter's
+ * Parts with `context` verses before and after each (`CHAPTER_CONTEXT`: the rest of their chapters;
+ * whole chapters as they are), by each chapter's
  * verse count (`counts.get(3)`: chapter 3's), crossing into the chapters around them: `shown` is
  * what to render (overlapping parts joined), `context` the verses added, to set apart
  */
@@ -115,7 +120,8 @@ export function withContextVerses(parts: VersePart[], context: number, counts: R
     const end = at(p.endChapter, p.endVerse, true);
     if (start === -1 || end === -1) return { shown: parts, context: [] };
     for (let i = start; i <= end; i++) own.add(i);
-    for (let i = Math.max(0, start - context); i <= Math.min(verses.length - 1, end + context); i++) all.add(i);
+    const [from, to] = context === CHAPTER_CONTEXT ? [at(p.chapter, 1, false), at(p.endChapter, END, true)] : [start - context, end + context];
+    for (let i = Math.max(0, from); i <= Math.min(verses.length - 1, to); i++) all.add(i);
   }
   const runs = (set: Set<number>): VersePart[] => {
     const sorted = [...set].sort((a, b) => a - b);

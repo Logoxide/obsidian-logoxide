@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { BookStyle, Topos } from "logoxide";
-import { END, formatVerseLocator, parseVerseLocator, partSegments, passageParts, splitBible, splitContext, splitEdition, withBible, withContext, withContextVerses, withEdition } from "../src/core/verse-locator.ts";
+import { END, formatVerseLocator, parseVerseLocator, partSegments, passageParts, splitBible, splitContext, splitEdition, withBible, withContext, withContextVerses, withEdition, CHAPTER_CONTEXT } from "../src/core/verse-locator.ts";
 
 test("verse locators round-trip", () => {
   for (const s of ["v=3:16", "v=3:16-18", "v=3:16-4:2", "v=3", "v=3-4", "v=3:16;4:1-5;5"]) {
@@ -65,4 +65,9 @@ test("a locator's context: verses around its passage, across chapters", () => {
   // Whole chapters, and no context, are as they were
   assert.deepEqual(withContextVerses([v(3, 0, 3, END)], 2, counts).context, []);
   assert.deepEqual(withContextVerses([v(3, 16, 3, 16)], 0, counts).shown, [v(3, 16, 3, 16)]);
+  // The rest of the passage's chapters
+  assert.deepEqual(withContextVerses([v(3, 16, 3, 16)], CHAPTER_CONTEXT, counts), { shown: [v(3, 1, 3, 36)], context: [v(3, 1, 3, 15), v(3, 17, 3, 36)] });
+  assert.deepEqual(withContextVerses([v(3, 36, 4, 1)], CHAPTER_CONTEXT, counts).shown, [v(3, 1, 4, 54)]);
+  assert.deepEqual(splitContext("v=3:16&c=chapter"), { locator: "v=3:16", context: CHAPTER_CONTEXT });
+  assert.equal(withContext("v=3:16", CHAPTER_CONTEXT), "v=3:16&c=chapter");
 });

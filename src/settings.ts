@@ -2,6 +2,7 @@ import { App, Notice, type ColorComponent, type DropdownComponent, Platform, Set
 import { BookStyle, PackageKind } from "logoxide";
 import { DEFAULT_FORMAT, written, type FormatSettings } from "./core/format.ts";
 import { parseQuery } from "./core/query.ts";
+import { CHAPTER_CONTEXT } from "./core/verse-locator.ts";
 import type { BookCompletion } from "./core/completions.ts";
 import { FILTERS, linkUrl, PLACEHOLDERS, SITES, templateError } from "./core/links.ts";
 import { bookStyle, embedAloneWhere, type EmbedAloneIn, type InlineTextStyle, type ReferenceTap, type StyleName } from "./core/settings.ts";
@@ -471,10 +472,10 @@ export class ToposSettingsPanel {
       );
     new Setting(embeds)
       .setName("Verses of context")
-      .setDesc("How many verses before and after the passage its context is.")
+      .setDesc("How many verses before and after the passage its context is, or the rest of its chapter.")
       .addDropdown((d) =>
         d
-          .addOptions({ 1: "1 verse", 2: "2 verses", 3: "3 verses", 5: "5 verses", 10: "10 verses" })
+          .addOptions({ 1: "1 verse", 2: "2 verses", 3: "3 verses", 5: "5 verses", 10: "10 verses", [CHAPTER_CONTEXT]: "Full chapter" })
           .setValue(String(settings.previewContext))
           .onChange((value) => {
             settings.previewContext = Number(value);
