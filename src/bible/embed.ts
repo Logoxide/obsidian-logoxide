@@ -24,6 +24,8 @@ export class BibleEmbed extends DocumentEmbed<BibleBook, BibleReader> {
   private stopPlayer: (() => void) | null = null;
   /** The context shown last, to show again when it's turned back on */
   private lastContext: number | null = null;
+  /** The hovered document's text size, kept for when it renders again (its context toggled), with the pointer on the preview by then */
+  private documentFontSize: string | null = null;
   /**
    * Writes the embed again in its note with a highlight (`:~:text=so%20loved&color=yellow`), or
    * none (null); null where it can't be (a hover preview)
@@ -48,8 +50,8 @@ export class BibleEmbed extends DocumentEmbed<BibleBook, BibleReader> {
    */
   private matchHoveredDocument(): void {
     if (!this.containerEl.closest(".hover-popover")) return;
-    const size = hoveredDocumentFontSize(this.containerEl.doc, this.host);
-    if (size) this.host.style.setProperty("--topos-passage-font-size", size);
+    this.documentFontSize ??= hoveredDocumentFontSize(this.containerEl.doc, this.host);
+    if (this.documentFontSize) this.host.style.setProperty("--topos-passage-font-size", this.documentFontSize);
   }
 
   protected override onReaderReady(reader: BibleReader, loc: ParsedLocator, range: Range | null): void {
