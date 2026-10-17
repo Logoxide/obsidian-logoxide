@@ -10,4 +10,4 @@ An embed:
 
 ![John 1:1-5]
 
-A wikilink for comparison: [[Bibles/BSB/JHN.usx]]
+A wikilink for comparison: [[Bibles/BSB/John.bible]]
