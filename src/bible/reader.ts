@@ -450,12 +450,33 @@ ${NOTE_MARKS_CSS}`;
     const body = part.verse === 0 ? sectionBody(firstMarker.el) : null;
     if (body) range.setStart(body, 0);
     else range.setStartBefore(firstMarker.el);
-    const after = this.markers[next];
-    const lastBody = sectionBody(this.markers[next - 1]!.el);
-    if (after && sectionBody(after.el) === lastBody) range.setEndBefore(after.el);
-    else if (lastBody) range.setEnd(lastBody, lastBody.childNodes.length);
-    else range.setEndAfter(this.markers[next - 1]!.el);
+    range.setEnd(...this.verseEnd(next - 1));
     return range;
+  }
+
+  /**
+   * Where verse `i` (a marker's index) ends: before the next verse number in its chapter, else at the
+   * chapter's end; either way before the headings after its last words (they go with the next verse)
+   */
+  private verseEnd(i: number): [Node, number] {
+    const marker = this.markers[i]!;
+    const after = this.markers[i + 1];
+    const body = sectionBody(marker.el);
+    let end: [Node, number];
+    if (after && sectionBody(after.el) === body) end = [after.el.parentNode!, Array.prototype.indexOf.call(after.el.parentNode!.childNodes, after.el)];
+    else if (body) end = [body, body.childNodes.length];
+    else return [marker.el.parentNode!, Array.prototype.indexOf.call(marker.el.parentNode!.childNodes, marker.el) + 1];
+    // Back from there to the verse's last words: past headings, the end is after them
+    const walker = this.doc.createTreeWalker(body ?? this.content, NodeFilter.SHOW_TEXT);
+    const at = end[0].childNodes[end[1]];
+    if (at) walker.currentNode = at;
+    let t = (at ? walker.previousNode() : walker.lastChild()) as Text | null;
+    let heading = false;
+    for (; t && !(marker.el.compareDocumentPosition(t) & Node.DOCUMENT_POSITION_PRECEDING); t = walker.previousNode() as Text | null) {
+      if (t.parentElement?.closest(".topos-title")) heading = true;
+      else if (t.data.trim()) return heading ? [t, t.length] : end;
+    }
+    return end;
   }
 
   /**
@@ -480,6 +501,10 @@ ${NOTE_MARKS_CSS}`;
   /** Verse markers are the units of locators, so selections of part of a verse keep their words */
   protected override unitElements(): readonly Element[] {
     return this.markerEls;
+  }
+
+  protected override unitEnd(i: number): [Node, number] {
+    return this.verseEnd(i);
   }
 
   // Keys label verses (`h`, `c`, `v`…), each without the headings after it

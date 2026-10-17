@@ -6,6 +6,9 @@ import type ToposPlugin from "../main.ts";
 
 export const OTHER_TRANSLATIONS = "logoxide-other-translations";
 
+/** What other Bibles' highlights are drawn in (their own color is in the hover) */
+const OTHER_COLOR = "gray";
+
 /** A highlight in another Bible, as marked in this one */
 interface OtherHighlight {
   entry: HighlightEntry;
@@ -32,7 +35,7 @@ function highlightWords(locator: string): string | null {
 /**
  * Highlights made in the other Bibles, faint in this one: each over the whole verses it's in (their
  * words differ, so its own words can't be found), placed through the vault's versification maps when
- * the two are numbered differently. Hover shows where it's from, its words, and its comment; the
+ * the two are numbered differently, all in grey. Hover shows where it's from, its color, its words, and its comment; the
  * menu opens it there, or its note
  */
 export function otherTranslationsProvider(plugin: ToposPlugin): AnnotationProvider<OtherHighlight> {
@@ -55,7 +58,8 @@ export function otherTranslationsProvider(plugin: ToposPlugin): AnnotationProvid
           out.push({
             id: `${bible.folder}:${entry.id}`,
             locator: formatVerseLocator(placed.parts),
-            color: entry.color,
+            // Grey whatever its color: several overlapping ones don't mix into another color
+            color: OTHER_COLOR,
             label: `Highlighted in ${bible.name}`,
             data: { entry, bible, words: highlightWords(entry.locator) },
           });
@@ -71,12 +75,14 @@ export function otherTranslationsProvider(plugin: ToposPlugin): AnnotationProvid
     icon: "languages",
     // Over whole verses: a long press selects their words, a tap opens the menu
     holdSelects: true,
-    // Faint: a wash of the highlight's color under the verses, dotted beneath
+    // Faint: a grey wash under the verses, dotted beneath
     style: (c) => `background-color: color-mix(in srgb, ${c} 14%, transparent); text-decoration: underline dotted 1px color-mix(in srgb, ${c} 70%, transparent); text-underline-offset: 4px;`,
     annotations: (file) => marked(file),
     tooltip: (a) => {
       const { bible, words, entry } = a.data as OtherHighlight;
-      return [`Highlighted in ${bible.name}${words ? `: “${words}”` : ""}`, entry.comment ?? ""].filter(Boolean).join("\n");
+      const color = entry.color ?? plugin.settings.defaultColor;
+      const what = color ? `${color[0].toUpperCase()}${color.slice(1)} highlight` : "Highlighted";
+      return [`${what} in ${bible.name}${words ? `: “${words}”` : ""}`, entry.comment ?? ""].filter(Boolean).join("\n");
     },
     menu: (menu, annotations) => {
       for (const a of annotations) {
