@@ -481,6 +481,14 @@ ${NOTE_MARKS_CSS}`;
   protected override unitElements(): readonly Element[] {
     return this.markerEls;
   }
+
+  // Keys label verses (`h`, `c`, `v`…), each without the headings after it
+  protected override hintsByUnit = true;
+
+  protected override unitHintRange(i: number): Range | null {
+    const m = this.markers[i];
+    return m ? this.partRange({ chapter: m.chapter, verse: m.verse, endChapter: m.chapter, endVerse: m.last }) : null;
+  }
 }
 
 /** USX's paragraph and character styles, as USFM's stylesheet (usfm.sty) describes them */
