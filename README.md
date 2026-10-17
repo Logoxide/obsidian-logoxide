@@ -112,6 +112,7 @@ the sidebar, which takes the sidebar's search along) has room to read results:
 | Copy the reference under the cursor as OSIS | `John.3.16-John.3.18` |
 | Normalize references in the selection or note | `jn 3:16` → `John 3:16`, in the chosen style |
 | Open commentary | The commentary view in the sidebar, on the reference under the cursor or the Bible tab's verse (see [Commentaries](#commentaries-cross-references-and-strongs-numbers)) |
+| Open a commentary or dictionary in a tab | One commentary (a book of it at a time) or dictionary in its own tab, beside the Bible |
 | Look up the Strong's number under the cursor | `G25`'s entries from the vault's Strong's dictionaries, in the commentary view |
 
 **Settings**: reference style (`John 3:16`, `Jn 3:16`, or `John.3.16`), where references open
@@ -270,6 +271,14 @@ Commentary, dictionary, and cross-reference packages (logoxide's `commentary`, `
   the Bible tab in front and the reference under the cursor in a note. *Stretch notes over the
   verses after them* (off by default) shows, for a verse a commentary skips, its note before it
   in the chapter
+- **Open a commentary or dictionary in a tab** (or *Read John 3:16 in a commentary…* in the
+  editor's menu; or click a commentary's name in the commentary view, or the book icon beside it in
+  a Bible tab's *Commentaries*) reads one in a tab of its own, beside the Bible tab: a commentary a
+  book at a time, every note in order under its chapter's heading, with pickers for the
+  commentary, book, and chapter; while its link button is lit it follows the verse at the top of
+  the Bible tab in front (and the reference under the cursor in a note). Its links open in the
+  Bible tab beside it. A dictionary lists its keys (type to filter: `g25` finds `G0025`) beside
+  the entry picked; double-click a Strong's number in an entry to go to it
 - **Strong's numbers**: hovering over one in a note (`G25`, `H430`, `G0025`), in a commentary's
   note, or over a word in a Bible whose text carries them (the KJV's `\w loved|strong="G25"\w*`)
   shows its entries from the vault's dictionaries keyed by Strong's Greek or Hebrew numbers
@@ -394,7 +403,7 @@ It also needs file-plus-plus (the engine of EPUB++ and Transcript++) checked out
 The plugin uses the `logoxide` package (logoxide's bindings, with all of
 [topos](https://github.com/MasterTemple/topos-bible)'s) built from a logoxide checkout at
 `../../rust/logoxide`, which builds against topos at `../../rust/topos` (`~/Development/rust/...` when
-this repository is `~/Development/typescript/obsidian-logoxide`):
+this repository is `~/Development/obsidian-plugins/obsidian-logoxide`):
 
 ```sh
 # Once: cargo install boltffi_cli --version 0.31.0, rustup target add wasm32-unknown-unknown

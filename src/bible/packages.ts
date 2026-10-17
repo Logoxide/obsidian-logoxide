@@ -73,6 +73,17 @@ export interface CommentaryNotes {
   notes: Note[];
 }
 
+/** A commentary or dictionary the vault uses, as its own tab lists them */
+export interface StudyResource {
+  kind: PackageKind;
+  /** What the vault's logoxide.toml calls it */
+  dependency: string;
+  /** Its abbreviation (`MHCC`) */
+  name: string;
+  /** Its full name */
+  title: string;
+}
+
 /** A dictionary's entry */
 export interface DictionaryEntry {
   dictionary: string;
@@ -836,6 +847,46 @@ export class LogoxideBibles {
   /** Whether the vault has a dictionary keyed by Strong's numbers */
   hasStrongs(): boolean {
     return this.study.some((p) => p.kind === PackageKind.Lexicon && (p.keys === "strongs-greek" || p.keys === "strongs-hebrew"));
+  }
+
+  /** The vault's commentaries and dictionaries, in the lock's order */
+  async resources(): Promise<StudyResource[]> {
+    await this.loading;
+    return this.study.filter((p) => p.kind !== PackageKind.CrossReferences).map(({ kind, dependency, name, title }) => ({ kind, dependency, name, title }));
+  }
+
+  private resource(dependency: string): StudyPackage | null {
+    return this.study.find((p) => p.dependency === dependency) ?? null;
+  }
+
+  /** The books a commentary has notes on (their ids, in its manifest's order) */
+  resourceBooks(dependency: string): number[] {
+    const p = this.resource(dependency);
+    return p ? Array.from(p.pkg.books()) : [];
+  }
+
+  /** One commentary's notes on a passage, as written (not stretched) */
+  async notesIn(dependency: string, passage: Passage, options: BookTextOptions): Promise<Note[]> {
+    await this.loading;
+    const p = this.resource(dependency);
+    if (!p) return [];
+    const notes = p.pkg.notes(passage, options, false);
+    await this.saveCache(p.pkg);
+    return notes;
+  }
+
+  /** A dictionary's keys (Strong's numbers or headwords), in its own order */
+  async keysOf(dependency: string): Promise<string[]> {
+    await this.loading;
+    return this.resource(dependency)?.pkg.keys() ?? [];
+  }
+
+  /** One dictionary's entry for a key */
+  async entryIn(dependency: string, key: string, options: BookTextOptions): Promise<DictionaryEntry | null> {
+    await this.loading;
+    const p = this.resource(dependency);
+    const entry = p?.pkg.entry(key, options);
+    return p && entry ? { dictionary: p.name, title: p.title, entry } : null;
   }
 
   /** Each commentary's notes on a passage (those with none left out), in the lock's order */

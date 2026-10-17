@@ -117,3 +117,37 @@ export function notedVerses(commentaries: NotesOf<NoteSpan>[]): Set<string> {
   for (const { notes } of commentaries) for (const n of notes) if (n.verse > 0) verses.add(`${n.chapter}:${n.verse}`);
   return verses;
 }
+
+/**
+ * Where a commentary read as a whole is at a verse: the first note covering it, else the last one
+ * starting before it (a note on the verses before, or the chapter's introduction); -1 before the first
+ */
+export function noteAt(notes: readonly NoteSpan[], chapter: number, verse: number): number {
+  const covering = notes.findIndex((n) => n.verse > 0 && coversVerse(n, chapter, verse));
+  if (covering >= 0) return covering;
+  const at = placeKey(chapter, verse);
+  let before = -1;
+  notes.forEach((n, i) => {
+    if (placeKey(n.chapter, n.verse) <= at) before = i;
+  });
+  return before;
+}
+
+/**
+ * A dictionary's keys matching what's typed, at most `limit`: those starting with it first, then
+ * those containing it, ignoring case (and a Strong's number's leading zeros: `g25` finds `G0025`)
+ */
+export function matchingKeys(keys: readonly string[], query: string, limit: number): { keys: string[]; more: number } {
+  const fold = (s: string) => s.toLowerCase().replace(/^([gh])0+(?=\d)/, "$1");
+  const q = fold(query.trim());
+  if (!q) return { keys: keys.slice(0, limit), more: Math.max(0, keys.length - limit) };
+  const starts: string[] = [];
+  const contains: string[] = [];
+  for (const key of keys) {
+    const k = fold(key);
+    if (k.startsWith(q)) starts.push(key);
+    else if (k.includes(q)) contains.push(key);
+  }
+  const all = [...starts, ...contains];
+  return { keys: all.slice(0, limit), more: Math.max(0, all.length - limit) };
+}

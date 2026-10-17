@@ -2202,3 +2202,36 @@ body.theme-dark {
 
 /* The search's switches (--verses) */
 .topos-filter-check { display: flex; align-items: center; gap: 0.4em; font-size: var(--font-ui-small); color: var(--text-muted); }
+
+/* A commentary or dictionary in a tab of its own (src/bible/resource.ts) */
+.topos-resource.view-content { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+.topos-resource-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4em;
+  padding: 0.4em 0.75em;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+.topos-resource-bar .dropdown { max-width: 100%; }
+.topos-resource-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0.5em var(--size-4-4) 3em; user-select: text; }
+.topos-resource-body:not(.topos-resource-dictionary) > * { max-width: var(--file-line-width, 40rem); margin-inline: auto; }
+.topos-resource-title { font-size: 1.6em; margin: 0.6em 0 0.4em; }
+.topos-resource-chapter > h2 { margin: 1.2em 0 0.5em; padding-bottom: 0.2em; border-bottom: 1px solid var(--background-modifier-border); }
+.topos-resource .topos-commentary-note { font-size: var(--font-text-size); line-height: var(--line-height-normal); margin-bottom: 1.2em; }
+.topos-resource .topos-commentary-note.is-current { animation: topos-resource-current 2s ease-out; border-radius: var(--radius-s); }
+@keyframes topos-resource-current { from { background: var(--text-highlight-bg); } to { background: transparent; } }
+.topos-resource-body.topos-resource-dictionary { display: flex; gap: 1em; padding: 0; overflow: hidden; }
+.topos-resource-keys { display: flex; flex-direction: column; width: 14em; flex-shrink: 0; border-right: 1px solid var(--background-modifier-border); }
+.topos-resource-filter { margin: 0.5em; }
+.topos-resource-key-list { flex: 1; overflow-y: auto; padding: 0 0.25em 1em; }
+.topos-resource-key { padding: 0.2em 0.5em; border-radius: var(--radius-s); cursor: pointer; font-size: var(--font-ui-small); }
+.topos-resource-key:hover { background: var(--background-modifier-hover); }
+.topos-resource-key.is-active { background: var(--background-modifier-active-hover); color: var(--text-accent); }
+.topos-resource-entry { flex: 1; min-width: 0; overflow-y: auto; padding: 0.75em 1em 3em 0; font-size: var(--font-text-size); }
+.topos-study-read { display: inline-flex; vertical-align: middle; margin-left: 0.3em; padding: 2px; --icon-size: var(--icon-xs); }
+@container (max-width: 32em) {
+  .topos-resource-body.topos-resource-dictionary { flex-direction: column; overflow-y: auto; }
+  .topos-resource-keys { width: auto; max-height: 40%; border-right: none; border-bottom: 1px solid var(--background-modifier-border); }
+  .topos-resource-entry { overflow: visible; padding: 0 0.75em 3em; }
+}
+.topos-resource.view-content { container-type: inline-size; }

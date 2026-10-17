@@ -215,6 +215,12 @@ export class CommentariesTab extends VerseTab {
       const summary = details.createEl("summary");
       summary.createSpan({ cls: "topos-commentary-name", text: commentary });
       if (title && title !== commentary) summary.createSpan({ cls: "topos-commentary-meta", text: ` ${title}` });
+      const read = summary.createSpan({ cls: "clickable-icon topos-study-read", attr: { "aria-label": `Read ${commentary} in a tab` } });
+      setIcon(read, "book-open-text");
+      read.addEventListener("click", (e) => {
+        e.preventDefault();
+        void this.plugin.openResource(commentary, { passage: shown });
+      });
       for (const note of notes) if (shown) renderNote(this.plugin, details, note, book, shown, this.hoverParent);
     }
   }

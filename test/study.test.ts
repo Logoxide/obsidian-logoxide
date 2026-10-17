@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { normalizeStrongs, strongsAt, strongsIn, strongsKeys, wordStrongs } from "../src/core/strongs.ts";
-import { coversVerse, locatorReference, notedVerses, noteLabel, noteVerses, onChapter, stretched, studyGroups, weightLabel } from "../src/core/study.ts";
+import { coversVerse, locatorReference, matchingKeys, noteAt, notedVerses, noteLabel, noteVerses, onChapter, stretched, studyGroups, weightLabel } from "../src/core/study.ts";
 
 test("Strong's numbers are found in text, in normal form", () => {
   assert.deepEqual(strongsIn("loved (G25, G0026) and H430a; not XG25 or G25xy or H"), [
@@ -105,4 +105,22 @@ test("stretched notes cover the verses after them, up to the next", () => {
   assert.equal(stretched(first, [first, later], 36).last, 21);
   assert.equal(stretched(later, [first, later], 36).last, 36);
   assert.equal(stretched(span(3, 0, 3, 0), [first], 36).last, 0, "an introduction stays");
+});
+
+test("a commentary read as a whole is at the note on a verse, else the one before it", () => {
+  const note = (chapter: number, verse: number, last = verse, lastChapter = chapter) => ({ chapter, verse, last, lastChapter, part: 0 });
+  const notes = [note(3, 0), note(3, 1, 5), note(3, 16), note(4, 1, 3)];
+  assert.equal(noteAt(notes, 3, 3), 1);
+  assert.equal(noteAt(notes, 3, 16), 2);
+  assert.equal(noteAt(notes, 3, 20), 2);
+  assert.equal(noteAt(notes, 4, 2), 3);
+  assert.equal(noteAt(notes, 2, 1), -1);
+});
+
+test("a dictionary's keys matching what's typed", () => {
+  const keys = ["G0025", "G0026", "G2025", "H0430", "Love", "Beloved"];
+  assert.deepEqual(matchingKeys(keys, "g25", 10), { keys: ["G0025"], more: 0 });
+  assert.deepEqual(matchingKeys(keys, "g2", 10), { keys: ["G0025", "G0026", "G2025"], more: 0 });
+  assert.deepEqual(matchingKeys(keys, "love", 10), { keys: ["Love", "Beloved"], more: 0 });
+  assert.deepEqual(matchingKeys(keys, "", 2), { keys: ["G0025", "G0026"], more: 4 });
 });
