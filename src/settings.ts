@@ -34,6 +34,7 @@ const FPP_SECTIONS: Record<string, SettingsTab> = {
   Reading: "reader",
   "Jumping to a passage": "reader",
   Previews: "reader",
+  Keyboard: "reader",
   "Opening links": "reader",
   Mobile: "reader",
 };
