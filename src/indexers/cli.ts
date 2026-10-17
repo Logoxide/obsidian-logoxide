@@ -35,6 +35,8 @@ export function runCli(
     "--no-config",
     "-m",
     "index",
+    // Whole chapters (John 3) too, as the built-in engine indexes them
+    "--chapters",
     ...(cache ? ["--cache"] : []),
     ...(extensions.length > 0 ? ["--ext", extensions.join(",")] : []),
     "--",

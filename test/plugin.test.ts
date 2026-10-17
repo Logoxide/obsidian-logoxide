@@ -209,6 +209,8 @@ const obsidian = {
   Setting: FakeSetting,
   ItemView: class {},
   SuggestModal: class {},
+  AbstractInputSuggest: class {},
+  PopoverSuggest: class {},
   MarkdownView: class {},
   Notice: class {
     static messages: string[] = [];
@@ -342,6 +344,18 @@ test("the built plugin loads, indexes, and runs its commands", async (t) => {
     }),
   };
   const app = {
+    // The root key scope: file-plus-plus's reader keys go first in it
+    scope: {
+      keys: [] as any[],
+      register(modifiers: any, key: any, func: any) {
+        const entry = { modifiers, key, func };
+        this.keys.push(entry);
+        return entry;
+      },
+      unregister(entry: any) {
+        this.keys.splice(this.keys.indexOf(entry), 1);
+      },
+    },
     workspace: Object.assign(new Events(), {
       onLayoutReady: (callback: () => void) => callback(),
       updateOptions() {},
@@ -395,8 +409,17 @@ test("the built plugin loads, indexes, and runs its commands", async (t) => {
   assert.equal(existsSync(join(vaultPath, manifest.dir, "epub-index.json")), false);
   assert.equal(existsSync(oldPack), false);
 
-  // The Bible tab (and the plain text of USX files, from file-plus-plus), and the sidebar
-  assert.deepEqual(plugin.viewTypes, ["logoxide", "logoxide-source", "logoxide-search", "logoxide-search-pane", "logoxide-commentary"]);
+  // The Bible tab (and the plain text of USX files, from file-plus-plus), the sidebar, and the study tabs
+  assert.deepEqual(plugin.viewTypes, [
+    "logoxide",
+    "logoxide-source",
+    "logoxide-search",
+    "logoxide-search-pane",
+    "logoxide-commentary",
+    "logoxide-resource",
+    "logoxide-translations",
+    "logoxide-verse-commentaries",
+  ]);
   assert.deepEqual(
     plugin.refs.all().map((h: any) => `${h.path} ${h.passage.reference}`),
     ["Archive/old.md Genesis 1:1", "Sermons/a.md John 3:16", "Sermons/a.md Romans 8:28", "Sermons/b.md Psalm 23"],
