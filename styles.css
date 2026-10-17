@@ -2235,3 +2235,85 @@ body.theme-dark {
   .topos-resource-entry { overflow: visible; padding: 0 0.75em 3em; }
 }
 .topos-resource.view-content { container-type: inline-size; }
+
+/* Translations and commentaries in rows (src/bible/rows.ts): a row each, its name beside it (above it when narrow) */
+.topos-rows.view-content { display: flex; flex-direction: column; padding: 0; overflow: hidden; container-type: inline-size; }
+.topos-rows-bar { align-items: center; }
+.topos-rows-passage { flex: 1 1 10em; min-width: 8em; }
+.topos-rows-passage.is-invalid { border-color: var(--text-error); }
+.topos-rows-pick { display: inline-flex; align-items: center; gap: 0.25em; }
+.topos-rows-pick-icon { display: inline-flex; --icon-size: var(--icon-xs); }
+.topos-rows-pick.is-active { background: var(--interactive-accent); color: var(--text-on-accent); }
+.topos-rows-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0.25em var(--size-4-4) 3em; user-select: text; }
+.topos-rows-row {
+  display: grid;
+  grid-template-columns: minmax(4em, 9em) 1fr;
+  gap: 0.25em 1em;
+  padding: 0.75em 0;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+.topos-rows-label { font-size: var(--font-ui-small); font-weight: 600; overflow-wrap: anywhere; }
+.topos-rows-label .topos-commentary-meta { font-weight: normal; }
+.topos-rows-text { font-size: var(--font-text-size); line-height: var(--line-height-normal); min-width: 0; }
+.topos-rows-text > .topos-commentary-note:last-child { margin-bottom: 0; }
+.topos-rows-number { color: var(--text-faint); font-size: 0.7em; margin-right: 0.2em; }
+.topos-rows-missing { color: var(--text-faint); font-style: italic; }
+@container (max-width: 30em) {
+  .topos-rows-row { grid-template-columns: 1fr; }
+}
+.topos-rows-foldable.is-folded { max-height: 18em; overflow: hidden; -webkit-mask-image: linear-gradient(to bottom, black 75%, transparent); mask-image: linear-gradient(to bottom, black 75%, transparent); }
+.topos-rows-more { grid-column: 2; justify-self: start; font-size: var(--font-ui-smaller); }
+@container (max-width: 30em) { .topos-rows-more { grid-column: 1; } }
+
+/* A pick list: choices to tick, searched, below a bar's button (src/bible/pick-list.ts) */
+.topos-pick-list {
+  position: fixed;
+  z-index: var(--layer-menu);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4em;
+  box-sizing: border-box;
+  width: min(20em, calc(100vw - 16px));
+  max-height: min(26em, calc(100vh - 16px));
+  padding: 0.5em;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  box-shadow: var(--shadow-l);
+}
+.topos-pick-search { width: 100%; flex-shrink: 0; }
+.topos-pick-search > input { width: 100%; }
+.topos-pick-tools { display: flex; align-items: center; gap: 0.3em; font-size: var(--font-ui-smaller); }
+.topos-pick-tools button { font-size: var(--font-ui-smaller); padding: 2px 8px; height: auto; }
+.topos-pick-count { flex: 1; color: var(--text-muted); }
+.topos-pick-items { flex: 1; min-height: 0; overflow-y: auto; }
+.topos-pick-item { display: flex; align-items: center; gap: 0.2em; border-radius: var(--radius-s); font-size: var(--font-ui-small); }
+.topos-pick-item:hover { background: var(--background-modifier-hover); }
+.topos-pick-item.is-first-off { margin-top: 0.3em; padding-top: 0.3em; border-top: 1px solid var(--background-modifier-border); border-radius: 0; }
+.topos-pick-items > .topos-pick-item { transition: transform 150ms ease; }
+/* A row being dragged: a gap where it will go, and a lifted copy following the pointer */
+.topos-pick-item.is-placeholder { background: var(--background-modifier-hover); outline: 1px dashed var(--background-modifier-border-hover); outline-offset: -1px; }
+.topos-pick-item.is-placeholder > * { visibility: hidden; }
+.topos-pick-ghost {
+  position: fixed;
+  z-index: 1;
+  box-sizing: border-box;
+  pointer-events: none;
+  background: var(--background-primary);
+  border: 1px solid var(--interactive-accent);
+  box-shadow: var(--shadow-l);
+  transform: scale(1.03);
+  opacity: 0.95;
+}
+.topos-pick-ghost .topos-pick-grip { color: var(--interactive-accent); cursor: grabbing; }
+.topos-pick-ghost.is-dropping { transition: top 150ms ease, transform 150ms ease, box-shadow 150ms ease; transform: none; box-shadow: none; }
+body.topos-pick-dragging, body.topos-pick-dragging * { cursor: grabbing !important; user-select: none; }
+.topos-pick-grip:not(.is-empty):hover { color: var(--text-muted); }
+.topos-pick-grip { display: inline-flex; flex-shrink: 0; width: 1.4em; justify-content: center; color: var(--text-faint); cursor: grab; touch-action: none; padding: 0.3em 0; --icon-size: var(--icon-xs); }
+.topos-pick-grip.is-empty { cursor: default; }
+.topos-pick-choice { display: flex; flex: 1; min-width: 0; align-items: baseline; gap: 0.5em; padding: 0.3em 0.4em 0.3em 0; cursor: pointer; }
+.topos-pick-choice input { margin: 0; flex-shrink: 0; align-self: center; }
+.topos-pick-label { font-weight: 600; }
+.topos-pick-detail { color: var(--text-muted); font-size: var(--font-ui-smaller); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.topos-pick-none { color: var(--text-muted); font-style: italic; padding: 0.3em 0.4em; font-size: var(--font-ui-small); }
+.topos-pick-action { font-size: var(--font-ui-smaller); flex-shrink: 0; height: auto; white-space: normal; text-align: start; }

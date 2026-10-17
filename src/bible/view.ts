@@ -4,10 +4,12 @@ import { PREFIX, type SelectionInfo, type TocItem } from "file-plus-plus/core";
 import { clipOf, timingAt, timingOf, type Timing } from "../core/timings.ts";
 import { parseVerseLocator, type VersePart } from "../core/verse-locator.ts";
 import { STUB_EXTENSION } from "../core/stubs.ts";
+import { bookStyle } from "../core/settings.ts";
 import type ToposPlugin from "../main.ts";
 import { openPassagePicker } from "./picker.ts";
 import type { Recording } from "./packages.ts";
 import type { BibleBook, BibleReader } from "./reader.ts";
+import { TRANSLATIONS_VIEW, VERSE_COMMENTARIES_VIEW } from "./rows.ts";
 import { CommentariesTab, CrossReferencesTab, LanguageTab } from "./study-tab.ts";
 
 /**
@@ -401,6 +403,22 @@ export class BibleView extends DocumentView<BibleBook, BibleReader> {
         .setIcon("languages")
         .setSection("action")
         .onClick(() => (word ? this.language?.showWord(word) : this.language?.showVerse(chapter, verse))),
+    );
+    const passage = this.reader && this.topos.topos.parse(`${this.reader.bible.name} ${chapter}:${verse}`, bookStyle("name"));
+    if (!passage) return;
+    menu.addItem((item) =>
+      item
+        .setTitle("Compare translations")
+        .setIcon("rows-3")
+        .setSection("action")
+        .onClick(() => void this.topos.openRows(TRANSLATIONS_VIEW, passage)),
+    );
+    menu.addItem((item) =>
+      item
+        .setTitle("Commentaries in rows")
+        .setIcon("message-square-quote")
+        .setSection("action")
+        .onClick(() => void this.topos.openRows(VERSE_COMMENTARIES_VIEW, passage)),
     );
   }
 

@@ -855,6 +855,11 @@ export class LogoxideBibles {
     return this.study.filter((p) => p.kind !== PackageKind.CrossReferences).map(({ kind, dependency, name, title }) => ({ kind, dependency, name, title }));
   }
 
+  /** The vault's commentaries, as last read (none while the packages are first read) */
+  commentaries(): StudyResource[] {
+    return this.study.filter((p) => p.kind === PackageKind.Commentary).map(({ kind, dependency, name, title }) => ({ kind, dependency, name, title }));
+  }
+
   private resource(dependency: string): StudyPackage | null {
     return this.study.find((p) => p.dependency === dependency) ?? null;
   }

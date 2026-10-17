@@ -113,6 +113,8 @@ the sidebar, which takes the sidebar's search along) has room to read results:
 | Normalize references in the selection or note | `jn 3:16` → `John 3:16`, in the chosen style |
 | Open commentary | The commentary view in the sidebar, on the reference under the cursor or the Bible tab's verse (see [Commentaries](#commentaries-cross-references-and-strongs-numbers)) |
 | Open a commentary or dictionary in a tab | One commentary (a book of it at a time) or dictionary in its own tab, beside the Bible |
+| Compare translations in rows | The same verses (1 at a time by default) in several Bibles, a row each |
+| Compare commentaries on a verse in rows | Each commentary's notes on one verse, a row each |
 | Look up the Strong's number under the cursor | `G25`'s entries from the vault's Strong's dictionaries, in the commentary view |
 
 **Settings**: reference style (`John 3:16`, `Jn 3:16`, or `John.3.16`), where references open
@@ -279,6 +281,21 @@ Commentary, dictionary, and cross-reference packages (logoxide's `commentary`, `
   the Bible tab in front (and the reference under the cursor in a note). Its links open in the
   Bible tab beside it. A dictionary lists its keys (type to filter: `g25` finds `G0025`) beside
   the entry picked; double-click a Strong's number in an entry to go to it
+- **Compare commentaries on a verse in rows** (or *Commentaries in rows* in a verse's menu, or
+  *Commentaries on John 3:16 in rows* in the editor's menu) shows each commentary's notes on one
+  verse, a row each (those with none say so; long ones fold, *Show all* unfolds them;
+  *Commentaries* picks and orders them the same way), with
+  arrows to the verse before and after and a field to type a passage (it suggests books,
+  chapters, and verses as you type, each verse with its text); it follows the Bible tab
+  like a commentary's tab. A commentary's name opens it in a tab
+- **Compare translations in rows** (or *Compare translations* in a verse's menu, or *Compare
+  translations of John 3:16* in the editor's menu) shows the same verses in several Bibles, a row
+  each: 1 verse at a time by default, or 2, 3, 5, 10, or 20, across chapters' ends. *Bibles* picks
+  which (by default the current one and those embeds compare with; tick several, search them by
+  name or folder, *All* or *None*, and drag the ticked ones by their handles to order the rows:
+  the list stays open until you click away or press Escape); a Bible numbered differently
+  has the verses as it numbers them (they're numbered as the current Bible numbers them, whatever
+  the rows' order). A Bible's name opens the verses in it
 - **Strong's numbers**: hovering over one in a note (`G25`, `H430`, `G0025`), in a commentary's
   note, or over a word in a Bible whose text carries them (the KJV's `\w loved|strong="G25"\w*`)
   shows its entries from the vault's dictionaries keyed by Strong's Greek or Hebrew numbers

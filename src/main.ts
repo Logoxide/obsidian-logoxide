@@ -67,6 +67,7 @@ import { isBareMention, partAt, passageStops, wholeReference } from "./core/synt
 import { inlineNeeds, inlineText, inlineTextVars } from "./core/inline-text.ts";
 import { COMMENTARY_VIEW, CommentaryView } from "./bible/commentary.ts";
 import { RESOURCE_VIEW, ResourceModal, ResourceView } from "./bible/resource.ts";
+import { TRANSLATIONS_VIEW, TranslationsView, VERSE_COMMENTARIES_VIEW, VerseCommentariesView } from "./bible/rows.ts";
 import type { StrongsPopupOptions } from "./bible/strongs.ts";
 import { strongsHover } from "./editor/strongs.ts";
 import { strongsAt } from "./core/strongs.ts";
@@ -304,6 +305,8 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
     this.registerView(SEARCH_PANE_VIEW, (leaf) => new SearchPane(leaf, this));
     this.registerView(COMMENTARY_VIEW, (leaf) => new CommentaryView(leaf, this));
     this.registerView(RESOURCE_VIEW, (leaf) => new ResourceView(leaf, this));
+    this.registerView(TRANSLATIONS_VIEW, (leaf) => new TranslationsView(leaf, this));
+    this.registerView(VERSE_COMMENTARIES_VIEW, (leaf) => new VerseCommentariesView(leaf, this));
     this.registerHoverLinkSource(HOVER_SOURCE, { display: "Logoxide: Bible references in notes", defaultMod: false });
     this.patchReferenceLinks();
     this.addRibbonIcon("book-open", "Verse search", () => void this.activateSearch());
@@ -1271,15 +1274,51 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
     return this.app.workspace.getLeavesOfType(RESOURCE_VIEW).flatMap((leaf) => (leaf.view instanceof ResourceView ? [leaf.view] : []));
   }
 
-  /** Whether anything follows the passage shown (the commentary view while `commentaryFollows`, a commentary's tab while it follows) */
+  /** The tabs that follow the passage shown while their link button is on: commentaries', translations' and commentaries' rows */
+  private followingViews(): (ResourceView | TranslationsView | VerseCommentariesView)[] {
+    return [RESOURCE_VIEW, TRANSLATIONS_VIEW, VERSE_COMMENTARIES_VIEW]
+      .flatMap((type) => this.app.workspace.getLeavesOfType(type))
+      .flatMap((leaf) => (leaf.view instanceof ResourceView || leaf.view instanceof TranslationsView || leaf.view instanceof VerseCommentariesView ? [leaf.view] : []))
+      .filter((v) => v.following && (!(v instanceof ResourceView) || v.isCommentary));
+  }
+
+  /** Whether anything follows the passage shown (the commentary view while `commentaryFollows`, the tabs that follow) */
   private hasFollowers(): boolean {
-    return (this.settings.commentaryFollows && this.commentaryViews().length > 0) || this.resourceViews().some((v) => v.following && v.isCommentary);
+    return (this.settings.commentaryFollows && this.commentaryViews().length > 0) || this.followingViews().length > 0;
+  }
+
+  /**
+   * A new tab for a study tab (a commentary, dictionary, translations' or commentaries' rows): beside
+   * the other study tabs, else beside the Bible tab in front (not on a phone), else a new tab
+   */
+  private studyLeaf(): WorkspaceLeaf {
+    const { workspace } = this.app;
+    const other = [RESOURCE_VIEW, TRANSLATIONS_VIEW, VERSE_COMMENTARIES_VIEW].flatMap((type) => workspace.getLeavesOfType(type))[0];
+    const parent = other?.parent as (WorkspaceLeaf["parent"] & { children?: unknown[] }) | undefined;
+    if (parent) return workspace.createLeafInParent(parent, parent.children?.length ?? 0);
+    const besideBible = this.views().some((v) => v.leaf === workspace.getMostRecentLeaf());
+    return besideBible && !Platform.isPhone ? workspace.getLeaf("split", "vertical") : workspace.getLeaf("tab");
+  }
+
+  /** Opens translations in rows (`TranslationsView`) or commentaries in rows (`VerseCommentariesView`) on a passage: the tab open already, else a new one */
+  async openRows(type: typeof TRANSLATIONS_VIEW | typeof VERSE_COMMENTARIES_VIEW, passage: Passage | null = this.currentPassage()): Promise<void> {
+    const { workspace } = this.app;
+    let leaf = workspace.getLeavesOfType(type)[0];
+    if (!leaf) {
+      leaf = this.studyLeaf();
+      await leaf.setViewState({ type, active: true, state: passage ? { book: passage.bookId, at: null } : {} });
+    }
+    await workspace.revealLeaf(leaf);
+    const view = leaf.view;
+    if (passage && (view instanceof TranslationsView || view instanceof VerseCommentariesView)) await view.show(passage);
   }
 
   /** Shows the open commentary views again (a setting changed what they show, or the packages were read again) */
   refreshCommentaries(): void {
     for (const view of this.commentaryViews()) void view.render();
     for (const view of this.resourceViews()) void view.load();
+    for (const leaf of this.app.workspace.getLeavesOfType(VERSE_COMMENTARIES_VIEW)) if (leaf.view instanceof VerseCommentariesView) void leaf.view.render();
+    for (const leaf of this.app.workspace.getLeavesOfType(TRANSLATIONS_VIEW)) if (leaf.view instanceof TranslationsView) void leaf.view.render();
     for (const view of this.views()) {
       if (!(view instanceof BibleView)) continue;
       view.commentaries?.refresh();
@@ -1316,11 +1355,7 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
     const { workspace } = this.app;
     let leaf = workspace.getLeavesOfType(RESOURCE_VIEW).find((l) => l.view instanceof ResourceView && l.view.resource?.dependency === found.dependency);
     if (!leaf) {
-      // Beside the other resources' tabs, else beside the Bible tab in front
-      const parent = workspace.getLeavesOfType(RESOURCE_VIEW)[0]?.parent as (WorkspaceLeaf["parent"] & { children?: unknown[] }) | undefined;
-      const besideBible = this.views().some((v) => v.leaf === workspace.getMostRecentLeaf());
-      if (parent) leaf = workspace.createLeafInParent(parent, parent.children?.length ?? 0);
-      else leaf = besideBible && !Platform.isPhone ? workspace.getLeaf("split", "vertical") : workspace.getLeaf("tab");
+      leaf = this.studyLeaf();
       const state = { resource: found.dependency, book: at.passage?.bookId ?? null, at: null, key: at.key ?? null };
       await leaf.setViewState({ type: RESOURCE_VIEW, active: true, state });
     }
@@ -1334,10 +1369,10 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
    * Opens a passage from a tab that isn't a Bible's (a commentary's): where the book is open
    * already, else in the Bible tab used last (in the same window), else beside it, so the tab stays
    */
-  async openBeside(passage: Passage, from: WorkspaceLeaf, newLeaf: PaneType | false): Promise<void> {
-    const bible = this.bibles.current();
+  async openBeside(passage: Passage, from: WorkspaceLeaf, newLeaf: PaneType | false, translation?: string | null): Promise<void> {
+    const bible = translation ? this.bibles.named(translation) : this.bibles.current();
     const file = bible && this.settings.referenceLinks === "bible" ? await this.bibles.bookFile(passage, bible) : null;
-    if (!file) return this.openPassage(passage, newLeaf);
+    if (!file) return this.openPassage(passage, newLeaf, translation);
     const locator = this.passageLocator(passage);
     const open = this.views().some((v) => v.file?.path === file.path);
     if (newLeaf || open) return this.openDocument(file, locator, newLeaf, { eState: { link: true } });
@@ -1355,7 +1390,7 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
   followPassage(passage: Passage | null): void {
     if (!passage) return;
     if (this.settings.commentaryFollows) for (const view of this.commentaryViews()) void view.show(passage);
-    for (const view of this.resourceViews()) view.follow(passage);
+    for (const view of this.followingViews()) view.follow(passage);
   }
 
   /** A Bible tab's passage, from its book and a verse locator (its position, `v=3:16`) */
@@ -1484,6 +1519,16 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
       id: "open-resource",
       name: "Open a commentary or dictionary in a tab",
       callback: () => void this.openResource(null, { passage: this.currentPassage() }),
+    });
+    this.addCommand({
+      id: "open-translations",
+      name: "Compare translations in rows",
+      callback: () => void this.openRows(TRANSLATIONS_VIEW),
+    });
+    this.addCommand({
+      id: "open-verse-commentaries",
+      name: "Compare commentaries on a verse in rows",
+      callback: () => void this.openRows(VERSE_COMMENTARIES_VIEW),
     });
     this.addCommand({
       id: "look-up-strongs",
@@ -1638,7 +1683,19 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
           .setIcon("book-open-text")
           .onClick(() => void this.openResource(null, { passage })),
       );
+      menu.addItem((item) =>
+        item
+          .setTitle(`Commentaries on ${passage.reference} in rows`)
+          .setIcon("message-square-quote")
+          .onClick(() => void this.openRows(VERSE_COMMENTARIES_VIEW, passage)),
+      );
     }
+    menu.addItem((item) =>
+      item
+        .setTitle(`Compare translations of ${passage.reference}`)
+        .setIcon("rows-3")
+        .onClick(() => void this.openRows(TRANSLATIONS_VIEW, passage)),
+    );
     const recorded = this.recordedBibles(passage)[0];
     if (recorded) {
       menu.addItem((item) =>
