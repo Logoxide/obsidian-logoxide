@@ -2,13 +2,16 @@ import { ItemView, setIcon, type HoverPopover, type WorkspaceLeaf } from "obsidi
 import { PackageKind, type Passage } from "logoxide";
 import type { Bible } from "../core/bibles.ts";
 import { partsReference } from "../core/mapping.ts";
+import type { BibleEmbed } from "./embed.ts";
 import { bookStyle } from "../core/settings.ts";
-import { passageParts } from "../core/verse-locator.ts";
+import { formatVerseLocator, passageParts } from "../core/verse-locator.ts";
 import { stepVerse, versesFrom, type VersePlace } from "../core/verse-steps.ts";
 import type ToposPlugin from "../main.ts";
 import { renderNote, type OpenPassage } from "./commentary.ts";
 import { PassageSuggest } from "./passage-suggest.ts";
-import { pickListButton } from "./pick-list.ts";
+import { pickListButton, popoverButton } from "./pick-list.ts";
+import { buildAppearanceControls, type AppearanceTarget } from "file-plus-plus/obsidian";
+import type { ReaderSettings } from "file-plus-plus/core";
 import { strongsPopups } from "./strongs.ts";
 
 export const TRANSLATIONS_VIEW = "logoxide-translations";
@@ -291,6 +294,49 @@ export class TranslationsView extends RowsView {
         actions: this.bibles ? [{ label: "Reset to the default Bibles", run: () => this.setBibles(null) }] : [],
       };
     });
+    popoverButton(bar, { icon: "type", tooltip: "Appearance" }, "topos-rows-appearance", (el) => this.appearanceControls(el));
+  }
+
+  /**
+   * The rows' look (`rowsAppearance`, for every translations tab): font size, font, line spacing,
+   * alignment, theme, over each Bible's own; the reading width and margins are the pane's
+   */
+  private appearanceControls(el: HTMLElement): void {
+    const plugin = this.plugin;
+    const own = () => plugin.settings.rowsAppearance;
+    // The notes' text size, which passages show at unless the rows set their own
+    const textSize = () => parseFloat(getComputedStyle(el.doc.body).getPropertyValue("--font-text-size")) || 16;
+    const target: AppearanceTarget = {
+      settings: () => ({ ...plugin.readerSettings(), fontSize: textSize(), ...own() }),
+      update: async (patch) => {
+        plugin.settings.rowsAppearance = { ...own(), ...patch };
+        await plugin.saveSettings();
+        plugin.applyRowsAppearance();
+      },
+      overridden: (key) => key in own(),
+    };
+    const head = el.createDiv({ cls: "topos-rows-appearance-head" });
+    head.createSpan({ text: "Translations in rows" });
+    const reset = head.createEl("button", { text: "Reset" });
+    reset.toggle(Object.keys(own()).length > 0);
+    const controls = el.createDiv();
+    const draw = () => {
+      controls.empty();
+      buildAppearanceControls(controls, plugin, target, () => reset.toggle(Object.keys(own()).length > 0), ["width", "widthUnit", "margin", "dimImages"] as (keyof ReaderSettings)[]);
+    };
+    reset.addEventListener("click", async () => {
+      plugin.settings.rowsAppearance = {};
+      await plugin.saveSettings();
+      plugin.applyRowsAppearance();
+      reset.hide();
+      draw();
+    });
+    draw();
+  }
+
+  /** The rows' look changed: each row shows it */
+  applyAppearance(): void {
+    for (const embed of this.embeds) embed.applyPaneAppearance();
   }
 
   protected async drawRows(el: HTMLElement, verses: Passage[], current: () => boolean): Promise<void> {
@@ -302,41 +348,44 @@ export class TranslationsView extends RowsView {
     // Numbered as the current Bible numbers them (else the first row's), whatever the rows' order
     const from = (this.plugin.bibles.current() ?? bibles[0]!).name;
     const book = this.bookName();
+    const whole = this.plugin.topos.parse(this.reference(verses), bookStyle("name"));
+    if (!whole) return;
+    const embeds: BibleEmbed[] = [];
     for (const bible of bibles) {
       const row = el.createDiv({ cls: "topos-rows-row" });
       const label = row.createDiv({ cls: "topos-rows-label" });
       const name = label.createSpan({ cls: "topos-commentary-link", text: bible.name, attr: { "aria-label": `Open in ${bible.name}` } });
       const text = row.createDiv({ cls: "topos-rows-text" });
-      const whole = this.plugin.topos.parse(this.reference(verses), bookStyle("name"));
-      name.addEventListener("click", (e) => {
-        if (!whole) return;
-        // Where it is in that Bible, as it numbers it
-        const parts = this.plugin.placeIn(whole, bible, from).parts;
-        const there = parts.length > 0 ? this.plugin.topos.parse(partsReference(book, parts), bookStyle("name")) : null;
-        void this.plugin.openBeside(there ?? whole, this.leaf, e.ctrlKey || e.metaKey ? "tab" : false, bible.name);
-      });
-      const labels: string[] = [];
-      for (const verse of verses) {
-        const placed = this.plugin.placeIn(verse, bible, from);
-        if (placed.mapped?.text) labels.push(placed.mapped.text);
-        if (placed.parts.length === 0) {
-          text.createSpan({ cls: "topos-rows-missing", text: `${passageParts(verse)[0]?.verse ?? ""} — ` });
-          continue;
-        }
-        for (const part of placed.parts) {
-          const passage = this.plugin.topos.parse(partsReference(book, [part]), bookStyle("name"));
-          const words = passage ? await this.plugin.bibles.textIn(passage, bible, bible.name) : null;
-          if (!current()) return;
-          // A chapter's start after the first one's verses names it: `4:1`
-          const first = part.chapter !== this.at.chapter && part.verse === 1 ? `${part.chapter}:1` : String(part.verse);
-          const number = part.endVerse !== part.verse || part.endChapter !== part.chapter ? `${first}-${part.endVerse}` : first;
-          if (verses.length > 1 || placed.mapped) text.createEl("sup", { cls: "topos-rows-number", text: number });
-          text.createSpan({ text: words ? `${words} ` : "— ", cls: words ? "" : "topos-rows-missing" });
-        }
+      // Where the verses are in this Bible, as it numbers them
+      const placed = this.plugin.placeIn(whole, bible, from);
+      const there = placed.parts.length > 0 ? this.plugin.topos.parse(partsReference(book, placed.parts), bookStyle("name")) : null;
+      name.addEventListener("click", (e) => void this.plugin.openBeside(there ?? whole, this.leaf, e.ctrlKey || e.metaKey ? "tab" : false, bible.name));
+      if (placed.mapped?.text) label.createDiv({ cls: "topos-commentary-meta", text: placed.mapped.text });
+      const file = placed.parts.length > 0 ? await this.plugin.bibles.bookFile(whole, bible) : null;
+      if (!current()) return;
+      if (!file) {
+        text.createSpan({ cls: "topos-rows-missing", text: `Not in ${bible.name}.` });
+        continue;
       }
-      const mapped = labels.filter(Boolean);
-      if (!text.querySelector("span:not(.topos-rows-missing)")) text.replaceChildren(createSpan({ cls: "topos-rows-missing", text: `Not in ${bible.name}.` }));
-      if (mapped.length > 0) label.createDiv({ cls: "topos-commentary-meta", text: mapped.join(", ") });
+      // Its text with the notes' highlights, and the menus to make them (`BibleEmbed.inPane`)
+      const embed = this.plugin.createEmbed({ app: this.app, containerEl: text.createDiv() }, file, formatVerseLocator(placed.parts)) as BibleEmbed;
+      embed.inPane(this.contentEl, () => this.plugin.settings.rowsAppearance);
+      embeds.push(embed);
+    }
+    this.pendingEmbeds = embeds;
+  }
+
+  /** The rows' embeds shown (children of the view), and those of the rows being drawn, loaded once they're on the page */
+  private embeds: BibleEmbed[] = [];
+  private pendingEmbeds: BibleEmbed[] = [];
+
+  protected override afterRender(): void {
+    for (const old of this.embeds) this.removeChild(old);
+    this.embeds = this.pendingEmbeds;
+    this.pendingEmbeds = [];
+    for (const embed of this.embeds) {
+      this.addChild(embed);
+      void embed.loadFile();
     }
   }
 }

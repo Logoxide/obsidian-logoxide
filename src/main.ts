@@ -47,7 +47,7 @@ import { BibleEmbed } from "./bible/embed.ts";
 import { BibleMedia } from "./bible/media.ts";
 import { BibleView } from "./bible/view.ts";
 import { BibleNotes } from "./bible/bible-notes.ts";
-import type { HighlightEntry } from "file-plus-plus/annotator";
+import type { AnnotationTarget, HighlightEntry } from "file-plus-plus/annotator";
 import { registerSwitcher } from "./bible/switcher.ts";
 import { createBibleFormat } from "./bible/format.ts";
 import { STUB_EXTENSION } from "./core/stubs.ts";
@@ -67,6 +67,7 @@ import { isBareMention, partAt, passageStops, wholeReference } from "./core/synt
 import { inlineNeeds, inlineText, inlineTextVars } from "./core/inline-text.ts";
 import { COMMENTARY_VIEW, CommentaryView } from "./bible/commentary.ts";
 import { RESOURCE_VIEW, ResourceModal, ResourceView } from "./bible/resource.ts";
+import { OTHER_TRANSLATIONS, otherTranslationsProvider, siblingPaths } from "./bible/other-translations.ts";
 import { TRANSLATIONS_VIEW, TranslationsView, VERSE_COMMENTARIES_VIEW, VerseCommentariesView } from "./bible/rows.ts";
 import type { StrongsPopupOptions } from "./bible/strongs.ts";
 import { strongsHover } from "./editor/strongs.ts";
@@ -278,7 +279,7 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
     for (const view of this.views()) if (view.file?.path === target.path) view.refreshHighlights();
   }
 
-  override async createAnnotationFile(view: DocumentView<BibleBook, BibleReader>): Promise<TFile | null> {
+  override async createAnnotationFile(view: AnnotationTarget<BibleBook, BibleReader>): Promise<TFile | null> {
     const of = view.file ? this.notes.bookOf(view.file.path) : null;
     return of ? this.notes.open(of.book, of.bible) : null;
   }
@@ -357,6 +358,14 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
       void this.indexer.start();
       this.epubs.start();
       this.otherDocuments.start();
+      // Highlights in the other Bibles, faint in each Bible's text
+      this.register(this.api.registerAnnotationProvider(otherTranslationsProvider(this)));
+      this.registerEvent(
+        this.annotator.index.on("changed", (paths) => {
+          const siblings = siblingPaths(this, paths);
+          if (siblings.length > 0) this.api.refreshAnnotations(OTHER_TRANSLATIONS, siblings);
+        }),
+      );
       const vault = this.app.vault;
       this.registerEvent(vault.on("modify", (file) => file instanceof TFile && void this.indexer.update(file)));
       this.registerEvent(vault.on("create", (file) => file instanceof TFile && void this.indexer.update(file)));
@@ -1298,6 +1307,11 @@ export default class ToposPlugin extends FilePlusPlusPlugin<BibleBook, BibleRead
     if (parent) return workspace.createLeafInParent(parent, parent.children?.length ?? 0);
     const besideBible = this.views().some((v) => v.leaf === workspace.getMostRecentLeaf());
     return besideBible && !Platform.isPhone ? workspace.getLeaf("split", "vertical") : workspace.getLeaf("tab");
+  }
+
+  /** Translations in rows' look changed (`rowsAppearance`): every translations tab shows it */
+  applyRowsAppearance(): void {
+    for (const leaf of this.app.workspace.getLeavesOfType(TRANSLATIONS_VIEW)) if (leaf.view instanceof TranslationsView) leaf.view.applyAppearance();
   }
 
   /** Opens translations in rows (`TranslationsView`) or commentaries in rows (`VerseCommentariesView`) on a passage: the tab open already, else a new one */

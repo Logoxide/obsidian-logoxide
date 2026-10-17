@@ -196,6 +196,10 @@ that Bible, its hover and embed show that Bible's text, and completion offers th
   markers in the background and kept in the plugin's folder), so a verse one translation numbers
   and another doesn't is a reference only in the one that has it
 - *Compare in embeds* (`KJV, NET`) shows those Bibles' text after the named one in every embed
+- A highlight made in one Bible shows faintly in the others, over the whole verses it's in (their
+  words differ), in Bible tabs (not in translations in rows, where the others are beside it): hover it for the Bible, its words, and
+  its comment; its menu opens it there or its note, or saves it as that Bible's own highlight. Hide
+  them with their tab in a Bible tab's sidebar
 - In a Bible tab, the commands *Open this book in another Bible* and *Open this book in another
   Bible beside it, on the same verse* open the same verse in another translation; beside it, the
   two tabs keep the verse at the top of either one at the top of the other as you scroll
@@ -295,7 +299,11 @@ Commentary, dictionary, and cross-reference packages (logoxide's `commentary`, `
   name or folder, *All* or *None*, and drag the ticked ones by their handles to order the rows:
   the list stays open until you click away or press Escape); a Bible numbered differently
   has the verses as it numbers them (they're numbered as the current Bible numbers them, whatever
-  the rows' order). A Bible's name opens the verses in it
+  the rows' order). Each row shows your highlights in that Bible, with their comments on hover (a
+  tap on a phone), and highlights the same way as a Bible tab: select words and right-click (or
+  hold a selection on a phone) for the colors and copy formats; click a highlight to recolor it,
+  comment on it, or delete it. *Aa* sets the rows' own font size, font, line spacing, alignment,
+  and theme (for every translations tab; *Reset* goes back to each Bible's). A Bible's name opens the verses in it
 - **Strong's numbers**: hovering over one in a note (`G25`, `H430`, `G0025`), in a commentary's
   note, or over a word in a Bible whose text carries them (the KJV's `\w loved|strong="G25"\w*`)
   shows its entries from the vault's dictionaries keyed by Strong's Greek or Hebrew numbers

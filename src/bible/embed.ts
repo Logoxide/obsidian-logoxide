@@ -1,5 +1,5 @@
 import { Menu, Platform, setIcon, type TFile } from "obsidian";
-import type { HighlightSpec, ParsedLocator, SelectionInfo } from "file-plus-plus/core";
+import type { HighlightSpec, ParsedLocator, ReaderSettings, SelectionInfo } from "file-plus-plus/core";
 import { DocumentEmbed, MediaPlayer, type EmbedContext, type FilePlusPlusPlugin } from "file-plus-plus/obsidian";
 import { clipOf } from "../core/timings.ts";
 import { END, formatVerseLocator, parseVerseLocator, splitContext, withContext } from "../core/verse-locator.ts";
@@ -7,6 +7,7 @@ import { STUB_EXTENSION } from "../core/stubs.ts";
 import type ToposPlugin from "../main.ts";
 import type { BibleBook, BibleReader } from "./reader.ts";
 import { followVerses } from "./view.ts";
+import { OTHER_TRANSLATIONS } from "./other-translations.ts";
 
 /**
  * A passage in a hover preview or an embed (`![John 1:1-5]`, `![[JHN.usx#v=1:1-5]]`): only its
@@ -31,6 +32,10 @@ export class BibleEmbed extends DocumentEmbed<BibleBook, BibleReader> {
    * none (null); null where it can't be (a hover preview)
    */
   onHighlight: ((fragment: string | null) => void) | null = null;
+  /** The pane it's a row of (translations in rows), where its comment cards go; null elsewhere */
+  private pane: HTMLElement | null = null;
+  /** The pane's own appearance (font size, font, line spacing…), over the Bible's */
+  private paneAppearance: (() => Partial<ReaderSettings>) | null = null;
 
   constructor(plugin: FilePlusPlusPlugin<BibleBook, BibleReader>, ctx: EmbedContext, file: TFile, subpath: string) {
     super(plugin, ctx, file, subpath);
@@ -39,7 +44,48 @@ export class BibleEmbed extends DocumentEmbed<BibleBook, BibleReader> {
     if (linktext && sourcePath) this.onHighlight = (fragment) => void rewriteWikiEmbed(plugin, sourcePath, linktext, fragment);
   }
 
+  /**
+   * Makes it a row of a pane (translations in rows, `rows.ts`): the notes' highlights, with the menus
+   * to make and change them (file-plus-plus's annotated embeds), rather than its link's, but not the
+   * other Bibles' faint ones (they're in the rows beside it); no header, as tall as its verses, and
+   * the pane's `appearance` over the Bible's. Before `loadFile`
+   */
+  inPane(pane: HTMLElement, appearance: () => Partial<ReaderSettings>): void {
+    this.pane = pane;
+    this.paneAppearance = appearance;
+    this.annotated = true;
+    this.hiddenProviders = [OTHER_TRANSLATIONS];
+    this.onHighlight = null;
+    this.containerEl.addClass("topos-row-embed");
+  }
+
+  protected override readerSettings(): ReaderSettings {
+    return { ...super.readerSettings(), ...(this.paneAppearance?.() ?? {}), width: 0 };
+  }
+
+  /** The pane's appearance changed: shown again */
+  applyPaneAppearance(): void {
+    this.paneFontSize();
+    this.reader?.updateSettings(this.readerSettings());
+  }
+
+  /** A passage shows at the notes' text size, unless the pane sets its own */
+  private paneFontSize(): void {
+    const size = this.paneAppearance?.().fontSize;
+    if (size) this.host.style.setProperty("--topos-passage-font-size", `${size}px`);
+    else this.host.style.removeProperty("--topos-passage-font-size");
+  }
+
+  protected override annotationContainer(): HTMLElement {
+    return this.pane ?? super.annotationContainer();
+  }
+
   protected override buildExtraUi(): void {
+    // A row has its pane's labels, and its look
+    if (this.pane) {
+      this.title.parentElement?.hide();
+      this.paneFontSize();
+    }
     this.matchHoveredDocument();
   }
 
@@ -60,6 +106,7 @@ export class BibleEmbed extends DocumentEmbed<BibleBook, BibleReader> {
     if (!this.host.style.getPropertyValue("--topos-passage-font-size")) this.matchHoveredDocument();
     // A link's verses aren't highlighted in its embed, but a highlight in them is (`:~:text=`),
     // if its words are there (else it would be all of them)
+    if (this.pane) return this.fitRow(reader);
     if (!TEXT_DIRECTIVE.test(loc.locator ?? "") || !reader.hasWords(loc.locator ?? "")) reader.setHighlights([]);
     this.offerHighlighting(reader);
     const book = reader.bible;
@@ -84,6 +131,22 @@ export class BibleEmbed extends DocumentEmbed<BibleBook, BibleReader> {
     if (!range) return;
     this.offerContext(reader, loc);
     void this.offerPlaying(reader, loc, label);
+  }
+
+  /** A row: as tall as its verses, whatever their length, also as the width changes */
+  private fitRow(reader: BibleReader): void {
+    const fit = () => {
+      const height = reader.passageHeight();
+      if (height > 0) this.host.style.height = `${Math.ceil(height)}px`;
+    };
+    fit();
+    reader.scrollToPassage();
+    const observer = new ResizeObserver(() => {
+      fit();
+      reader.scrollToPassage();
+    });
+    observer.observe(reader.content);
+    this.register(() => observer.disconnect());
   }
 
   /**

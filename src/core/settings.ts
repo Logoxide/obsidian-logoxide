@@ -5,6 +5,7 @@ import { SITES } from "./links.ts";
 import { DEFAULT_FORMAT, type FormatSettings } from "./format.ts";
 import type { SavedQuery } from "./query.ts";
 import type { SortOrder } from "./sort.ts";
+import type { ReaderSettings } from "file-plus-plus/core";
 
 export type StyleName = "name" | "abbreviation" | "osis";
 
@@ -101,6 +102,8 @@ export interface ToposSettings {
   bibleAliases: string;
   /** Bibles embeds also show, by name, separated by commas: `KJV, NET` */
   compareBibles: string;
+  /** Translations in rows' own appearance (font size, font, line spacing…), over each Bible's; empty: theirs */
+  rowsAppearance: Partial<ReaderSettings>;
   /** Footnotes' marks in Bible text (and study notes: every note but cross references) */
   footnotes: MarkLook;
   /** Cross references' marks in Bible text */
@@ -217,6 +220,7 @@ export const DEFAULT_SETTINGS: ToposSettings = {
   playbackRate: 1,
   bibleAliases: "",
   compareBibles: "",
+  rowsAppearance: {},
   footnotes: "none",
   crossRefs: "none",
   bibleHeadings: true,

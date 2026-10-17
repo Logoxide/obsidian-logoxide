@@ -34,7 +34,7 @@ export function openPickList(anchor: HTMLElement, options: PickListOptions): () 
   const doc = anchor.ownerDocument;
   const win = doc.defaultView ?? window;
   const picked = [...options.picked];
-  const popup = doc.body.createDiv({ cls: "topos-pick-list" });
+  const { el: popup, close, place } = openPopover(anchor, "topos-pick-list", () => options.onClose?.());
   const field = popup.createDiv({ cls: "search-input-container topos-pick-search" });
   const search = field.createEl("input", { attr: { type: "search", placeholder: options.placeholder ?? "Search…", spellcheck: "false", enterkeyhint: "done" } });
   const clear = field.createDiv({ cls: "search-input-clear-button", attr: { "aria-label": "Clear search" } });
@@ -208,17 +208,30 @@ export function openPickList(anchor: HTMLElement, options: PickListOptions): () 
     });
   }
 
-  // Below the button, kept on screen
+  draw();
+  place();
+  // Not on a phone: its keyboard would cover the choices
+  if (!Platform.isMobile) search.focus();
+  return close;
+}
+
+/**
+ * A popup below a button (`cls` styles it), kept on screen, that stays open until a press outside it
+ * (or on the button) or Escape. `place` puts it below the button again (once it's filled)
+ */
+export function openPopover(anchor: HTMLElement, cls: string, onClose: () => void): { el: HTMLElement; close: () => void; place: () => void } {
+  const doc = anchor.ownerDocument;
+  const win = doc.defaultView ?? window;
+  const el = doc.body.createDiv({ cls: `topos-popover ${cls}` });
   const place = () => {
     const r = anchor.getBoundingClientRect();
-    const width = Math.min(popup.offsetWidth, win.innerWidth - 16);
-    popup.style.left = `${Math.max(8, Math.min(r.left, win.innerWidth - width - 8))}px`;
-    popup.style.top = `${Math.min(r.bottom + 4, win.innerHeight - popup.offsetHeight - 8)}px`;
+    const width = Math.min(el.offsetWidth, win.innerWidth - 16);
+    el.style.left = `${Math.max(8, Math.min(r.left, win.innerWidth - width - 8))}px`;
+    el.style.top = `${Math.max(8, Math.min(r.bottom + 4, win.innerHeight - el.offsetHeight - 8))}px`;
   };
-
   const onDown = (e: PointerEvent) => {
     const target = e.target as Node;
-    if (!popup.contains(target) && !anchor.contains(target)) close();
+    if (!el.contains(target) && !anchor.contains(target)) close();
   };
   const onKey = (e: KeyboardEvent) => {
     if (e.key === "Escape") {
@@ -227,23 +240,39 @@ export function openPickList(anchor: HTMLElement, options: PickListOptions): () 
     }
   };
   let closed = false;
-  function close(): void {
+  const close = () => {
     if (closed) return;
     closed = true;
-    popup.remove();
+    el.remove();
     doc.removeEventListener("pointerdown", onDown, true);
     doc.removeEventListener("keydown", onKey, true);
     win.removeEventListener("resize", place);
-    options.onClose?.();
-  }
+    onClose();
+  };
   doc.addEventListener("pointerdown", onDown, true);
   doc.addEventListener("keydown", onKey, true);
   win.addEventListener("resize", place);
-  draw();
-  place();
-  // Not on a phone: its keyboard would cover the choices
-  if (!Platform.isMobile) search.focus();
-  return close;
+  return { el, close, place };
+}
+
+/** A bar button that opens a popover (`fill` fills it each time) and closes it when pressed again */
+export function popoverButton(parent: HTMLElement, label: { text?: string; icon?: string; tooltip: string }, cls: string, fill: (el: HTMLElement, close: () => void) => void): HTMLButtonElement {
+  const button = parent.createEl("button", { cls: "topos-rows-pick", attr: { "aria-label": label.tooltip } });
+  if (label.icon) setIcon(button.createSpan({ cls: "topos-rows-pick-glyph" }), label.icon);
+  if (label.text) button.createSpan({ text: label.text });
+  let close: (() => void) | null = null;
+  button.addEventListener("click", () => {
+    if (close) return close();
+    button.addClass("is-active");
+    const popover = openPopover(button, cls, () => {
+      close = null;
+      button.removeClass("is-active");
+    });
+    close = popover.close;
+    fill(popover.el, popover.close);
+    popover.place();
+  });
+  return button;
 }
 
 /** A bar button that opens a pick list (`open` makes its options each time) and closes it when pressed again */
