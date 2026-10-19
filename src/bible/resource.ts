@@ -56,6 +56,8 @@ export class ResourceView extends ItemView {
   private observer: IntersectionObserver | null = null;
   /** The dictionary's keys and what's typed in its filter */
   private keys: string[] = [];
+  /** A commentary's books (their ids) */
+  private books: number[] = [];
   private query = "";
 
   constructor(
@@ -155,7 +157,8 @@ export class ResourceView extends ItemView {
     this.resource = resources.find((r) => r.dependency === this.resourceName) ?? resources[0] ?? null;
     if (this.resource && !this.isCommentary) this.keys = await this.plugin.packages.keysOf(this.resource.dependency);
     if (this.isCommentary) {
-      const books = this.plugin.packages.resourceBooks(this.resource!.dependency);
+      const books = await this.plugin.packages.resourceBooks(this.resource!.dependency);
+      this.books = books;
       if (this.book === null || !books.includes(this.book)) this.book = books[0] ?? null;
     }
     this.updateFollow();
@@ -175,7 +178,7 @@ export class ResourceView extends ItemView {
   /** Shows a passage in a commentary: its book, scrolled to the note on it */
   async showPassage(passage: Passage): Promise<void> {
     if (!this.isCommentary || !this.resource) return;
-    const books = this.plugin.packages.resourceBooks(this.resource.dependency);
+    const books = await this.plugin.packages.resourceBooks(this.resource.dependency);
     if (!books.includes(passage.bookId)) return;
     const first = passageParts(passage)[0];
     const at = { chapter: first?.chapter ?? 1, verse: first?.verse ?? 0 };
@@ -275,7 +278,7 @@ export class ResourceView extends ItemView {
     pick.value = this.resource?.dependency ?? "";
     pick.addEventListener("change", () => void this.setResource(pick.value));
     if (!this.isCommentary || !this.resource) return;
-    const books = this.plugin.packages.resourceBooks(this.resource.dependency);
+    const books = this.books;
     const book = bar.createEl("select", { cls: "dropdown", attr: { "aria-label": "Book" } });
     for (const id of books) book.createEl("option", { value: String(id), text: this.bookName(id) });
     book.value = String(this.book ?? "");

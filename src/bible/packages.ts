@@ -1,4 +1,4 @@
-import { Notice, TFile, TFolder } from "obsidian";
+import { Notice, Platform, TFile, TFolder } from "obsidian";
 import { Logoxide, PackageKind, type BookTextOptions, type CrossReference, type Entry, type LogoxidePackage, type LogoxideVersifications, type LockedEntry, type MappedPassage, type MediaFile, type Note, type PackageFile, type Passage, type LogoxideBook, type ToposTranslations } from "logoxide";
 import { RESERVED, STUB_EXTENSION, parseStub, staleStubs, stubNames, stubPath, stubText } from "../core/stubs.ts";
 import { describeError } from "../core/errors.ts";
@@ -57,13 +57,16 @@ interface StudyPackage {
   kind: PackageKind;
   /** What the vault's logoxide.toml calls it */
   dependency: string;
-  /** Its abbreviation (`MHCC`), for labels */
+  /** Its abbreviation (`MHCC`), for labels; its full name without one */
   name: string;
   /** Its full name */
   title: string;
   /** A dictionary's keys: `strongs-greek`, `strongs-hebrew`, `headword` */
   keys: string | null;
-  pkg: LogoxidePackage;
+  /** Open, or (on a phone, until first used) not yet: `opened` opens it */
+  pkg: LogoxidePackage | null;
+  /** Opens it (once) */
+  open?: () => Promise<LogoxidePackage>;
 }
 
 /** A commentary's notes on a passage */
@@ -114,7 +117,7 @@ export interface InstalledPackage {
   /** From an import (`imports/<id>`) or a path package rather than the library */
   path: boolean;
   /** What it is, once read (else why it couldn't be) */
-  info: { name: string; abbreviation: string; license: string | null; kind: PackageKind } | null;
+  info: { name: string; abbreviation: string | null; license: string | null; kind: PackageKind } | null;
   problem: string | null;
   /** Whether it's in use: `enabled = false` in logoxide.toml turns it (and what it brings in) off, keeping it installed */
   enabled: boolean;
@@ -284,7 +287,7 @@ export class LogoxideBibles {
             else opened.bible?.pkg.dispose();
             if (opened.book && ours) books.push(opened.book);
             if (opened.study && ours) study.push(opened.study);
-            else opened.study?.pkg.dispose();
+            else opened.study?.pkg?.dispose();
             // Every map the vault has, whoever asked for it: a route may go through several
             if (opened.map) {
               try {
@@ -309,7 +312,7 @@ export class LogoxideBibles {
       }
     }
     for (const old of this.bibles) this.dispose(old);
-    for (const old of this.study) old.pkg.dispose();
+    for (const old of this.study) old.pkg?.dispose();
     this.bibles = bibles;
     this.books = books;
     this.study = study;
@@ -365,16 +368,9 @@ export class LogoxideBibles {
     return entry.location.tag === "Library" ? `${this.libraryDir()}/${entry.location.dir}` : join(base, entry.location.dir);
   }
 
-  /** A locked package: what it is, and its Bible or its books */
-  private async open(
-    logoxide: Logoxide,
-    entry: LockedEntry,
-    base: string,
-    problems: string[],
-    changed: string[],
-  ): Promise<{ info: NonNullable<InstalledPackage["info"]>; bible: PackageBible | null; book: PackageBook | null; map: LogoxidePackage | null; study?: StudyPackage }> {
+  /** A locked package's files, opened (with its cache, which is saved again) */
+  private async openFiles(logoxide: Logoxide, entry: LockedEntry, dir: string, problems: string[], changed: string[]): Promise<LogoxidePackage> {
     const adapter = this.plugin.app.vault.adapter;
-    const dir = this.dirOf(entry, base);
     const files = await readTree(this.plugin, dir);
     const cacheDir = this.cacheDir();
     // The cache is per package (`<id>/<version>-<checksum>/`)
@@ -385,13 +381,50 @@ export class LogoxideBibles {
       changed.push(entry.name);
     }
     await this.saveCache(pkg);
+    return pkg;
+  }
+
+  /** A locked package: what it is, and its Bible or its books */
+  private async open(
+    logoxide: Logoxide,
+    entry: LockedEntry,
+    base: string,
+    problems: string[],
+    changed: string[],
+  ): Promise<{ info: NonNullable<InstalledPackage["info"]>; bible: PackageBible | null; book: PackageBook | null; map: LogoxidePackage | null; study?: StudyPackage }> {
+    const adapter = this.plugin.app.vault.adapter;
+    const dir = this.dirOf(entry, base);
+    // On a phone, commentaries, dictionaries, and cross-references are opened when first used:
+    // one can take a hundred megabytes, which a phone's WebView may not have to spare
+    if (Platform.isMobile) {
+      const info = logoxide.readPackageInfo(await adapter.read(`${dir}/${MANIFEST}`));
+      if (STUDY_KINDS.includes(info.kind)) {
+        const summary = { name: info.name, abbreviation: info.abbreviation, license: info.license ?? info.licenseFile ?? null, kind: info.kind };
+        const study: StudyPackage = { kind: info.kind, dependency: entry.name, name: entry.abbreviation ?? info.abbreviation ?? info.name, title: info.name, keys: info.keys, pkg: null };
+        let opening: Promise<LogoxidePackage> | null = null;
+        study.open = () =>
+          (opening ??= (async () => {
+            const later: string[] = [];
+            const pkg = await this.openFiles(Logoxide.new(), entry, dir, later, []);
+            if (later.length > 0) console.warn("Logoxide: logoxide packages", later);
+            // The packages were read again meanwhile: this one is no longer listed
+            if (!this.study.includes(study)) {
+              pkg.dispose();
+              throw new Error(`${entry.name} was read again`);
+            }
+            return (study.pkg = pkg);
+          })());
+        return { info: summary, bible: null, book: null, map: null, study };
+      }
+    }
+    const pkg = await this.openFiles(logoxide, entry, dir, problems, changed);
     const info = pkg.info();
     const summary = { name: info.name, abbreviation: info.abbreviation, license: info.license ?? info.licenseFile ?? null, kind: info.kind };
     // A versification map is kept open for the maps (the caller disposes it)
     if (info.kind === PackageKind.VersificationMap) return { info: summary, bible: null, book: null, map: pkg };
     // Commentaries, dictionaries, and cross-references stay open to look things up in
     if (STUDY_KINDS.includes(info.kind)) {
-      const study = { kind: info.kind, dependency: entry.name, name: entry.abbreviation ?? info.abbreviation, title: info.name, keys: info.keys, pkg };
+      const study = { kind: info.kind, dependency: entry.name, name: entry.abbreviation ?? info.abbreviation ?? info.name, title: info.name, keys: info.keys, pkg };
       return { info: summary, bible: null, book: null, map: null, study };
     }
     if (info.kind !== PackageKind.Bible) {
@@ -400,8 +433,8 @@ export class LogoxideBibles {
       pkg.dispose();
       return { info: summary, bible: null, book: files.length > 0 ? { dependency: entry.name, dir, files } : null, map: null };
     }
-    // The vault's own names for it, when its logoxide.toml gives them (a fork's)
-    const name = entry.abbreviation ?? info.abbreviation;
+    // The vault's own names for it, when its logoxide.toml gives them (a fork's); a Bible has an abbreviation
+    const name = entry.abbreviation ?? info.abbreviation ?? entry.name;
     const aliases = entry.aliases ?? info.aliases;
     return {
       info: summary,
@@ -864,33 +897,49 @@ export class LogoxideBibles {
     return this.study.find((p) => p.dependency === dependency) ?? null;
   }
 
+  /** A study package, opened if it wasn't yet; null if it can't be */
+  private async opened(p: StudyPackage): Promise<LogoxidePackage | null> {
+    if (p.pkg) return p.pkg;
+    try {
+      return (await p.open?.()) ?? null;
+    } catch (error) {
+      console.warn(`Logoxide: opening ${p.dependency}`, error);
+      return null;
+    }
+  }
+
   /** The books a commentary has notes on (their ids, in its manifest's order) */
-  resourceBooks(dependency: string): number[] {
+  async resourceBooks(dependency: string): Promise<number[]> {
+    await this.loading;
     const p = this.resource(dependency);
-    return p ? Array.from(p.pkg.books()) : [];
+    const pkg = p && (await this.opened(p));
+    return pkg ? Array.from(pkg.books()) : [];
   }
 
   /** One commentary's notes on a passage, as written (not stretched) */
   async notesIn(dependency: string, passage: Passage, options: BookTextOptions): Promise<Note[]> {
     await this.loading;
     const p = this.resource(dependency);
-    if (!p) return [];
-    const notes = p.pkg.notes(passage, options, false);
-    await this.saveCache(p.pkg);
+    const pkg = p && (await this.opened(p));
+    if (!pkg) return [];
+    const notes = pkg.notes(passage, options, false);
+    await this.saveCache(pkg);
     return notes;
   }
 
   /** A dictionary's keys (Strong's numbers or headwords), in its own order */
   async keysOf(dependency: string): Promise<string[]> {
     await this.loading;
-    return this.resource(dependency)?.pkg.keys() ?? [];
+    const p = this.resource(dependency);
+    const pkg = p && (await this.opened(p));
+    return pkg?.keys() ?? [];
   }
 
   /** One dictionary's entry for a key */
   async entryIn(dependency: string, key: string, options: BookTextOptions): Promise<DictionaryEntry | null> {
     await this.loading;
     const p = this.resource(dependency);
-    const entry = p?.pkg.entry(key, options);
+    const entry = p && (await this.opened(p))?.entry(key, options);
     return p && entry ? { dictionary: p.name, title: p.title, entry } : null;
   }
 
@@ -900,9 +949,11 @@ export class LogoxideBibles {
     const found: CommentaryNotes[] = [];
     for (const p of this.study.filter((s) => s.kind === PackageKind.Commentary)) {
       try {
-        const notes = p.pkg.notes(passage, options, this.plugin.settings.stretchNotes);
+        const pkg = await this.opened(p);
+        if (!pkg) continue;
+        const notes = pkg.notes(passage, options, this.plugin.settings.stretchNotes);
         if (notes.length > 0) found.push({ commentary: p.name, title: p.title, notes });
-        await this.saveCache(p.pkg);
+        await this.saveCache(pkg);
       } catch (error) {
         console.warn(`Logoxide: ${p.name}'s notes on ${passage.reference}`, error);
       }
@@ -920,7 +971,7 @@ export class LogoxideBibles {
     const found: DictionaryEntry[] = [];
     for (const p of this.study.filter((s) => s.kind === PackageKind.Lexicon && s.keys === keys)) {
       try {
-        const entry = p.pkg.entry(key, options);
+        const entry = (await this.opened(p))?.entry(key, options);
         if (entry) found.push({ dictionary: p.name, title: p.title, entry });
       } catch (error) {
         console.warn(`Logoxide: ${p.name}'s entry ${key}`, error);
@@ -935,7 +986,9 @@ export class LogoxideBibles {
     const found: PackageCrossReferences[] = [];
     for (const p of this.study.filter((s) => s.kind === PackageKind.CrossReferences)) {
       try {
-        const references = p.pkg.crossReferences(osis);
+        const pkg = await this.opened(p);
+        if (!pkg) continue;
+        const references = pkg.crossReferences(osis);
         if (references.length > 0) found.push({ name: p.name, title: p.title, references });
       } catch (error) {
         console.warn(`Logoxide: ${p.name}'s cross-references for ${osis}`, error);
@@ -952,7 +1005,7 @@ export class LogoxideBibles {
   unload(): void {
     for (const bible of this.bibles) this.dispose(bible);
     this.bibles = [];
-    for (const p of this.study) p.pkg.dispose();
+    for (const p of this.study) p.pkg?.dispose();
     this.study = [];
     this.versifications?.dispose();
     this.versifications = null;

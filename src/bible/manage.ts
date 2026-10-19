@@ -251,7 +251,7 @@ export class BibleManager {
     // The same installer: it has the archive already
     await this.install(logoxide, added, base, installer);
     added.dispose();
-    return info.abbreviation;
+    return info.abbreviation ?? info.name;
   }
 
   /** Adds a registry's package (its newest release, as `lx add` would) and installs it; its abbreviation */
@@ -264,7 +264,7 @@ export class BibleManager {
     project.dispose();
     await this.install(logoxide, added, base);
     added.dispose();
-    return entry.abbreviation;
+    return entry.abbreviation ?? entry.name;
   }
 
   /** Installs a catalog entry: adds its repository or its registry's newest release, or imports eBible.org's, fetch.bible's, CCEL's, or a SWORD repository's download */
@@ -287,7 +287,7 @@ export class BibleManager {
     project.dispose();
     await this.install(logoxide, added, base);
     added.dispose();
-    return entry.abbreviation;
+    return entry.abbreviation ?? entry.name;
   }
 
   /**

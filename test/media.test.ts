@@ -44,6 +44,7 @@ export async function requestUrl({ url }) {
 export class TFile {}
 export class TFolder {}
 export function setIcon() {}
+export const Platform = { isMobile: false, isDesktopApp: true };
 `;
 
 async function load() {
