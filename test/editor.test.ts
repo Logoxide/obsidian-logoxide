@@ -21,7 +21,7 @@ async function load() {
      export { linkUrl } from ${src("core/links.ts")};
      export { relinkEditor } from ${src("reading.ts")};
      export { DEFAULT_SETTINGS } from ${src("core/settings.ts")};
-     export { livePreview, editorLivePreviewField } from ${JSON.stringify(stub)};`,
+     export { livePreview, editorLivePreviewField, Platform } from ${JSON.stringify(stub)};`,
   );
   const outfile = join(cache, "editor.mjs");
   await esbuild.build({
@@ -257,4 +257,45 @@ test("with embedAlone, a reference alone on its line shows its text unless the c
   settings.embedAloneDevices = { phone: "reading", computer: "editor" };
   relinkEditor(plugin, calloutEl);
   assert.equal(calloutEl.querySelector(".callout-content p")!.textContent, "Ps 23:1");
+});
+
+test("a reference's text at its line's end goes while it's edited; on a phone, only once it's typed in", async () => {
+  const { EditorView, referenceDecorations, DEFAULT_SETTINGS, livePreview, editorLivePreviewField, Platform } = await load();
+  const { Topos } = await import("logoxide");
+  const { EditorSelection } = await import("@codemirror/state");
+  const settings = { ...DEFAULT_SETTINGS, inlineText: true, inlineTextWrap: true, linkInEditor: false };
+  const plugin = {
+    topos: Topos.new(),
+    settings,
+    inlineGeneration: 0,
+    referenceUrl: () => null,
+    linkSite: () => "the site",
+    clickOpens: () => false,
+    bibles: { all: () => [{}] },
+    translations: () => undefined,
+    inlineVerseTextNow: (passage: any) => `[${passage.reference}]`,
+    inlineVerseText: async (passage: any) => `[${passage.reference}]`,
+  };
+  livePreview.on = true;
+  const shown = (view: any) => view.contentDOM.textContent;
+  const at = "Start\n\nRead Heb 1:1".indexOf("Heb");
+  for (const mobile of [false, true]) {
+    Platform.isMobile = mobile;
+    const view = new EditorView({ doc: "Start\n\nRead Heb 1:1", selection: EditorSelection.cursor(0), extensions: [editorLivePreviewField, referenceDecorations(plugin)], parent: document.body });
+    assert.equal(shown(view), "StartRead Heb 1:1[Hebrews 1:1]");
+    // A tap in it, then a double tap's selection of it
+    view.dispatch({ selection: EditorSelection.cursor(at + 2) });
+    assert.equal(shown(view), mobile ? "StartRead Heb 1:1[Hebrews 1:1]" : "StartRead Heb 1:1", mobile ? "phone, tapped" : "desktop, clicked");
+    view.dispatch({ selection: EditorSelection.range(at, at + 7) });
+    assert.equal(shown(view), mobile ? "StartRead Heb 1:1[Hebrews 1:1]" : "StartRead Heb 1:1");
+    // Typing in it
+    view.dispatch({ changes: { from: at + 7, insert: "-2" }, selection: EditorSelection.cursor(at + 9) });
+    assert.equal(shown(view), "StartRead Heb 1:1-2");
+    // Away from it
+    view.dispatch({ selection: EditorSelection.cursor(0) });
+    assert.equal(shown(view), "StartRead Heb 1:1-2[Hebrews 1:1-2]");
+    view.destroy();
+  }
+  Platform.isMobile = false;
+  livePreview.on = false;
 });

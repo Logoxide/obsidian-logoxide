@@ -4,6 +4,9 @@ import { StateField } from "@codemirror/state";
 
 export const livePreview = { on: false };
 
+/** A phone while `isMobile` is true */
+export const Platform = { isMobile: false, isDesktop: true };
+
 export const editorLivePreviewField = StateField.define<boolean>({
   create: () => livePreview.on,
   update: () => livePreview.on,

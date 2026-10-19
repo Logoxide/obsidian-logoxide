@@ -8,7 +8,7 @@ import {
   type PluginValue,
   type ViewUpdate,
 } from "@codemirror/view";
-import { Component, editorLivePreviewField, MarkdownView, type HoverParent } from "obsidian";
+import { Component, editorLivePreviewField, MarkdownView, Platform, type HoverParent } from "obsidian";
 import { BookStyle, type Passage } from "logoxide";
 import { embedAloneCursorLines, embedsAloneIn } from "../core/settings.ts";
 import { blankAround, findReferences, withHighlight } from "../core/syntax.ts";
@@ -27,16 +27,23 @@ export const refreshReferences = StateEffect.define<null>();
  * - `![John 1:1]` shows the passage's text in live preview, unless the cursor is in it
  * - With `embedAlone`, so does a bare reference alone on its line with `embedAloneBlankLines` blank
  *   lines above and below it (where this device embeds them: `embedsAloneIn`), unless the cursor is within `embedAloneCursorLines` lines of it
+ * - On a phone, a reference's text at its line's end stays while the cursor or a selection is only
+ *   put in it, and goes once it's typed in: iOS's selection from a double tap is lost when the line
+ *   changes under it, and Backspace then deletes at the cursor before (the line break before the line)
  */
 export function referenceDecorations(plugin: ToposPlugin) {
   class References implements PluginValue {
     decorations: DecorationSet;
+    /** The last change was typing (not a tap or a selection), so a reference with the cursor is being edited */
+    private typing = false;
 
     constructor(view: EditorView) {
       this.decorations = this.build(view);
     }
 
     update(update: ViewUpdate): void {
+      if (update.docChanged) this.typing = true;
+      else if (update.selectionSet) this.typing = false;
       const refresh = update.transactions.some((tr) => tr.effects.some((e) => e.is(refreshReferences)));
       if (refresh || update.docChanged || update.viewportChanged || update.selectionSet) this.decorations = this.build(update.view);
       // Line-end texts that don't wrap: the room on their rows may have changed
@@ -48,6 +55,8 @@ export function referenceDecorations(plugin: ToposPlugin) {
       const live = view.state.field(editorLivePreviewField, false) ?? false;
       const { selection } = view.state;
       const editing = (from: number, to: number) => selection.ranges.some((r) => r.from <= to && r.to >= from);
+      // Its text at the line's end, which on a phone goes only once it's typed in
+      const textEditing = (from: number, to: number) => (!Platform.isMobile || this.typing) && editing(from, to);
       const { doc } = view.state;
       const near = embedAloneCursorLines(plugin.settings);
       const nearCursor = (line: number) =>
@@ -86,7 +95,7 @@ export function referenceDecorations(plugin: ToposPlugin) {
           // Its text at the end of its line, unless it's being edited
           const line = doc.lineAt(a);
           const heading = /^#{1,6}\s/.test(line.text);
-          if (inline && r.kind !== "embed" && !editing(a, b) && (!heading || plugin.settings.inlineTextInHeadings)) {
+          if (inline && r.kind !== "embed" && !textEditing(a, b) && (!heading || plugin.settings.inlineTextInHeadings)) {
             const end = line.to;
             const items = inlineLines.get(end) ?? [];
             items.push({ passage: r.passage, translation: r.translation });
